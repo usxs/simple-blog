@@ -1,0 +1,26 @@
+# 依赖
+node_modules/
+
+# 运行环境配置（含密码，绝不入库）
+.env
+.env.*
+!.env.example
+
+# 运行时数据：只保留占位文件，内容不入库
+backend/data/*
+!backend/data/.gitkeep
+backend/article/*
+!backend/article/.gitkeep
+backend/Musings/*
+!backend/Musings/.gitkeep
+backend/img/*
+!backend/img/.gitkeep
+backend/file/*
+!backend/file/.gitkeep
+
+# 杂项
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

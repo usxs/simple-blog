@@ -1,0 +1,17 @@
+{
+  "name": "simple-blog-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "简单博客 · lightweight self-hosted blog backend: password login, posts/moments management, image upload with automatic WebP conversion",
+  "main": "server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node --check backend/auth.js && node --check backend/captcha.js && node --check backend/storage.js && node --check backend/probe.js && node --check backend/sitemap.js && node --check backend/indexnow.js && node --check backend/image.js && node --check admin.js"
+  },
+  "dependencies": {
+    "sharp": "^0.35.5"
+  }
+}

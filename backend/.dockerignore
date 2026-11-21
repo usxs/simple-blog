@@ -1,0 +1,11 @@
+# 构建镜像时排除：数据走卷挂载、依赖在镜像内全新安装
+node_modules
+data
+article
+Musings
+img
+file
+config.json
+*.log
+.git
+.DS_Store

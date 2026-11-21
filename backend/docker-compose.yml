@@ -1,0 +1,56 @@
+# 博客后端：Node 20 + sharp（上传图片自动转 WebP）
+#
+# 使用方式：
+#   1. cp .env.example .env && vim .env      # 至少填 ADMIN_PASSWORD 或首次用后台初始化向导
+#   2. docker compose up -d --build          # 首次或改动代码后必须带 --build
+#   3. 浏览器打开 http://127.0.0.1:33001/    # 若在服务器上，建议用 Nginx/Cloudflare 反代到该端口
+#
+# 数据卷：config.json / article / Musings / img / file / data 全部以相对路径挂载到宿主机，
+# 升级代码不会丢数据；容器以 UID 1000 运行，宿主机这些目录需 chown 1000:1000。
+
+services:
+  backend:
+    build: .
+    image: simple-blog-backend:latest
+    container_name: simple-blog-backend
+    restart: unless-stopped
+    user: "1000:1000"
+    working_dir: /app
+    ports:
+      # 默认只监听本机，由 Nginx / Cloudflare Tunnel 对外提供 HTTPS
+      - "127.0.0.1:${HOST_PORT:-33001}:33001"
+    environment:
+      TZ: Asia/Shanghai
+      NODE_ENV: production
+      PORT: "33001"
+      # 管理员账号：仅在 data/auth.json 不存在时用于首次初始化，之后请到后台修改密码
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # 站点对外地址（用于 sitemap 与 IndexNow 推送的绝对 URL）
+      SITE_PUBLIC_URL: ${SITE_PUBLIC_URL:-https://www.example.com}
+      BACKEND_PUBLIC_URL: ${BACKEND_PUBLIC_URL:-https://api.example.com}
+      # 验证码签名密钥，留空则首次启动自动生成并持久化到 data/captcha-secret.json
+      CAPTCHA_SECRET: ${CAPTCHA_SECRET:-}
+      # IndexNow：填了 key 才会在发布/删除文章后向 Bing/Yandex 等推送收录
+      INDEXNOW_KEY: ${INDEXNOW_KEY:-}
+      INDEXNOW_KEY_LOCATION: ${INDEXNOW_KEY_LOCATION:-}
+      # 可选的服务器探针数据源（兼容 CF-Server-Monitor 的 /api/servers），留空则探针列表为空
+      PROBE_SERVERS_URL: ${PROBE_SERVERS_URL:-}
+    volumes:
+      - ./config.json:/app/config.json
+      - ./article:/app/article
+      - ./Musings:/app/Musings
+      - ./img:/app/img
+      - ./file:/app/file
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:33001/api/auth/status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

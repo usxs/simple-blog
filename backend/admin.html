@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-theme-mode="auto">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Console · 后台管理</title>
+  <link id="dynamic-favicon" rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 34'%3E%3Crect width='34' height='34' rx='7' fill='%23141416'/%3E%3Ctext x='50%25' y='53%25' dominant-baseline='central' text-anchor='middle' fill='%23FFFFFF' font-family='monospace' font-weight='600' font-size='18'%3ES%3C/text%3E%3C/svg%3E" />
+  <script>
+    (function () {
+      var d = document.documentElement;
+      try {
+        var m = window.localStorage.getItem('site-theme-mode') || 'auto';
+        var isLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+        var t = m === 'light' ? 'light' : (m === 'dark' ? 'dark' : (isLight ? 'light' : 'dark'));
+        d.setAttribute('data-theme', t);
+        d.setAttribute('data-theme-mode', m);
+        d.style.colorScheme = t;
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/admin.css" />
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-profile">
+        <div class="sidebar-avatar" id="site-avatar">S</div>
+        <div class="sidebar-name">后台管理</div>
+      </div>
+
+      <ul class="nav-list" id="mod-nav">
+        <li><button class="nav-btn active" data-mod="posts" onclick="cms.switchMod('posts')"><span>文章</span><span class="nav-count" id="count-posts">0</span></button></li>
+        <li><button class="nav-btn" data-mod="moments" onclick="cms.switchMod('moments')"><span>碎碎念</span><span class="nav-count" id="count-moments">0</span></button></li>
+        <li><button class="nav-btn" data-mod="comments" onclick="cms.switchMod('comments')"><span>评论审核</span><span class="nav-count" id="count-comments">0</span></button></li>
+        <li><button class="nav-btn" data-mod="tools" onclick="cms.switchMod('tools')"><span>工具</span><span class="nav-count" id="count-tools">0</span></button></li>
+        <li><button class="nav-btn" data-mod="status" onclick="cms.switchMod('status')"><span>状态</span><span class="nav-count" id="count-status">0</span></button></li>
+        <li><button class="nav-btn" data-mod="quirky" onclick="cms.switchMod('quirky')"><span>奇奇怪怪</span><span class="nav-count" id="count-quirky">0</span></button></li>
+      </ul>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-row">
+          <span>状态</span>
+          <span class="backend-status" id="conn-badge" data-status="offline">
+            <span class="backend-status-dot"></span>
+            <span id="conn-state">IDLE</span>
+          </span>
+        </div>
+
+        <div class="sidebar-row">
+          <span>外观</span>
+          <div class="theme-options" role="group" aria-label="外观模式">
+            <button type="button" class="theme-option" data-mode="auto" title="跟随系统" onclick="cms.setTheme('auto')">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>
+            </button>
+            <button type="button" class="theme-option" data-mode="dark" title="暗色" onclick="cms.setTheme('dark')">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></svg>
+            </button>
+            <button type="button" class="theme-option" data-mode="light" title="亮色" onclick="cms.setTheme('light')">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M2 12h2"/><path d="M20 12h2"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="sidebar-copyright">
+          <div>© <span id="year"></span> Personal Console</div>
+          <div>后台管理系统</div>
+        </div>
+      </div>
+    </aside>
+
+    <div class="main-wrap">
+      <main class="workspace">
+        <div class="auth-bar">
+          <span class="auth-user-chip">
+            <span class="auth-user-dot"></span>
+            <span id="auth-username">—</span>
+          </span>
+          <span class="storage-hint" id="storage-hint">存储: ./article/*/*.md</span>
+          <div class="auth-actions">
+            <button class="btn" onclick="cms.refreshData()">同步数据</button>
+            <button class="btn" onclick="cms.openPasswordModal()">修改密码</button>
+            <button class="btn btn-danger" onclick="cms.logout()">退出登录</button>
+          </div>
+        </div>
+
+        <div class="cms-grid">
+          <section class="panel">
+            <div class="panel-head">
+              <span id="list-title">文章列表</span>
+              <div style="display:flex;gap:6px;">
+                <button class="btn" id="probe-now-btn" style="padding:3px 9px;font-size:12px;display:none;" onclick="cms.triggerProbeNow()">立即探测</button>
+                <button class="btn" id="new-item-btn" style="padding:3px 9px;font-size:12px;" onclick="cms.newItem()">+ 新建</button>
+              </div>
+            </div>
+            <ul class="item-list" id="item-list"></ul>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <span id="editor-title">新建内容</span>
+              <span id="editing-id" style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);">NEW</span>
+            </div>
+            <div class="form-body" id="form-container"></div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <input type="file" id="hidden-img-input" accept="image/*" multiple style="display:none;" />
+  <input type="file" id="hidden-file-input" multiple style="display:none;" />
+
+  <!-- 登录 / 首次初始化浮层 -->
+  <div class="auth-overlay" id="auth-overlay" data-mode="login">
+    <div class="auth-card">
+      <div class="auth-brand">CONSOLE</div>
+      <div class="auth-sub" id="auth-sub">账号密码登录后台管理</div>
+
+      <form id="auth-login-form" autocomplete="on">
+        <div class="field">
+          <label class="field-label" for="login-username">用户名</label>
+          <input class="field-input" id="login-username" name="username" type="text" autocomplete="username" placeholder="管理员用户名" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="login-password">密码</label>
+          <input class="field-input" id="login-password" name="password" type="password" autocomplete="current-password" placeholder="管理员密码" />
+        </div>
+        <button class="btn btn-primary auth-submit" type="submit">登 录</button>
+        <div class="auth-error" id="login-error"></div>
+        <div class="auth-hint">会话 7 天内有效，支持退出登录与强制吊销</div>
+      </form>
+
+      <form id="auth-setup-form" autocomplete="on" style="display:none;">
+        <div class="field">
+          <label class="field-label" for="setup-username">用户名</label>
+          <input class="field-input" id="setup-username" name="username" type="text" autocomplete="username" placeholder="例如：admin" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="setup-password">密码（至少 8 位）</label>
+          <input class="field-input" id="setup-password" name="password" type="password" autocomplete="new-password" placeholder="设置管理员密码" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="setup-password2">确认密码</label>
+          <input class="field-input" id="setup-password2" name="password2" type="password" autocomplete="new-password" placeholder="再次输入密码" />
+        </div>
+        <button class="btn btn-primary auth-submit" type="submit">创建管理员并进入</button>
+        <div class="auth-error" id="setup-error"></div>
+        <div class="auth-hint">首次部署初始化：仅当服务器尚未创建管理员时可用，创建后此入口永久关闭</div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 修改密码弹窗 -->
+  <div class="modal-mask" id="password-modal" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-title">修改管理员密码</div>
+      <div class="field">
+        <label class="field-label" for="pw-current">当前密码</label>
+        <input class="field-input" id="pw-current" type="password" autocomplete="current-password" />
+      </div>
+      <div class="field">
+        <label class="field-label" for="pw-new">新密码（至少 8 位）</label>
+        <input class="field-input" id="pw-new" type="password" autocomplete="new-password" />
+      </div>
+      <div class="field">
+        <label class="field-label" for="pw-new2">确认新密码</label>
+        <input class="field-input" id="pw-new2" type="password" autocomplete="new-password" />
+      </div>
+      <div class="auth-error" id="pw-error"></div>
+      <div class="btn-row">
+        <button class="btn" onclick="cms.closePasswordModal()">取消</button>
+        <button class="btn btn-primary" onclick="cms.submitPasswordChange()">确认修改</button>
+      </div>
+      <div class="auth-hint">修改成功后将吊销其它设备的登录状态，当前设备自动续签</div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="/markdown.js"></script>
+  <script src="/admin.js"></script>
+</body>
+</html>

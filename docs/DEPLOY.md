@@ -1,0 +1,175 @@
+# 部署详解
+
+本文按「后端 → 反代 → 前端 → 域名与 SEO → 备份」的顺序，把一套完整上线流程走一遍。命令以 Ubuntu + 宝塔面板为例，其它发行版把 `chown` / 路径换掉即可。
+
+---
+
+## 一、准备
+
+- 一台能跑 Docker 的服务器（1C1G 足够），已安装 `docker` 与 `docker compose` v2；
+- 一个域名，例如 `example.com`，计划用 `www.example.com` 做博客、`api.example.com` 做后端；
+- Cloudflare 账号（托管 DNS 并部署前端，免费额度够用）。
+
+```bash
+# 检查环境
+docker -v && docker compose version
+```
+
+## 二、部署后端
+
+```bash
+git clone https://github.com/<your-name>/simple-blog.git
+cd simple-blog/backend
+
+cp .env.example .env
+```
+
+编辑 `.env`：
+
+```ini
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=换成你自己的强密码      # 至少 8 位
+SITE_PUBLIC_URL=https://www.example.com
+BACKEND_PUBLIC_URL=https://api.example.com
+HOST_PORT=33001
+```
+
+准备数据目录并修正权限（**最容易踩的坑**）：
+
+```bash
+sudo mkdir -p data article Musings img file
+sudo chown -R 1000:1000 data article Musings img file config.json
+```
+
+> 容器内以 UID 1000 运行。如果宿主机目录属主是 root，初始化管理员时会报
+> `EACCES: permission denied`，接口返回「管理员数据目录不可写」。
+
+启动：
+
+```bash
+docker compose up -d --build
+docker compose ps                 # 等 STATUS 变成 healthy
+docker compose logs --tail 50
+```
+
+本机验证：
+
+```bash
+curl -s http://127.0.0.1:33001/api/auth/status
+# {"ok":true,"authed":false,"setupNeeded":false,"dataWritable":true}
+```
+
+`setupNeeded:false` 说明 `.env` 里的管理员已经创建好；如果之前没填 `ADMIN_PASSWORD`，第一次打开后台会出现初始化向导，设置完成后 `auth.json` 落盘。
+
+## 三、Nginx 反代 + HTTPS
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name api.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/api.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.example.com/privkey.pem;
+
+    client_max_body_size 20m;          # 上传图片/附件用
+
+    location / {
+        proxy_pass http://127.0.0.1:33001;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;   # Cookie 的 Secure 依赖这个头
+        proxy_read_timeout 120s;
+    }
+}
+
+server {
+    listen 80;
+    server_name api.example.com;
+    return 301 https://$host$request_uri;
+}
+```
+
+两个要点：
+
+1. **一定要带上 `X-Forwarded-Proto`**，后端据此判断是否给 Cookie 加 `Secure`；漏了的话 HTTPS 站点上 Cookie 依然可用，但弱化了防护。
+2. 如果前面还有 Cloudflare 代理，把 CF 的 IPv4/IPv6 段加进 `set_real_ip_from`，否则登录限流会按 Cloudflare 的出口 IP 计数，容易误伤所有访客。
+
+## 四、部署前端到 Cloudflare Pages
+
+1. 把仓库推到 GitHub（`frontend/` 与 `backend/` 在一起即可，Pages 只取它需要的目录）。
+2. Cloudflare 控制台 → **Workers & Pages → Create → Pages → Connect to Git**，选中仓库。
+3. 构建配置：
+   - Framework preset：`None`
+   - Build command：留空
+   - Build output directory：`frontend`
+4. **Settings → Environment variables**（Production 与 Preview 都加）：
+
+   | 变量 | 值 |
+   | --- | --- |
+   | `SITE_URL` | `https://www.example.com` |
+   | `API_BASE_URL` | `https://api.example.com` |
+   | `SITE_NAME` | `简单博客` |
+   | `SITE_BIO` | 一句话站点简介 |
+
+   > 改了环境变量需要重新部署一次才会生效。
+
+5. 自定义域名填 `www.example.com`（以及把根域 `example.com` 301 到 `www`）。
+
+部署完成后的自检：
+
+```bash
+curl -s https://www.example.com/ | head -20          # 首页
+curl -s https://www.example.com/robots.txt
+curl -s https://www.example.com/sitemap.xml | head  # 应看到 /post/<id> 真实路径
+curl -s https://www.example.com/posts | grep '<title>'   # 应为「文章 · 简单博客」
+```
+
+`sitemap.xml` 若返回的是首页 HTML，说明 Pages Functions 没生效：检查构建输出目录是否正确、`frontend/functions/` 目录是否被一起上传。
+
+## 五、域名、SEO 与收录
+
+1. DNS：`www` 指向 Pages（CNAME），`api` 指向服务器 IP；建议两者都开 Cloudflare 小云朵（后端请把 SSL 模式设为 **Full (strict)**）。
+2. **Google Search Console**：添加资源时选择「网域」并用 DNS TXT 验证，这样 `www` 与 `api` 都在同一资源下；然后在「站点地图」提交 `https://www.example.com/sitemap.xml`。
+   - 如果选的是「网址前缀」资源（`https://www.example.com`），那么提交 `api.example.com` 的 sitemap 会一直显示「无法读取」——这是 GSC 的资源隔离规则，不是服务端故障。
+   - 提交后通常需要 1–2 天才会抓取，期间状态显示「已提交」是正常的。
+3. **Bing Webmaster Tools**：可直接从 GSC 导入站点，再提交同一个 sitemap。
+4. **IndexNow**（可选，但很划算）：
+   ```bash
+   openssl rand -hex 16        # 例如 8f3c...e21
+   ```
+   把结果填进后端 `.env` 的 `INDEXNOW_KEY`，并在前端站点根目录（`frontend/`）放一个同名文件 `8f3c...e21.txt`，内容就是这串 key 本身。之后每次在后台发布或删除文章，后端都会通知 Bing/Yandex 重新抓取。
+
+## 六、备份与迁移
+
+需要备份的只有六个路径：
+
+```
+backend/config.json
+backend/article/
+backend/Musings/
+backend/img/
+backend/file/
+backend/data/          # auth.json、sessions.json、captcha-secret.json
+```
+
+```bash
+cd simple-blog/backend
+tar czf ~/blog-backup-$(date +%F).tar.gz config.json article Musings img file data
+```
+
+迁移到新机器：装好 Docker → 拷贝整个 `backend/`（含 `data/`）→ `chown -R 1000:1000` → `docker compose up -d --build`。所有会话、密码、文章、图片原样可用。
+
+## 七、常见问题
+
+| 现象 | 排查 |
+| --- | --- |
+| 容器起来又退出 | `docker compose logs` 看是否有 `EACCES`（目录权限）或端口占用 |
+| `Conflict. The container name is already in use` | `docker rm -f simple-blog-backend` 后重新 `up -d` |
+| 后台能进，前端文章 404 | `API_BASE_URL` 写错；浏览器 Network 里看 `/api/sync?module=posts` 的响应 |
+| 上传图片报 500 或仍是 jpg | `docker compose logs` 里是否有 sharp 加载失败；重新 `--build` |
+| 登录后刷新就退出 | Cookie 的 `SameSite=Strict` 要求前后端同站；如果前端在 `www.example.com`、后端在 `api.example.com`，属于同站（eTLD+1 相同），正常应可工作——检查浏览器是否有跨站拦截或第三方 Cookie 限制 |
+| 评论提交后不显示 | 评论默认待审核，在后台「评论管理」里通过 |
+
+> 若前端和后端不在同一个主域下（例如 `blog.pages.dev` + `api.example.com`），`SameSite=Strict` 的 Cookie 会被浏览器拦截，登录状态无法保持。请务必把前端绑到自有域名，并让前后端同属一个站点。

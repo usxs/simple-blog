@@ -1,0 +1,4 @@
+# 可选：把 /sitemap.xml 301 重定向到后端实时生成的 sitemap。
+# 默认使用 functions/sitemap.xml.js 做同域代理（无跳转、边缘缓存 5 分钟），一般无需此行。
+# 若代理函数未生效，可取消下一行注释并改成你的后端域名作为保底（_redirects 优先级高于 Functions）。
+# /sitemap.xml https://api.example.com/sitemap.xml 301
