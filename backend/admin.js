@@ -603,10 +603,14 @@ var cms = {
     var settingsEl = document.getElementById('admin-settings');
     if (grid) grid.style.display = isSettings ? 'none' : '';
     if (settingsEl) settingsEl.hidden = !isSettings;
+    // 存储路径提示只属于内容类页面，「管理」页不显示
+    var hintEl = document.getElementById('storage-hint');
     if (isSettings) {
+      if (hintEl) hintEl.style.display = 'none';
       this.loadSettings();
       return;
     }
+    if (hintEl) hintEl.style.display = '';
 
     document.getElementById('list-title').textContent = SCHEMAS[m].label + '列表';
     document.getElementById('storage-hint').textContent = SCHEMAS[m].storageHint;
