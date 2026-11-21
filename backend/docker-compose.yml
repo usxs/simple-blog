@@ -36,6 +36,14 @@ services:
       INDEXNOW_KEY_LOCATION: ${INDEXNOW_KEY_LOCATION:-}
       # 可选的服务器探针数据源（兼容 CF-Server-Monitor 的 /api/servers），留空则探针列表为空
       PROBE_SERVERS_URL: ${PROBE_SERVERS_URL:-}
+      # 站点信息初始值（之后可在后台「管理」页随时修改，改动会立即在前台生效）
+      SITE_NAME: ${SITE_NAME:-简单博客}
+      SITE_AVATAR: ${SITE_AVATAR:-简}
+      SITE_TITLE: ${SITE_TITLE:-简单博客}
+      SITE_SUBTITLE: ${SITE_SUBTITLE:-这里是我的个人博客，记录技术、折腾与生活。}
+      # 通行密钥（Passkey）需要 HTTPS；反向代理域名与后端 host 不一致时可显式指定
+      WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-}
+      WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:-}
     volumes:
       - ./config.json:/app/config.json
       - ./article:/app/article

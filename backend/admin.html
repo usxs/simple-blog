@@ -38,6 +38,7 @@
         <li><button class="nav-btn" data-mod="tools" onclick="cms.switchMod('tools')"><span>工具</span><span class="nav-count" id="count-tools">0</span></button></li>
         <li><button class="nav-btn" data-mod="status" onclick="cms.switchMod('status')"><span>状态</span><span class="nav-count" id="count-status">0</span></button></li>
         <li><button class="nav-btn" data-mod="quirky" onclick="cms.switchMod('quirky')"><span>奇奇怪怪</span><span class="nav-count" id="count-quirky">0</span></button></li>
+        <li><button class="nav-btn" data-mod="settings" onclick="cms.switchMod('settings')"><span>管理</span></button></li>
       </ul>
 
       <div class="sidebar-footer">
@@ -81,7 +82,6 @@
           <span class="storage-hint" id="storage-hint">存储: ./article/*/*.md</span>
           <div class="auth-actions">
             <button class="btn" onclick="cms.refreshData()">同步数据</button>
-            <button class="btn" onclick="cms.openPasswordModal()">修改密码</button>
             <button class="btn btn-danger" onclick="cms.logout()">退出登录</button>
           </div>
         </div>
@@ -106,6 +106,128 @@
             <div class="form-body" id="form-container"></div>
           </section>
         </div>
+
+        <section class="admin-settings" id="admin-settings" hidden>
+          <header class="settings-head">
+            <h2 class="settings-title">管理</h2>
+            <p class="settings-desc">站点信息 · 账号安全 · 多因素认证 · 登录会话</p>
+          </header>
+
+          <div class="settings-grid">
+            <section class="settings-card">
+              <div class="settings-card-head">
+                <h3>站点信息</h3>
+                <span class="settings-tip">保存后对前台立即生效</span>
+              </div>
+              <form id="site-form">
+                <div class="field">
+                  <label class="field-label" for="site-name">站点名称</label>
+                  <input class="field-input" id="site-name" maxlength="40" placeholder="显示在导航与侧边栏" />
+                </div>
+                <div class="field">
+                  <label class="field-label" for="site-avatar">头像文字（1–2 字）</label>
+                  <input class="field-input" id="site-avatar" maxlength="2" placeholder="例如：简" />
+                </div>
+                <div class="field">
+                  <label class="field-label" for="site-title">网页标题</label>
+                  <input class="field-input" id="site-title" maxlength="80" placeholder="浏览器标签页标题" />
+                </div>
+                <div class="field">
+                  <label class="field-label" for="site-subtitle">副标题 / 简介</label>
+                  <input class="field-input" id="site-subtitle" maxlength="200" placeholder="首页显示的一句话介绍" />
+                </div>
+                <div class="settings-actions">
+                  <button class="btn btn-primary" type="submit">保存站点信息</button>
+                </div>
+                <div class="auth-error" id="site-error"></div>
+              </form>
+            </section>
+
+            <section class="settings-card">
+              <div class="settings-card-head">
+                <h3>管理员账号</h3>
+              </div>
+              <form id="username-form">
+                <div class="field">
+                  <label class="field-label" for="account-username">管理员用户名</label>
+                  <input class="field-input" id="account-username" maxlength="32" autocomplete="username" />
+                </div>
+                <div class="field">
+                  <label class="field-label" for="account-password">当前密码（确认身份）</label>
+                  <input class="field-input" id="account-password" type="password" autocomplete="current-password" placeholder="修改前请验证当前密码" />
+                </div>
+                <div class="settings-actions">
+                  <button class="btn btn-primary" type="submit">保存用户名</button>
+                  <button class="btn" type="button" onclick="cms.openPasswordModal()">修改密码</button>
+                </div>
+                <div class="auth-error" id="username-error"></div>
+              </form>
+            </section>
+
+            <section class="settings-card">
+              <div class="settings-card-head">
+                <h3>两步验证</h3>
+                <span class="settings-badge" id="totp-badge">未启用</span>
+              </div>
+              <p class="settings-tip">使用 Google Authenticator、Microsoft Authenticator、1Password 等验证器应用保存密钥，登录时输入 6 位动态码。</p>
+              <div id="totp-off-box">
+                <button class="btn btn-primary" type="button" id="totp-start-btn">启用两步验证</button>
+              </div>
+              <div id="totp-setup-box" hidden>
+                <p class="settings-tip">在验证器中选择「手动输入密钥」，或复制下面的链接导入：</p>
+                <div class="totp-secret-row">
+                  <code class="totp-secret" id="totp-secret"></code>
+                  <button class="btn" type="button" id="totp-copy-btn">复制密钥</button>
+                </div>
+                <div class="totp-secret-row">
+                  <code class="totp-uri" id="totp-uri"></code>
+                  <button class="btn" type="button" id="totp-uri-copy-btn">复制链接</button>
+                </div>
+                <div class="field">
+                  <label class="field-label" for="totp-code">输入验证器显示的 6 位验证码</label>
+                  <input class="field-input" id="totp-code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000" />
+                </div>
+                <div class="settings-actions">
+                  <button class="btn btn-primary" type="button" id="totp-enable-btn">确认启用</button>
+                  <button class="btn" type="button" id="totp-cancel-btn">取消</button>
+                </div>
+              </div>
+              <div id="totp-on-box" hidden>
+                <div class="settings-actions">
+                  <button class="btn" type="button" id="totp-backup-btn">重新生成备用码</button>
+                  <button class="btn btn-danger" type="button" id="totp-disable-btn">关闭两步验证</button>
+                </div>
+              </div>
+              <pre class="backup-codes" id="backup-codes" hidden></pre>
+              <div class="auth-error" id="totp-error"></div>
+            </section>
+
+            <section class="settings-card">
+              <div class="settings-card-head">
+                <h3>通行密钥</h3>
+                <span class="settings-tip">指纹 / 面容 / 安全密钥</span>
+              </div>
+              <p class="settings-tip">添加通行密钥后可免密码登录，私钥保存在你的设备安全芯片中，服务器只保存公钥。</p>
+              <ul class="passkey-list" id="passkey-list"></ul>
+              <div class="settings-actions">
+                <button class="btn btn-primary" type="button" id="passkey-add-btn">添加通行密钥</button>
+              </div>
+              <div class="auth-error" id="passkey-error"></div>
+            </section>
+
+            <section class="settings-card">
+              <div class="settings-card-head">
+                <h3>登录会话</h3>
+                <span class="settings-tip" id="session-count"></span>
+              </div>
+              <ul class="session-list" id="session-list"></ul>
+              <div class="settings-actions">
+                <button class="btn" type="button" id="revoke-others-btn">下线其它设备</button>
+              </div>
+              <div class="auth-error" id="session-error"></div>
+            </section>
+          </div>
+        </section>
       </main>
     </div>
   </div>
@@ -128,7 +250,12 @@
           <label class="field-label" for="login-password">密码</label>
           <input class="field-input" id="login-password" name="password" type="password" autocomplete="current-password" placeholder="管理员密码" />
         </div>
+        <div class="field" id="login-totp-field" hidden>
+          <label class="field-label" for="login-totp">两步验证码</label>
+          <input class="field-input" id="login-totp" name="totp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="9" placeholder="6 位动态码或一次性备用码" />
+        </div>
         <button class="btn btn-primary auth-submit" type="submit">登 录</button>
+        <button class="btn auth-passkey" type="button" id="passkey-login-btn" hidden>用通行密钥登录</button>
         <div class="auth-error" id="login-error"></div>
         <div class="auth-hint">会话 7 天内有效，支持退出登录与强制吊销</div>
       </form>

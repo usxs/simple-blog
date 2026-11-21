@@ -19,6 +19,9 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { ROOT_DIR } = require('./storage');
+const totp = require('./totp');
+const webauthn = require('./webauthn');
+const site = require('./site');
 
 const DATA_DIR = process.env.AUTH_DATA_DIR || path.join(ROOT_DIR, 'data');
 const AUTH_FILE = path.join(DATA_DIR, 'auth.json');
@@ -130,12 +133,30 @@ const DUMMY_HASH = scryptHash('dummy-password-for-timing-equality');
 // 凭据存取
 // ---------------------------------------------------------------------------
 
+function normalizeTotp(raw) {
+  const t = raw && typeof raw === 'object' ? raw : {};
+  return {
+    enabled: Boolean(t.enabled),
+    secret: String(t.secret || ''),
+    pending: String(t.pending || ''),
+    pendingAt: Number(t.pendingAt) || 0,
+    backup: Array.isArray(t.backup) ? t.backup.filter(x => typeof x === 'string') : []
+  };
+}
+
 function getCreds() {
   // 凭据文件存在但损坏 → 返回 null 但 setupNeeded 也为 false（fail-closed，拒绝一切登录）
   if (fs.existsSync(AUTH_FILE)) {
     const raw = readJsonSafe(AUTH_FILE, null);
     if (raw && raw.username && raw.hash) {
-      return { username: String(raw.username), hash: String(raw.hash), createdAt: raw.createdAt || 0, updatedAt: raw.updatedAt || 0 };
+      return {
+        username: String(raw.username),
+        hash: String(raw.hash),
+        createdAt: raw.createdAt || 0,
+        updatedAt: raw.updatedAt || 0,
+        totp: normalizeTotp(raw.totp),
+        passkeys: Array.isArray(raw.passkeys) ? raw.passkeys.filter(k => k && k.id && k.coseRaw) : []
+      };
     }
     return null;
   }
@@ -165,13 +186,20 @@ function validatePassword(raw) {
   return p;
 }
 
-function saveCreds(username, hash) {
+function saveAuthRecord(record) {
+  const prev = readJsonSafe(AUTH_FILE, {}) || {};
   writeJsonAtomic(AUTH_FILE, {
-    username: username,
-    hash: hash,
-    createdAt: Date.now(),
-    updatedAt: Date.now()
+    username: record.username,
+    hash: record.hash,
+    createdAt: prev.createdAt || record.createdAt || Date.now(),
+    updatedAt: Date.now(),
+    totp: normalizeTotp(record.totp),
+    passkeys: Array.isArray(record.passkeys) ? record.passkeys : []
   });
+}
+
+function saveCreds(username, hash) {
+  saveAuthRecord({ username, hash, totp: { enabled: false }, passkeys: [] });
 }
 
 function setupAccount(username, password) {
@@ -228,7 +256,23 @@ function pruneLoginAttempts() {
 }
 setInterval(pruneLoginAttempts, 10 * 60 * 1000).unref();
 
-function attemptLogin(ip, username, password) {
+function registerFailure(ip, rec, now) {
+  rec.lastActive = now;
+  rec.fails += 1;
+  if (rec.fails >= LOGIN_FAIL_LIMIT) {
+    rec.blockedUntil = now + LOGIN_BLOCK_MS;
+    rec.fails = 0;
+  }
+  loginAttempts.set(ip, rec);
+}
+
+/**
+ * 账密登录，支持两步验证：
+ *  - 未开启 2FA：行为与之前一致
+ *  - 已开启 2FA 且未带验证码：返回 needTotp，密码正确但还差一步
+ *  - 验证码可以是 6 位动态码，也可以是一次性备用码（命中后立即作废）
+ */
+function attemptLogin(ip, username, password, totpCode) {
   if (!DATA_WRITABLE) {
     return {
       ok: false,
@@ -259,19 +303,41 @@ function attemptLogin(ip, username, password) {
     scryptVerify(String(password || ''), DUMMY_HASH);
   }
 
-  rec.lastActive = now;
   if (!success) {
-    rec.fails += 1;
-    if (rec.fails >= LOGIN_FAIL_LIMIT) {
-      rec.blockedUntil = now + LOGIN_BLOCK_MS;
-      rec.fails = 0;
-    }
-    loginAttempts.set(ip, rec);
+    registerFailure(ip, rec, now);
     return { ok: false, status: 401, error: '用户名或密码错误' };
   }
 
+  const mfa = creds.totp;
+  if (mfa && mfa.enabled) {
+    const code = String(totpCode || '').trim();
+    if (!code) {
+      rec.lastActive = now;
+      loginAttempts.set(ip, rec);
+      return { ok: false, status: 401, needTotp: true, error: '请输入两步验证码' };
+    }
+    let pass = false;
+    let usedBackupIdx = -1;
+    if (/^\d{6}$/.test(code.replace(/\s+/g, ''))) {
+      pass = totp.verifyTotp(mfa.secret, code);
+    }
+    if (!pass) {
+      usedBackupIdx = totp.matchBackupCode(code, mfa.backup);
+      pass = usedBackupIdx >= 0;
+    }
+    if (!pass) {
+      registerFailure(ip, rec, now);
+      return { ok: false, status: 401, needTotp: true, error: '两步验证码不正确' };
+    }
+    if (usedBackupIdx >= 0) {
+      mfa.backup.splice(usedBackupIdx, 1);
+      saveAuthRecord({ ...creds, totp: mfa });
+      console.log(`[auth] 已使用一次性备用码登录，剩余备用码 ${mfa.backup.length} 个`);
+    }
+  }
+
   loginAttempts.delete(ip);
-  return { ok: true, username: creds.username };
+  return { ok: true, username: creds.username, totpUsed: Boolean(mfa && mfa.enabled) };
 }
 
 // ---------------------------------------------------------------------------
@@ -436,7 +502,13 @@ function changePassword(req, currentPassword, newPassword) {
   }
 
   const token = parseCookies(req)[SESSION_COOKIE];
-  saveCreds(creds.username, scryptHash(p));
+  saveAuthRecord({
+    username: creds.username,
+    hash: scryptHash(p),
+    createdAt: creds.createdAt,
+    totp: creds.totp,
+    passkeys: creds.passkeys
+  });
   const revoked = revokeOtherSessions(token);
 
   // 会话轮换：签发新 Token，旧 Token 立即作废
@@ -531,10 +603,12 @@ function handleLogin(req, res) {
   if (!assertSameOrigin(req)) return respond(res, 403, { ok: false, error: '拒绝跨站请求' });
   return readJsonBody(req, res, (data) => {
     const ip = getClientIp(req);
-    const result = attemptLogin(ip, data.username, data.password);
+    const result = attemptLogin(ip, data.username, data.password, data.totpCode || data.code);
     if (!result.ok) {
-      res.setHeader('Retry-After', String(result.retryAfter || 60));
-      return respond(res, result.status, { ok: false, error: result.error });
+      if (result.retryAfter) res.setHeader('Retry-After', String(result.retryAfter));
+      const payload = { ok: false, error: result.error };
+      if (result.needTotp) payload.needTotp = true;
+      return respond(res, result.status, payload);
     }
 
     let token;
@@ -581,6 +655,543 @@ function handleChangePassword(req, res) {
   });
 }
 
+
+// ---------------------------------------------------------------------------
+// 账号管理：改用户名 / 两步验证 / 通行密钥 / 会话
+// ---------------------------------------------------------------------------
+
+const CHALLENGE_TTL_MS = 5 * 60 * 1000;
+const challenges = new Map();
+
+function putChallenge(type, extra) {
+  const challenge = webauthn.b64uEncode(crypto.randomBytes(32));
+  challenges.set(challenge, { type, expiresAt: Date.now() + CHALLENGE_TTL_MS, ...(extra || {}) });
+  return challenge;
+}
+
+function takeChallenge(challenge, type) {
+  const rec = challenges.get(String(challenge || ''));
+  if (!rec) return null;
+  challenges.delete(challenge);
+  if (rec.type !== type || rec.expiresAt < Date.now()) return null;
+  return rec;
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of challenges.entries()) if (v.expiresAt < now) challenges.delete(k);
+}, 10 * 60 * 1000).unref();
+
+function rpConfig(req) {
+  const hostHeader = String(req.headers['x-forwarded-host'] || req.headers['host'] || '').split(',')[0].trim();
+  const hostname = hostHeader.split(':')[0] || 'localhost';
+  const rpId = String(process.env.WEBAUTHN_RP_ID || hostname).trim();
+  const proto = isSecureRequest(req) ? 'https' : 'http';
+  const origins = [];
+  if (process.env.WEBAUTHN_ORIGIN) {
+    origins.push(String(process.env.WEBAUTHN_ORIGIN).replace(/\/+$/, ''));
+  } else {
+    origins.push(`${proto}://${hostHeader || hostname}`);
+  }
+  if (process.env.WEBAUTHN_EXTRA_ORIGINS) {
+    String(process.env.WEBAUTHN_EXTRA_ORIGINS).split(',').map(x => x.trim().replace(/\/+$/, '')).filter(Boolean).forEach(o => origins.push(o));
+  }
+  return { rpId, origins };
+}
+
+function requireWritable() {
+  if (!DATA_WRITABLE) {
+    return { ok: false, status: 503, error: '管理员数据目录不可写，请检查容器 data 目录挂载与宿主机权限（chown 1000:1000）后重试' };
+  }
+  return null;
+}
+
+function verifyPasswordOrFail(creds, password) {
+  if (!creds) return '管理员凭据不可用';
+  if (!scryptVerify(String(password || ''), creds.hash)) return '当前密码不正确';
+  return '';
+}
+
+function changeUsername(currentPassword, newUsername) {
+  const blocked = requireWritable();
+  if (blocked) return blocked;
+  const creds = getCreds();
+  const err = verifyPasswordOrFail(creds, currentPassword);
+  if (err) return { ok: false, error: err };
+
+  const u = validateUsername(newUsername);
+  if (!u) return { ok: false, error: '用户名不能为空且长度不超过 32 个字符（不含空白字符）' };
+  if (timingSafeEqualStr(u, creds.username)) return { ok: false, error: '新用户名与当前用户名相同' };
+
+  saveAuthRecord({ ...creds, username: u });
+  // 会话里冗余存了用户名，同步刷新，避免界面显示旧名字
+  const list = loadSessions();
+  let changed = 0;
+  list.forEach(sess => {
+    if (sess.username !== u) { sess.username = u; changed += 1; }
+  });
+  if (changed) saveSessions(list);
+  console.log(`[auth] 管理员用户名已修改: ${creds.username} -> ${u}`);
+  return { ok: true, username: u };
+}
+
+function beginTotpSetup(currentPassword) {
+  const blocked = requireWritable();
+  if (blocked) return blocked;
+  const creds = getCreds();
+  const err = verifyPasswordOrFail(creds, currentPassword);
+  if (err) return { ok: false, error: err };
+  if (creds.totp.enabled) return { ok: false, error: '两步验证已开启，如需重设请先关闭' };
+
+  const secret = totp.generateSecret();
+  saveAuthRecord({ ...creds, totp: { ...creds.totp, pending: secret, pendingAt: Date.now() } });
+  const issuer = site.getSite().name || 'Blog Console';
+  return {
+    ok: true,
+    secret,
+    otpauth: totp.otpauthUrl(secret, creds.username, issuer),
+    issuer,
+    account: creds.username
+  };
+}
+
+function enableTotp(code) {
+  const blocked = requireWritable();
+  if (blocked) return blocked;
+  const creds = getCreds();
+  if (!creds) return { ok: false, error: '管理员凭据不可用' };
+  if (creds.totp.enabled) return { ok: false, error: '两步验证已开启' };
+  if (!creds.totp.pending) return { ok: false, error: '请先生成两步验证密钥' };
+  if (Date.now() - creds.totp.pendingAt > 15 * 60 * 1000) {
+    return { ok: false, error: '密钥已过期，请重新生成' };
+  }
+  if (!totp.verifyTotp(creds.totp.pending, code)) {
+    return { ok: false, error: '验证码不正确，请确认设备时间是否准确' };
+  }
+
+  const { plain, hashed } = totp.generateBackupCodes(10);
+  saveAuthRecord({
+    ...creds,
+    totp: { enabled: true, secret: creds.totp.pending, pending: '', pendingAt: 0, backup: hashed }
+  });
+  console.log('[auth] 已开启两步验证（TOTP）');
+  return { ok: true, backupCodes: plain };
+}
+
+function disableTotp(currentPassword) {
+  const blocked = requireWritable();
+  if (blocked) return blocked;
+  const creds = getCreds();
+  const err = verifyPasswordOrFail(creds, currentPassword);
+  if (err) return { ok: false, error: err };
+  if (!creds.totp.enabled && !creds.totp.pending) return { ok: false, error: '两步验证未开启' };
+
+  saveAuthRecord({ ...creds, totp: { enabled: false, secret: '', pending: '', pendingAt: 0, backup: [] } });
+  console.log('[auth] 已关闭两步验证');
+  return { ok: true };
+}
+
+function regenerateBackupCodes(currentPassword) {
+  const blocked = requireWritable();
+  if (blocked) return blocked;
+  const creds = getCreds();
+  const err = verifyPasswordOrFail(creds, currentPassword);
+  if (err) return { ok: false, error: err };
+  if (!creds.totp.enabled) return { ok: false, error: '两步验证未开启' };
+
+  const { plain, hashed } = totp.generateBackupCodes(10);
+  saveAuthRecord({ ...creds, totp: { ...creds.totp, backup: hashed } });
+  console.log('[auth] 已重新生成一次性备用码');
+  return { ok: true, backupCodes: plain };
+}
+
+// ---------------- 通行密钥（Passkey / WebAuthn） ----------------
+
+function publicPasskeyMeta(k) {
+  return {
+    id: k.id,
+    label: k.label || '通行密钥',
+    createdAt: k.createdAt || 0,
+    lastUsedAt: k.lastUsedAt || 0,
+    counter: k.counter || 0
+  };
+}
+
+function listPasskeys() {
+  const creds = getCreds();
+  return creds && creds.passkeys ? creds.passkeys.map(publicPasskeyMeta) : [];
+}
+
+function beginPasskeyRegistration(req) {
+  const blocked = requireWritable();
+  if (blocked) return blocked;
+  const creds = getCreds();
+  if (!creds) return { ok: false, error: '管理员凭据不可用' };
+
+  const { rpId } = rpConfig(req);
+  const challenge = putChallenge('register', { rpId });
+  const siteName = site.getSite().name || 'Blog Console';
+  return {
+    ok: true,
+    publicKey: {
+      challenge,
+      rp: { id: rpId, name: siteName },
+      user: {
+        id: webauthn.b64uEncode(Buffer.from(creds.username, 'utf8')),
+        name: creds.username,
+        displayName: creds.username
+      },
+      pubKeyCredParams: [
+        { type: 'public-key', alg: -7 },
+        { type: 'public-key', alg: -257 }
+      ],
+      timeout: 60000,
+      attestation: 'none',
+      authenticatorSelection: {
+        residentKey: 'preferred',
+        requireResidentKey: false,
+        userVerification: 'preferred'
+      },
+      excludeCredentials: creds.passkeys.map(k => ({ type: 'public-key', id: k.id }))
+    }
+  };
+}
+
+function finishPasskeyRegistration(req, body) {
+  const blocked = requireWritable();
+  if (blocked) return blocked;
+  const creds = getCreds();
+  if (!creds) return { ok: false, error: '管理员凭据不可用' };
+
+  let result;
+  try {
+    const rp = rpConfig(req);
+    const clientData = JSON.parse(webauthn.b64uDecode(body.clientDataJSON).toString('utf8'));
+    const challenge = takeChallenge(clientData.challenge, 'register');
+    if (!challenge) return { ok: false, error: '注册会话已过期，请重新开始' };
+    result = webauthn.verifyRegistration({
+      clientDataJSON: body.clientDataJSON,
+      attestationObject: body.attestationObject,
+      expectedChallenge: clientData.challenge,
+      rpId: rp.rpId,
+      expectedOrigins: rp.origins
+    });
+  } catch (e) {
+    return { ok: false, error: '通行密钥注册失败：' + (e && e.message ? e.message : '校验未通过') };
+  }
+
+  if (creds.passkeys.some(k => k.id === result.credentialId)) {
+    return { ok: false, error: '该通行密钥已存在' };
+  }
+  const label = String(body.label || '').trim().slice(0, 40) || ('通行密钥 ' + new Date().toLocaleDateString('zh-CN'));
+  const record = {
+    id: result.credentialId,
+    coseRaw: result.coseRaw,
+    alg: result.alg,
+    counter: result.counter || 0,
+    label,
+    createdAt: Date.now(),
+    lastUsedAt: 0,
+    transports: Array.isArray(body.transports) ? body.transports.slice(0, 4) : []
+  };
+  creds.passkeys.push(record);
+  saveAuthRecord(creds);
+  console.log(`[auth] 已添加通行密钥：${label}`);
+  return { ok: true, passkey: publicPasskeyMeta(record) };
+}
+
+function deletePasskey(currentPassword, id) {
+  const blocked = requireWritable();
+  if (blocked) return blocked;
+  const creds = getCreds();
+  const err = verifyPasswordOrFail(creds, currentPassword);
+  if (err) return { ok: false, error: err };
+
+  const idx = creds.passkeys.findIndex(k => k.id === String(id || ''));
+  if (idx === -1) return { ok: false, error: '未找到该通行密钥' };
+  const [removed] = creds.passkeys.splice(idx, 1);
+  saveAuthRecord(creds);
+  console.log(`[auth] 已删除通行密钥：${removed.label || removed.id}`);
+  return { ok: true };
+}
+
+function beginPasskeyLogin(req) {
+  const creds = getCreds();
+  if (!creds || !creds.passkeys.length) return { ok: false, status: 400, error: '尚未登记通行密钥' };
+
+  const { rpId } = rpConfig(req);
+  const challenge = putChallenge('login', { rpId });
+  return {
+    ok: true,
+    publicKey: {
+      challenge,
+      rpId,
+      timeout: 60000,
+      userVerification: 'preferred',
+      allowCredentials: creds.passkeys.map(k => ({
+        type: 'public-key',
+        id: k.id,
+        transports: Array.isArray(k.transports) && k.transports.length ? k.transports : undefined
+      }))
+    }
+  };
+}
+
+function finishPasskeyLogin(req, body, ip) {
+  const creds = getCreds();
+  if (!creds) return { ok: false, status: 401, error: '管理员凭据不可用' };
+
+  const now = Date.now();
+  const rec = loginAttempts.get(ip) || { fails: 0, blockedUntil: 0, lastActive: now };
+  if (now < rec.blockedUntil) {
+    return { ok: false, status: 429, error: '尝试次数过多，请稍后再试', retryAfter: Math.ceil((rec.blockedUntil - now) / 1000) };
+  }
+
+  try {
+    const clientData = JSON.parse(webauthn.b64uDecode(body.clientDataJSON).toString('utf8'));
+    const challenge = takeChallenge(clientData.challenge, 'login');
+    if (!challenge) return { ok: false, status: 401, error: '登录会话已过期，请重试' };
+
+    const credentialId = String(body.credentialId || '');
+    const idx = creds.passkeys.findIndex(k => k.id === credentialId);
+    if (idx === -1) return { ok: false, status: 401, error: '该通行密钥未登记' };
+
+    const rp = rpConfig(req);
+    const result = webauthn.verifyAssertion({
+      clientDataJSON: body.clientDataJSON,
+      authenticatorData: body.authenticatorData,
+      signature: body.signature,
+      expectedChallenge: clientData.challenge,
+      rpId: rp.rpId,
+      expectedOrigins: rp.origins,
+      coseRaw: creds.passkeys[idx].coseRaw,
+      storedCounter: creds.passkeys[idx].counter
+    });
+
+    creds.passkeys[idx].counter = result.counter || creds.passkeys[idx].counter;
+    creds.passkeys[idx].lastUsedAt = Date.now();
+    saveAuthRecord(creds);
+    loginAttempts.delete(ip);
+    return { ok: true, username: creds.username };
+  } catch (e) {
+    registerFailure(ip, rec, now);
+    return { ok: false, status: 401, error: '通行密钥验证失败：' + (e && e.message ? e.message : '校验未通过') };
+  }
+}
+
+// ---------------- 会话列表 ----------------
+
+function listSessions(req) {
+  const token = parseCookies(req)[SESSION_COOKIE];
+  const currentId = token ? sha256hex(token) : '';
+  const now = Date.now();
+  return loadSessions()
+    .filter(s => s.expiresAt > now)
+    .sort((a, b) => (b.lastSeenAt || 0) - (a.lastSeenAt || 0))
+    .map(s => ({
+      id: String(s.id || '').slice(0, 8),
+      current: s.id === currentId,
+      ip: s.ip || '',
+      ua: s.ua || '',
+      createdAt: s.createdAt || 0,
+      lastSeenAt: s.lastSeenAt || 0,
+      expiresAt: s.expiresAt || 0
+    }));
+}
+
+function adminOverview(req) {
+  const creds = getCreds();
+  return {
+    username: creds ? creds.username : '',
+    site: site.getSite(),
+    totp: {
+      enabled: Boolean(creds && creds.totp.enabled),
+      pending: Boolean(creds && creds.totp.pending && !creds.totp.enabled),
+      backupCodesLeft: creds && creds.totp.enabled ? creds.totp.backup.length : 0
+    },
+    passkeys: listPasskeys(),
+    sessions: listSessions(req),
+    dataWritable: DATA_WRITABLE,
+    version: (() => {
+      try { return require('../package.json').version || '1.0.0'; } catch (e) { return '1.0.0'; }
+    })()
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 管理接口 HTTP 处理器
+// ---------------------------------------------------------------------------
+
+function handleSiteGet(req, res) {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  return respond(res, 200, { ok: true, site: site.getSite() });
+}
+
+function handleAdminOverview(req, res) {
+  return respond(res, 200, { ok: true, ...adminOverview(req) });
+}
+
+function handleSiteSave(req, res) {
+  return readJsonBody(req, res, (data) => {
+    try {
+      const saved = site.saveSite(data || {});
+      return respond(res, 200, { ok: true, site: saved });
+    } catch (e) {
+      return respond(res, 503, { ok: false, error: '站点配置写入失败，请检查 data 目录权限' });
+    }
+  });
+}
+
+function handleChangeUsername(req, res) {
+  return readJsonBody(req, res, (data) => {
+    let result;
+    try {
+      result = changeUsername(data.currentPassword || data.password, data.username);
+    } catch (e) {
+      return respond(res, 503, { ok: false, error: '数据写入失败，请检查 data 目录权限后重试' });
+    }
+    if (!result.ok) return respond(res, result.status || 400, result);
+    return respond(res, 200, { ok: true, username: result.username });
+  });
+}
+
+function handleTotpSetup(req, res) {
+  return readJsonBody(req, res, (data) => {
+    let result;
+    try {
+      result = beginTotpSetup(data.currentPassword || data.password);
+    } catch (e) {
+      return respond(res, 503, { ok: false, error: '数据写入失败，请检查 data 目录权限后重试' });
+    }
+    return respond(res, result.ok ? 200 : (result.status || 400), result);
+  });
+}
+
+function handleTotpEnable(req, res) {
+  return readJsonBody(req, res, (data) => {
+    let result;
+    try {
+      result = enableTotp(data.code);
+    } catch (e) {
+      return respond(res, 503, { ok: false, error: '数据写入失败，请检查 data 目录权限后重试' });
+    }
+    return respond(res, result.ok ? 200 : (result.status || 400), result);
+  });
+}
+
+function handleTotpDisable(req, res) {
+  return readJsonBody(req, res, (data) => {
+    let result;
+    try {
+      result = disableTotp(data.currentPassword || data.password);
+    } catch (e) {
+      return respond(res, 503, { ok: false, error: '数据写入失败，请检查 data 目录权限后重试' });
+    }
+    return respond(res, result.ok ? 200 : (result.status || 400), result);
+  });
+}
+
+function handleBackupCodes(req, res) {
+  return readJsonBody(req, res, (data) => {
+    let result;
+    try {
+      result = regenerateBackupCodes(data.currentPassword || data.password);
+    } catch (e) {
+      return respond(res, 503, { ok: false, error: '数据写入失败，请检查 data 目录权限后重试' });
+    }
+    return respond(res, result.ok ? 200 : (result.status || 400), result);
+  });
+}
+
+function handlePasskeyRegisterOptions(req, res) {
+  return readJsonBody(req, res, () => {
+    let result;
+    try {
+      result = beginPasskeyRegistration(req);
+    } catch (e) {
+      return respond(res, 500, { ok: false, error: '生成注册参数失败' });
+    }
+    return respond(res, result.ok ? 200 : (result.status || 400), result);
+  });
+}
+
+function handlePasskeyRegister(req, res) {
+  return readJsonBody(req, res, (raw) => {
+    // WebAuthn 响应比普通 JSON 大，单独放宽上限
+    let result;
+    try {
+      result = finishPasskeyRegistration(req, raw);
+    } catch (e) {
+      return respond(res, 500, { ok: false, error: '通行密钥注册失败' });
+    }
+    return respond(res, result.ok ? 200 : (result.status || 400), result);
+  }, 64 * 1024);
+}
+
+function handlePasskeyList(req, res) {
+  const creds = getCreds();
+  return respond(res, 200, {
+    ok: true,
+    passkeys: listPasskeys(),
+    totpEnabled: Boolean(creds && creds.totp.enabled)
+  });
+}
+
+function handlePasskeyDelete(req, res) {
+  return readJsonBody(req, res, (data) => {
+    let result;
+    try {
+      result = deletePasskey(data.currentPassword || data.password, data.id);
+    } catch (e) {
+      return respond(res, 503, { ok: false, error: '数据写入失败，请检查 data 目录权限后重试' });
+    }
+    return respond(res, result.ok ? 200 : (result.status || 400), result);
+  });
+}
+
+function handlePasskeyLoginOptions(req, res) {
+  if (!assertSameOrigin(req)) return respond(res, 403, { ok: false, error: '拒绝跨站请求' });
+  return readJsonBody(req, res, () => {
+    const result = beginPasskeyLogin(req);
+    return respond(res, result.ok ? 200 : (result.status || 400), result);
+  });
+}
+
+function handlePasskeyLogin(req, res) {
+  if (!assertSameOrigin(req)) return respond(res, 403, { ok: false, error: '拒绝跨站请求' });
+  return readJsonBody(req, res, (data) => {
+    const result = finishPasskeyLogin(req, data || {}, getClientIp(req));
+    if (!result.ok) {
+      if (result.retryAfter) res.setHeader('Retry-After', String(result.retryAfter));
+      return respond(res, result.status || 401, { ok: false, error: result.error });
+    }
+    let token;
+    try {
+      token = createSession(req, result.username);
+    } catch (e) {
+      return respond(res, 503, { ok: false, error: '会话写入失败，请检查 data 目录权限后重试' });
+    }
+    res.setHeader('Set-Cookie', sessionCookieHeader(req, token, Math.floor(SESSION_TTL_MS / 1000)));
+    return respond(res, 200, { ok: true, username: result.username });
+  }, 64 * 1024);
+}
+
+function handleSessionsList(req, res) {
+  return respond(res, 200, { ok: true, sessions: listSessions(req) });
+}
+
+function handleSessionsRevokeOthers(req, res) {
+  return readJsonBody(req, res, () => {
+    let revoked = 0;
+    try {
+      revoked = revokeOtherSessions(parseCookies(req)[SESSION_COOKIE]);
+    } catch (e) {
+      return respond(res, 503, { ok: false, error: '数据写入失败，请检查 data 目录权限后重试' });
+    }
+    return respond(res, 200, { ok: true, revoked });
+  });
+}
+
 // 定期清理过期会话文件
 setInterval(() => {
   try {
@@ -596,10 +1207,30 @@ module.exports = {
   getSession,
   isAuthenticated,
   assertSameOrigin,
+  assertSameOriginStrict: assertSameOrigin,
   changePassword,
   handleStatus,
   handleSetup,
+  getSiteInfo: () => site.getSite(),
+  saveSiteInfo: (patch) => site.saveSite(patch),
   handleLogin,
   handleLogout,
-  handleChangePassword
+  handleChangePassword,
+  // 站点信息 + 管理页
+  handleSiteGet,
+  handleAdminOverview,
+  handleSiteSave,
+  handleChangeUsername,
+  handleTotpSetup,
+  handleTotpEnable,
+  handleTotpDisable,
+  handleBackupCodes,
+  handlePasskeyList,
+  handlePasskeyRegisterOptions,
+  handlePasskeyRegister,
+  handlePasskeyDelete,
+  handlePasskeyLoginOptions,
+  handlePasskeyLogin,
+  handleSessionsList,
+  handleSessionsRevokeOthers
 };

@@ -18,6 +18,11 @@ backend/img/*
 backend/file/*
 !backend/file/.gitkeep
 
+# 备份包与临时归档
+*.tar.gz
+*.tgz
+.backup-*
+
 # 杂项
 *.log
 .DS_Store

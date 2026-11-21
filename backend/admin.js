@@ -92,6 +92,24 @@ var SCHEMAS = {
   }
 };
 
+/* ===== WebAuthn 编解码：ArrayBuffer <-> base64url ===== */
+function b64uToBuffer(value) {
+  var s = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
+  var pad = s.length % 4;
+  if (pad) s += '===='.slice(0, 4 - pad);
+  var bin = atob(s);
+  var bytes = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
+}
+
+function bufferToB64u(buffer) {
+  var bytes = new Uint8Array(buffer);
+  var bin = '';
+  for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
 var cms = {
   mod: 'posts',
   markdownMode: 'content',
@@ -105,6 +123,10 @@ var cms = {
     this.bindUploadInputs();
     this.renderForm();
     this.bindAuthForms();
+    this.bindSettings();
+    document.getElementById('passkey-login-btn').addEventListener('click', function () {
+      cms.passkeyLogin();
+    });
     await this.bootstrapAuth();
   },
 
@@ -146,6 +168,9 @@ var cms = {
     document.getElementById('auth-setup-form').style.display = isSetup ? 'block' : 'none';
     document.getElementById('login-error').textContent = '';
     document.getElementById('setup-error').textContent = '';
+    document.getElementById('login-totp-field').hidden = true;
+    document.getElementById('login-totp').value = '';
+    if (!isSetup) this.probePasskeyLogin();
     setTimeout(function () {
       var focusEl = document.getElementById(isSetup ? 'setup-username' : 'login-username');
       if (focusEl) focusEl.focus();
@@ -178,6 +203,8 @@ var cms = {
       errEl.textContent = '';
       var username = document.getElementById('login-username').value.trim();
       var password = document.getElementById('login-password').value;
+      var totpEl = document.getElementById('login-totp');
+      var totpCode = totpEl.value.trim();
       if (!username || !password) {
         errEl.textContent = '请输入用户名和密码';
         return;
@@ -186,14 +213,24 @@ var cms = {
         var res = await fetch(self.getApiUrl('/api/auth/login'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: username, password: password })
+          body: JSON.stringify({ username: username, password: password, totpCode: totpCode })
         });
         var data = await res.json().catch(function () { return {}; });
         if (!res.ok) {
+          // 密码正确但缺两步验证码：展开验证码输入框，不提示密码错误
+          if (data && data.needTotp) {
+            document.getElementById('login-totp-field').hidden = false;
+            errEl.textContent = data.error || '请输入两步验证码';
+            totpEl.value = '';
+            totpEl.focus();
+            return;
+          }
           errEl.textContent = (data && data.error) ? data.error : ('登录失败 (HTTP ' + res.status + ')');
           return;
         }
         document.getElementById('login-password').value = '';
+        totpEl.value = '';
+        document.getElementById('login-totp-field').hidden = true;
         self.enterConsole(data.username);
       } catch (err) {
         errEl.textContent = '网络错误：请确认后端服务是否可达';
@@ -559,6 +596,18 @@ var cms = {
     for (var i = 0; i < btns.length; i++) {
       btns[i].classList.toggle('active', btns[i].getAttribute('data-mod') === m);
     }
+
+    // 「管理」是独立页面，不参与列表 / 编辑器布局
+    var isSettings = m === 'settings';
+    var grid = document.querySelector('.cms-grid');
+    var settingsEl = document.getElementById('admin-settings');
+    if (grid) grid.style.display = isSettings ? 'none' : '';
+    if (settingsEl) settingsEl.hidden = !isSettings;
+    if (isSettings) {
+      this.loadSettings();
+      return;
+    }
+
     document.getElementById('list-title').textContent = SCHEMAS[m].label + '列表';
     document.getElementById('storage-hint').textContent = SCHEMAS[m].storageHint;
     document.getElementById('probe-now-btn').style.display = m === 'status' ? 'inline-block' : 'none';
@@ -924,6 +973,373 @@ var cms = {
       this.notify('已删除');
     } catch (err) {
       this.notify('删除失败：请确认登录状态是否有效');
+    }
+  },
+
+  // ======================= 管理页（站点 / 账号 / 两步验证 / 通行密钥 / 会话） =======================
+
+  api: async function (path, options) {
+    var opts = Object.assign({ method: 'GET', headers: {} }, options || {});
+    if (opts.body && typeof opts.body !== 'string') {
+      opts.headers['Content-Type'] = 'application/json';
+      opts.body = JSON.stringify(opts.body);
+    }
+    var res = await fetch(this.getApiUrl(path), opts);
+    var data = await res.json().catch(function () { return {}; });
+    if (res.status === 401) {
+      this.handle401();
+      throw new Error('unauthorized');
+    }
+    if (!res.ok) {
+      throw new Error((data && data.error) || ('HTTP ' + res.status));
+    }
+    return data;
+  },
+
+  loadSettings: async function () {
+    var pkeys = [];
+    try {
+      var data = await this.api('/api/admin/overview?_t=' + Date.now());
+      var site = data.site || {};
+      document.getElementById('site-name').value = site.name || '';
+      document.getElementById('site-avatar').value = site.avatarText || '';
+      document.getElementById('site-title').value = site.title || '';
+      document.getElementById('site-subtitle').value = site.subtitle || '';
+
+      document.getElementById('account-username').value = data.username || '';
+
+      var totpOn = Boolean(data.totp && data.totp.enabled);
+      this.renderTotpState(totpOn);
+
+      pkeys = data.passkeys || [];
+      this.renderPasskeys(pkeys);
+
+      this.renderSessions(data.sessions || []);
+    } catch (e) {
+      if (String(e && e.message) === 'unauthorized') return;
+      this.notify('管理信息加载失败：' + (e && e.message ? e.message : '未知错误'));
+    }
+  },
+
+  bindSettings: function () {
+    var self = this;
+
+    document.getElementById('site-form').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var err = document.getElementById('site-error');
+      err.textContent = '';
+      var payload = {
+        name: document.getElementById('site-name').value.trim(),
+        avatarText: document.getElementById('site-avatar').value.trim(),
+        title: document.getElementById('site-title').value.trim(),
+        subtitle: document.getElementById('site-subtitle').value.trim()
+      };
+      if (!payload.name) { err.textContent = '站点名称不能为空'; return; }
+      try {
+        var out = await self.api('/api/admin/site', { method: 'POST', body: payload });
+        var site = out.site || payload;
+        document.getElementById('site-name').value = site.name;
+        document.getElementById('site-avatar').value = site.avatarText;
+        document.getElementById('site-title').value = site.title;
+        document.getElementById('site-subtitle').value = site.subtitle;
+        self.notify('站点信息已保存，前台刷新后生效');
+      } catch (e2) {
+        err.textContent = e2.message === 'unauthorized' ? '' : ('保存失败：' + e2.message);
+      }
+    });
+
+    document.getElementById('username-form').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var err = document.getElementById('username-error');
+      err.textContent = '';
+      var username = document.getElementById('account-username').value.trim();
+      var password = document.getElementById('account-password').value;
+      if (!username) { err.textContent = '用户名不能为空'; return; }
+      if (!password) { err.textContent = '请输入当前密码以确认身份'; return; }
+      try {
+        await self.api('/api/auth/change-username', { method: 'POST', body: { username: username, password: password } });
+        document.getElementById('account-password').value = '';
+        document.getElementById('auth-username').textContent = username;
+        self.notify('管理员用户名已更新');
+      } catch (e2) {
+        err.textContent = e2.message === 'unauthorized' ? '' : ('修改失败：' + e2.message);
+      }
+    });
+
+    document.getElementById('totp-start-btn').addEventListener('click', async function () {
+      var err = document.getElementById('totp-error');
+      err.textContent = '';
+      var pwd = window.prompt('启用两步验证前，请再次输入当前密码以确认身份：');
+      if (!pwd) return;
+      try {
+        var out = await self.api('/api/auth/totp/setup', { method: 'POST', body: { currentPassword: pwd } });
+        document.getElementById('totp-secret').textContent = out.secret;
+        document.getElementById('totp-uri').textContent = out.otpauth;
+        document.getElementById('totp-code').value = '';
+        document.getElementById('totp-setup-box').hidden = false;
+        document.getElementById('totp-off-box').hidden = true;
+        document.getElementById('backup-codes').hidden = true;
+        setTimeout(function () { document.getElementById('totp-code').focus(); }, 60);
+      } catch (e2) {
+        err.textContent = e2.message === 'unauthorized' ? '' : ('生成密钥失败：' + e2.message);
+      }
+    });
+
+    document.getElementById('totp-copy-btn').addEventListener('click', function () {
+      var text = document.getElementById('totp-secret').textContent;
+      self.copy(text, '密钥已复制');
+    });
+    document.getElementById('totp-uri-copy-btn').addEventListener('click', function () {
+      var text = document.getElementById('totp-uri').textContent;
+      self.copy(text, '链接已复制');
+    });
+
+    document.getElementById('totp-cancel-btn').addEventListener('click', function () {
+      document.getElementById('totp-setup-box').hidden = true;
+      document.getElementById('totp-off-box').hidden = false;
+    });
+
+    document.getElementById('totp-enable-btn').addEventListener('click', async function () {
+      var err = document.getElementById('totp-error');
+      err.textContent = '';
+      var code = document.getElementById('totp-code').value.replace(/\s+/g, '');
+      if (!/^\d{6}$/.test(code)) { err.textContent = '请输入 6 位验证码'; return; }
+      try {
+        var out = await self.api('/api/auth/totp/enable', { method: 'POST', body: { code: code } });
+        self.renderTotpState(true);
+        self.showBackupCodes(out.backupCodes);
+        self.notify('两步验证已启用，请妥善保存备用码');
+      } catch (e2) {
+        err.textContent = e2.message === 'unauthorized' ? '' : ('启用失败：' + e2.message);
+      }
+    });
+
+    document.getElementById('totp-disable-btn').addEventListener('click', async function () {
+      var err = document.getElementById('totp-error');
+      err.textContent = '';
+      var pwd = window.prompt('关闭两步验证会降低账户安全性。请输入当前密码确认：');
+      if (!pwd) return;
+      try {
+        await self.api('/api/auth/totp/disable', { method: 'POST', body: { password: pwd } });
+        self.renderTotpState(false);
+        self.notify('两步验证已关闭');
+      } catch (e2) {
+        err.textContent = e2.message === 'unauthorized' ? '' : ('关闭失败：' + e2.message);
+      }
+    });
+
+    document.getElementById('totp-backup-btn').addEventListener('click', async function () {
+      var err = document.getElementById('totp-error');
+      err.textContent = '';
+      var pwd = window.prompt('重新生成会使旧备用码全部失效。请输入当前密码确认：');
+      if (!pwd) return;
+      try {
+        var out = await self.api('/api/auth/backup-codes', { method: 'POST', body: { password: pwd } });
+        self.showBackupCodes(out.backupCodes);
+        self.notify('备用码已重新生成');
+      } catch (e2) {
+        err.textContent = e2.message === 'unauthorized' ? '' : ('生成失败：' + e2.message);
+      }
+    });
+
+    document.getElementById('passkey-add-btn').addEventListener('click', function () {
+      self.addPasskey();
+    });
+
+    document.getElementById('revoke-others-btn').addEventListener('click', async function () {
+      var err = document.getElementById('session-error');
+      err.textContent = '';
+      try {
+        var out = await self.api('/api/auth/sessions/revoke-others', { method: 'POST', body: {} });
+        self.notify('已下线 ' + out.revoked + ' 个其它设备');
+        self.loadSettings();
+      } catch (e2) {
+        err.textContent = e2.message === 'unauthorized' ? '' : ('操作失败：' + e2.message);
+      }
+    });
+  },
+
+  copy: function (text, okMsg) {
+    if (!text) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        cms.notify(okMsg || '已复制');
+      }).catch(function () { cms.notify('复制失败，请手动选择文本'); });
+      return;
+    }
+    cms.notify('复制失败，请手动选择文本');
+  },
+
+  renderTotpState: function (on) {
+    var badge = document.getElementById('totp-badge');
+    badge.textContent = on ? '已启用' : '未启用';
+    badge.setAttribute('data-on', on ? 'true' : 'false');
+    document.getElementById('totp-off-box').hidden = on;
+    document.getElementById('totp-on-box').hidden = !on;
+    document.getElementById('totp-setup-box').hidden = true;
+    if (!on) document.getElementById('backup-codes').hidden = true;
+  },
+
+  showBackupCodes: function (codes) {
+    var el = document.getElementById('backup-codes');
+    if (!codes || !codes.length) { el.hidden = true; return; }
+    el.textContent = codes.join('\n');
+    el.hidden = false;
+  },
+
+  renderPasskeys: function (list) {
+    var ul = document.getElementById('passkey-list');
+    ul.innerHTML = '';
+    if (!list.length) {
+      ul.innerHTML = '<li class="empty-tip">还没有通行密钥，添加后可用指纹 / 面容免密码登录。</li>';
+      return;
+    }
+    list.forEach(function (pk) {
+      var li = document.createElement('li');
+      li.className = 'passkey-item';
+      var when = pk.createdAt ? new Date(pk.createdAt).toLocaleDateString('zh-CN') : '—';
+      var used = pk.lastUsedAt ? new Date(pk.lastUsedAt).toLocaleString('zh-CN') : '未使用';
+      li.innerHTML = '<div class="pk-main"><div class="pk-name">' + cms.escape(pk.label || '通行密钥') +
+        '</div><div class="pk-meta">添加于 ' + cms.escape(when) + ' · 最近使用 ' + cms.escape(used) + '</div></div>';
+      var btn = document.createElement('button');
+      btn.className = 'btn btn-danger';
+      btn.type = 'button';
+      btn.textContent = '删除';
+      btn.addEventListener('click', function () { cms.deletePasskey(pk.id); });
+      li.appendChild(btn);
+      ul.appendChild(li);
+    });
+  },
+
+  renderSessions: function (sessions) {
+    var ul = document.getElementById('session-list');
+    ul.innerHTML = '';
+    document.getElementById('session-count').textContent = '共 ' + sessions.length + ' 个在线会话';
+    if (!sessions.length) {
+      ul.innerHTML = '<li class="empty-tip">没有其它在线会话。</li>';
+      return;
+    }
+    sessions.forEach(function (s) {
+      var li = document.createElement('li');
+      li.className = 'session-item';
+      li.setAttribute('data-current', s.current ? 'true' : 'false');
+      var seen = s.lastSeenAt ? new Date(s.lastSeenAt).toLocaleString('zh-CN') : '—';
+      li.innerHTML = '<div class="ss-main"><div class="ss-name">' + cms.escape(s.ua || '未知设备') +
+        '</div><div class="ss-meta">' + cms.escape(s.ip || '未知 IP') + ' · 最近活动 ' + cms.escape(seen) + '</div></div>' +
+        (s.current ? '<span class="session-badge">当前设备</span>' : '');
+      ul.appendChild(li);
+    });
+  },
+
+  addPasskey: async function () {
+    var err = document.getElementById('passkey-error');
+    err.textContent = '';
+    if (!window.PublicKeyCredential || !navigator.credentials) {
+      err.textContent = '当前浏览器或环境不支持通行密钥（需要 HTTPS 或 localhost）';
+      return;
+    }
+    var label = window.prompt('给这个通行密钥起个名字（例如：MacBook 指纹）', '通行密钥');
+    if (label === null) return;
+    try {
+      var optsData = await this.api('/api/auth/passkey/register-options', { method: 'POST', body: {} });
+      var options = optsData.publicKey;
+      options.challenge = b64uToBuffer(options.challenge);
+      options.user.id = b64uToBuffer(options.user.id);
+      if (options.excludeCredentials) {
+        options.excludeCredentials = options.excludeCredentials.map(function (c) {
+          return { type: c.type, id: b64uToBuffer(c.id), transports: c.transports };
+        });
+      }
+      var cred = await navigator.credentials.create({ publicKey: options });
+      var payload = {
+        label: label || '通行密钥',
+        clientDataJSON: bufferToB64u(cred.response.clientDataJSON),
+        attestationObject: bufferToB64u(cred.response.attestationObject),
+        transports: typeof cred.response.getTransports === 'function' ? cred.response.getTransports() : []
+      };
+      await this.api('/api/auth/passkey/register', { method: 'POST', body: payload });
+      this.notify('通行密钥已添加');
+      this.loadSettings();
+    } catch (e) {
+      if (e && e.name === 'NotAllowedError') {
+        err.textContent = '操作已取消，或超时未完成验证';
+      } else {
+        err.textContent = e.message === 'unauthorized' ? '' : ('添加失败：' + (e && e.message ? e.message : '未知错误'));
+      }
+    }
+  },
+
+  deletePasskey: async function (id) {
+    var err = document.getElementById('passkey-error');
+    err.textContent = '';
+    var pwd = window.prompt('删除后该设备将无法用通行密钥登录。请输入当前密码确认：');
+    if (!pwd) return;
+    try {
+      await this.api('/api/auth/passkey/delete', { method: 'POST', body: { id: id, password: pwd } });
+      this.notify('通行密钥已删除');
+      this.loadSettings();
+    } catch (e) {
+      err.textContent = e.message === 'unauthorized' ? '' : ('删除失败：' + e.message);
+    }
+  },
+
+  probePasskeyLogin: async function () {
+    var btn = document.getElementById('passkey-login-btn');
+    btn.hidden = true;
+    if (!window.PublicKeyCredential || !navigator.credentials) return;
+    try {
+      var res = await fetch(this.getApiUrl('/api/auth/passkey/login-options'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}'
+      });
+      if (!res.ok) return;
+      var data = await res.json();
+      var allow = (data.publicKey && data.publicKey.allowCredentials) || [];
+      btn.hidden = allow.length === 0;
+    } catch (e) { /* 忽略 */ }
+  },
+
+  passkeyLogin: async function () {
+    var errEl = document.getElementById('login-error');
+    errEl.textContent = '';
+    try {
+      var optsRes = await fetch(this.getApiUrl('/api/auth/passkey/login-options'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}'
+      });
+      var optsData = await optsRes.json().catch(function () { return {}; });
+      if (!optsRes.ok) throw new Error(optsData.error || '无法获取登录挑战');
+      var options = optsData.publicKey;
+      options.challenge = b64uToBuffer(options.challenge);
+      if (options.allowCredentials) {
+        options.allowCredentials = options.allowCredentials.map(function (c) {
+          return { type: c.type, id: b64uToBuffer(c.id), transports: c.transports };
+        });
+      }
+      var cred = await navigator.credentials.get({ publicKey: options });
+      var payload = {
+        credentialId: bufferToB64u(cred.rawId),
+        clientDataJSON: bufferToB64u(cred.response.clientDataJSON),
+        authenticatorData: bufferToB64u(cred.response.authenticatorData),
+        signature: bufferToB64u(cred.response.signature),
+        userHandle: cred.response.userHandle ? bufferToB64u(cred.response.userHandle) : ''
+      };
+      var res = await fetch(this.getApiUrl('/api/auth/passkey/login'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      var data = await res.json().catch(function () { return {}; });
+      if (!res.ok) throw new Error(data.error || ('登录失败 (HTTP ' + res.status + ')'));
+      this.enterConsole(data.username);
+    } catch (e) {
+      if (e && e.name === 'NotAllowedError') {
+        errEl.textContent = '已取消，或没有可用的通行密钥';
+      } else {
+        errEl.textContent = (e && e.message) ? e.message : '通行密钥登录失败';
+      }
     }
   },
 

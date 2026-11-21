@@ -3,11 +3,13 @@
 // <title>/description/canonical/og 标签注入 index.html，让搜索引擎为每个栏目建立独立索引。
 //
 // 可用的 Pages 环境变量（推荐在 CF 控制台配置，也可直接改下面的 DEFAULTS）：
-//   SITE_URL      站点主域名，如 https://blog.example.com
-//   SITE_NAME     站点名称
-//   SITE_BIO      站点简介（与 index.html 中 <meta name="description"> 保持一致）
+//   SITE_URL        站点主域名，如 https://blog.example.com
+//   API_BASE_URL    后端地址，如 https://api.example.com（用于读取后台可修改的站点信息）
+//   SITE_NAME       站点名称（覆盖后台设置）
+//   SITE_BIO        站点简介（覆盖后台设置）
 const DEFAULTS = {
   siteUrl: 'https://example.com',
+  apiBase: 'https://api.example.com',
   siteName: '简单博客',
   siteBio: '这里是我的个人博客，记录技术、折腾与生活。'
 };
@@ -17,6 +19,24 @@ const cfg = Object.assign({}, DEFAULTS);
 function applyEnv(env) {
   const e = env || {};
   if (e.SITE_URL) cfg.siteUrl = String(e.SITE_URL).replace(/\/+$/, '');
+  if (e.API_BASE_URL) cfg.apiBase = String(e.API_BASE_URL).replace(/\/+$/, '');
+  if (e.SITE_NAME) cfg.siteName = String(e.SITE_NAME);
+  if (e.SITE_BIO) cfg.siteBio = String(e.SITE_BIO);
+}
+
+// 读取后端 /api/site（后台「管理」页可改站点名/简介），失败时保持默认值
+async function applyRemoteSite(env) {
+  const e = env || {};
+  try {
+    const res = await fetch(cfg.apiBase + '/api/site', { cf: { cacheTtl: 300, cacheEverything: true } });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.ok && data.site) {
+        if (data.site.name) cfg.siteName = String(data.site.name);
+        if (data.site.subtitle) cfg.siteBio = String(data.site.subtitle);
+      }
+    }
+  } catch (err) { /* 后端不可达时用内置默认值 */ }
   if (e.SITE_NAME) cfg.siteName = String(e.SITE_NAME);
   if (e.SITE_BIO) cfg.siteBio = String(e.SITE_BIO);
 }
@@ -77,6 +97,7 @@ function buildListMetaHtml(indexHtml, pageKey) {
 export async function onRequestGet(context) {
   try {
     applyEnv(context.env);
+    await applyRemoteSite(context.env);
     const page = String((context.params && context.params.page) || '');
     if (!PAGES[page]) return context.next(); // 未知栏目交给 SPA 兜底
 
@@ -96,4 +117,4 @@ export async function onRequestGet(context) {
   }
 }
 
-export { buildListMetaHtml, PAGES, applyEnv };
+export { buildListMetaHtml, PAGES, applyEnv, applyRemoteSite };

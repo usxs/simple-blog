@@ -38,6 +38,9 @@
 | 模块 | 说明 |
 | --- | --- |
 | 账号登录 | 账密登录 + `scrypt` 加盐哈希 + 服务端会话 Cookie（HttpOnly / SameSite=Strict），带登录失败限流与 CSRF 防护 |
+| 管理页 | 后台「管理」页集中放站点信息（名称 / 头像文字 / 浏览器标题 / 副标题）、改用户名改密码、两步验证、通行密钥、登录会话管理；改完前台立即生效，无需重新部署 |
+| 两步验证（2FA） | 标准 TOTP（RFC 6238），用 Google Authenticator / 1Password 等扫码绑定；登录需再输 6 位动态码；提供 10 个一次性备用码，用掉即作废 |
+| 通行密钥（Passkey） | WebAuthn 指纹 / 面容 / 安全密钥登录，服务端只存公钥，支持多设备注册与逐个删除；也可作为免密码登录入口 |
 | 文章管理 | Markdown 写作、前台实时预览、日期归档、按日期排序 |
 | Markdown 渲染 | 标题 / 列表（多级嵌套）/ 引用（可嵌套）/ 分隔线 / 表格（对齐）/ 任务清单 / 行内样式；围栏代码带语言标签、行号、一键复制与放大灯箱；```` ```mermaid ```` 流程图在浏览器端渲染 |
 | 动态 / 工具 / 状态 / 奇思妙想 | 多个可独立维护的内容板块，共用同一套增删改查接口 |
@@ -166,6 +169,8 @@ docker compose logs -f --tail 50
 | `INDEXNOW_KEY` | 否 | 填了才会在发布/删除文章后向 Bing 等推送 |
 | `INDEXNOW_KEY_LOCATION` | 否 | key 文件完整 URL，默认 `${SITE_PUBLIC_URL}/<KEY>.txt` |
 | `PROBE_SERVERS_URL` | 否 | 外部监控接口，留空则探针列表为空 |
+| `SITE_NAME` / `SITE_AVATAR` / `SITE_TITLE` / `SITE_SUBTITLE` | 否 | 站点信息初始值；首次启动后可在后台「管理」页修改，改完立即生效 |
+| `WEBAUTHN_RP_ID` / `WEBAUTHN_ORIGIN` | 否 | 通行密钥的 RP ID 与来源；默认按请求的 `X-Forwarded-Host` 推导 |
 | `HOST_PORT` | 否 | 宿主机端口，默认 `33001` |
 | `AUTH_DATA_DIR` | 否 | 覆盖会话/凭据的存放目录（主要给测试用） |
 
@@ -177,6 +182,7 @@ docker compose logs -f --tail 50
 GET  /api/sync?module=posts            # 文章列表（含正文，供前端列表与 SSR 使用）
 GET  /api/comments?postId=<id>         # 已审核评论
 GET  /api/public/post/<id>             # 单篇文章（供 Pages Functions SSR 抓取）
+GET  /api/site                         # 站点信息（名称/头像/标题/副标题，前台启动时读取）
 GET  /api/captcha                      # 获取验证码题目与签名
 POST /api/comments/submit              # 提交评论（带验证码与蜜罐）
 GET  /sitemap.xml  GET /robots.txt     # SEO
@@ -187,9 +193,18 @@ GET  /sitemap.xml  GET /robots.txt     # SEO
 ```
 GET  /api/auth/status                  # 当前登录态 / 是否需要初始化
 POST /api/auth/setup | login | logout | change-password
+POST /api/auth/passkey/login-options | passkey/login   # 通行密钥免密登录（公开）
 GET  /api/sync?module=comments         # 含待审核评论
 POST /api/save    POST /api/delete     # 内容增删改
 POST /api/upload                       # 图片/附件上传（图片自动转 WebP）
+GET  /api/admin/overview               # 管理页数据汇总（站点/2FA/通行密钥/会话）
+POST /api/admin/site                   # 保存站点信息
+POST /api/auth/change-username         # 改管理员用户名
+POST /api/auth/totp/setup | enable | disable | backup-codes
+GET  /api/auth/passkeys                # 通行密钥列表
+POST /api/auth/passkey/register-options | register | delete
+GET  /api/auth/sessions                # 登录会话列表
+POST /api/auth/sessions/revoke-others  # 下线其它设备
 ```
 
 完整参数见 [docs/API.md](docs/API.md)。
@@ -201,6 +216,9 @@ POST /api/upload                       # 图片/附件上传（图片自动转 W
 - 登录按 IP 限流：15 分钟内失败 5 次锁 15 分钟；登录失败提示统一为「用户名或密码错误」。
 - 所有写操作校验 `Origin` / `Sec-Fetch-Site`，跨站请求直接 403。
 - 上传文件名做清洗（去掉路径分隔符与控制字符），图片在服务端转换，原始文件不落盘。
+- 两步验证基于标准 TOTP（HMAC-SHA1、30 秒步长、允许前后 1 个窗口）；备用码只存 SHA-256，命中后立刻作废。
+- 通行密钥（Passkey）走 WebAuthn：服务端只保存公钥与签名计数器，私钥永不离开设备；会校验 challenge、origin、rpIdHash 与计数器回退（防重放）。
+- 修改密码、关闭两步验证、删除通行密钥、改用户名都需要再验证一次当前密码。
 
 > 务必通过 HTTPS 对外提供服务。明文 HTTP 下 Cookie 的 `Secure` 不会生效，密码也会以明文经过网络。
 
@@ -211,10 +229,12 @@ POST /api/upload                       # 图片/附件上传（图片自动转 W
 3. **`config.json` 是文件挂载**：如果宿主机上这个文件不存在，Docker 会把同名的**目录**挂进去，导致后端读不到配置。第一次启动前确保 `backend/config.json` 存在（仓库里已带空模板）。
 4. **图片格式**：`.jpg/.jpeg/.png/.gif` 会转成 WebP；SVG 与 AVIF 原样保留；已是 `.webp` 的不再重编码。转换后若反而更大，会保留原图。想关闭转换设 `IMAGE_WEBP_DISABLE=1`。
 5. **历史图片不追溯**：老文章的 Markdown 里写的是当时的文件名，重新转换会让链接失效，所以只对之后上传的图片生效。
-6. **站点名称 / 域名要改多处**：`app.js` 的 `SITE_CONFIG`、`index.html` 的 meta、`functions/` 的环境变量、`robots.txt`。文章页与列表页的 meta 由 Functions 正则替换生成，只要 `index.html` 的结构（title/description/canonical/og 标签）在，改名不会失效。
+6. **站点名称 / 域名要改多处**：站点名称、头像文字、浏览器标题、副标题都可以直接在后台「管理」页改（前端启动时读 `/api/site`，文章页与列表页 SSR 也会读取），不需要重新部署；但 `index.html` 里的静态 meta、`functions/` 环境变量、`robots.txt` 里的域名仍需手工同步（用于搜索引擎与无 JS 场景）。
 7. **SEO 与域名**：`canonical` 用的是 `SITE_URL`，如果站点同时存在 `example.com` 和 `www.example.com`，请固定一个并让另一个 301 过去，否则会被判重复内容。
 8. **备份**：只需备份 `backend/` 下的 `config.json`、`article/`、`Musings/`、`img/`、`file/`、`data/` 六个路径，建议 `tar` 打包后异地保存。
-9. **流程图依赖 CDN**：```` ```mermaid ```` 代码块由浏览器端按需从 jsDelivr 加载 `mermaid@11` 渲染，不在构建产物里；内网/离线环境不会报错，只是保留为一段源码文本。改 CDN 地址只需调整 `frontend/app.js` 与 `backend/admin.js` 里 `loadMermaid()` 的 `import()` 地址。
+9. **两步验证的备用码**：启用 2FA 时生成的 10 个备用码只显示一次，请立刻保存；丢失验证器又没有备用码时，可在服务器上删除 `backend/data/auth.json` 里的 `totp` 字段后重启（会关闭 2FA）。
+10. **通行密钥需要 HTTPS**：`http://` 或直接用 IP 访问时浏览器不提供 Passkey 接口；后端会按 `X-Forwarded-Host` 推导 `rpId`，反代域名与后端域名不一致时用 `WEBAUTHN_RP_ID` / `WEBAUTHN_ORIGIN` 显式指定。注册的密钥与域名绑定，换域名后需要重新注册。
+11. **流程图依赖 CDN**：```` ```mermaid ```` 代码块由浏览器端按需从 jsDelivr 加载 `mermaid@11` 渲染，不在构建产物里；内网/离线环境不会报错，只是保留为一段源码文本。改 CDN 地址只需调整 `frontend/app.js` 与 `backend/admin.js` 里 `loadMermaid()` 的 `import()` 地址。
 
 ## 排障
 

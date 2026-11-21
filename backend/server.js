@@ -145,6 +145,7 @@ const server = http.createServer((req, res) => {
   // /api/auth/* 与管理接口：不设置 CORS 头，仅限同源（配合 SameSite=Strict Cookie）
   const isOpenCors = pathname === '/' ||
     pathname.startsWith('/api/captcha') ||
+    pathname.startsWith('/api/site') ||
     pathname.startsWith('/api/comments') ||
     pathname.startsWith('/api/sync') ||
     pathname.startsWith('/api/probe-servers') ||
@@ -243,6 +244,93 @@ const server = http.createServer((req, res) => {
   // 3.5 修改密码: POST /api/auth/change-password（成功后吊销其它会话并轮换当前会话）
   if (req.method === 'POST' && pathname === '/api/auth/change-password') {
     return auth.handleChangePassword(req, res);
+  }
+
+  // 3.6 站点展示信息（公开）: GET /api/site —— 前端启动时读取名称/标题/副标题
+  if (req.method === 'GET' && pathname === '/api/site') {
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-cache, must-revalidate'
+    });
+    return res.end(JSON.stringify({ ok: true, site: auth.getSiteInfo() }));
+  }
+
+  // 3.7 后台总览: GET /api/admin/overview
+  if (req.method === 'GET' && pathname === '/api/admin/overview') {
+    if (!guardAuth(req, res)) return;
+    return auth.handleAdminOverview(req, res);
+  }
+
+  // 3.8 保存站点信息: POST /api/admin/site
+  if (req.method === 'POST' && pathname === '/api/admin/site') {
+    if (!guardAuth(req, res)) return;
+    return auth.handleSiteSave(req, res);
+  }
+
+  // 3.9 修改管理员用户名: POST /api/auth/change-username
+  if (req.method === 'POST' && pathname === '/api/auth/change-username') {
+    if (!guardAuth(req, res)) return;
+    return auth.handleChangeUsername(req, res);
+  }
+
+  // 3.10 两步验证（TOTP）
+  if (req.method === 'POST' && pathname === '/api/auth/totp/setup') {
+    if (!guardAuth(req, res)) return;
+    return auth.handleTotpSetup(req, res);
+  }
+  if (req.method === 'POST' && pathname === '/api/auth/totp/enable') {
+    if (!guardAuth(req, res)) return;
+    return auth.handleTotpEnable(req, res);
+  }
+  if (req.method === 'POST' && pathname === '/api/auth/totp/disable') {
+    if (!guardAuth(req, res)) return;
+    return auth.handleTotpDisable(req, res);
+  }
+  if (req.method === 'POST' && pathname === '/api/auth/backup-codes') {
+    if (!guardAuth(req, res)) return;
+    return auth.handleBackupCodes(req, res);
+  }
+
+  // 3.11 通行密钥（Passkey / WebAuthn）
+  if (req.method === 'GET' && pathname === '/api/auth/passkeys') {
+    if (!guardAuth(req, res)) return;
+    return auth.handlePasskeyList(req, res);
+  }
+  if (req.method === 'POST' && pathname === '/api/auth/passkey/register-options') {
+    if (!guardAuth(req, res)) return;
+    return auth.handlePasskeyRegisterOptions(req, res);
+  }
+  if (req.method === 'POST' && pathname === '/api/auth/passkey/register') {
+    if (!guardAuth(req, res)) return;
+    return auth.handlePasskeyRegister(req, res);
+  }
+  if (req.method === 'POST' && pathname === '/api/auth/passkey/delete') {
+    if (!guardAuth(req, res)) return;
+    return auth.handlePasskeyDelete(req, res);
+  }
+  if (req.method === 'POST' && pathname === '/api/auth/passkey/login-options') {
+    if (!auth.assertSameOrigin(req)) {
+      res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify({ ok: false, error: '拒绝跨站请求' }));
+    }
+    return auth.handlePasskeyLoginOptions(req, res);
+  }
+  if (req.method === 'POST' && pathname === '/api/auth/passkey/login') {
+    if (!auth.assertSameOrigin(req)) {
+      res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify({ ok: false, error: '拒绝跨站请求' }));
+    }
+    return auth.handlePasskeyLogin(req, res);
+  }
+
+  // 3.12 登录会话管理
+  if (req.method === 'GET' && pathname === '/api/auth/sessions') {
+    if (!guardAuth(req, res)) return;
+    return auth.handleSessionsList(req, res);
+  }
+  if (req.method === 'POST' && pathname === '/api/auth/sessions/revoke-others') {
+    if (!guardAuth(req, res)) return;
+    return auth.handleSessionsRevokeOthers(req, res);
   }
 
   // 4. 前端获取某篇文章已审核通过的评论（支持层中层 parentId 及站长回复）

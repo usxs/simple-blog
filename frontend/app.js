@@ -70,6 +70,40 @@ document.getElementById('copyright-year').textContent = String(new Date().getFul
 document.getElementById('footer-owner').textContent = SITE_CONFIG.owner;
 syncAvatarFavicon();
 
+// 运行时拉取后端站点信息（后台「管理」页可随时修改，无需重新部署前端）
+(function applyRemoteSiteInfo() {
+  var base = String(SITE_CONFIG.apiBaseUrl || '').replace(/\/+$/, '');
+  if (!base) return;
+  fetch(base + '/api/site', { cache: 'no-store' })
+    .then(function (res) { return res.ok ? res.json() : null; })
+    .then(function (data) {
+      if (!data || !data.ok || !data.site) return;
+      var site = data.site;
+      var ssrTitled = Boolean(window.__SSR_META__ && window.__SSR_META__.title);
+
+      if (site.name) {
+        SITE_CONFIG.name = String(site.name);
+        var nameEl = document.getElementById('site-name');
+        if (nameEl) nameEl.textContent = SITE_CONFIG.name;
+      }
+      if (site.avatarText) {
+        SITE_CONFIG.avatarText = String(site.avatarText);
+        var avatarEl = document.getElementById('site-avatar');
+        if (avatarEl) avatarEl.textContent = SITE_CONFIG.avatarText;
+      }
+      if (!ssrTitled) {
+        document.title = site.title ? String(site.title) : SITE_CONFIG.name;
+      }
+      if (site.subtitle) {
+        SITE_CONFIG.homeBio = String(site.subtitle);
+        var bioEl = document.querySelector('.home-bio');
+        if (bioEl) bioEl.textContent = SITE_CONFIG.homeBio;
+      }
+      syncAvatarFavicon();
+    })
+    .catch(function () { /* 后端不可达时保持内置配置 */ });
+})();
+
 var icpEl = document.getElementById('site-icp');
 if (SITE_CONFIG.icpText) {
   icpEl.textContent = SITE_CONFIG.icpText;

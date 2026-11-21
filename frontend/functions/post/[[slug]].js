@@ -26,6 +26,23 @@ function applyEnv(env) {
   if (e.SITE_BIO) cfg.siteBio = String(e.SITE_BIO);
 }
 
+// 读取后端 /api/site（后台「管理」页可改站点名/简介），失败时保持默认值
+async function applyRemoteSite(env) {
+  const e = env || {};
+  try {
+    const res = await fetch(cfg.apiBase + '/api/site', { cf: { cacheTtl: 300, cacheEverything: true } });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.ok && data.site) {
+        if (data.site.name) cfg.siteName = String(data.site.name);
+        if (data.site.subtitle) cfg.siteBio = String(data.site.subtitle);
+      }
+    }
+  } catch (err) { /* 后端不可达时用内置默认值 */ }
+  if (e.SITE_NAME) cfg.siteName = String(e.SITE_NAME);
+  if (e.SITE_BIO) cfg.siteBio = String(e.SITE_BIO);
+}
+
 function esc(s) {
   return String(s || '')
     .replace(/&/g, '&amp;')
@@ -137,6 +154,7 @@ function buildArticleHtml(indexHtml, post, postUrl) {
     [/<meta\s+property="og:title"\s+content="[^"]*"\s*\/?>/, '<meta property="og:title" content="' + title + '" />'],
     [/<meta\s+property="og:description"\s+content="[^"]*"\s*\/?>/, '<meta property="og:description" content="' + desc + '" />'],
     [/<meta\s+property="og:url"\s+content="[^"]*"\s*\/?>/, '<meta property="og:url" content="' + esc(postUrl) + '" />'],
+    [/<meta\s+property="og:site_name"\s+content="[^"]*"\s*\/?>/, '<meta property="og:site_name" content="' + esc(cfg.siteName) + '" />'],
     [/<meta\s+name="twitter:title"\s+content="[^"]*"\s*\/?>/, '<meta name="twitter:title" content="' + title + '" />'],
     [/<meta\s+name="twitter:description"\s+content="[^"]*"\s*\/?>/, '<meta name="twitter:description" content="' + desc + '" />'],
     // 首页的 WebSite 结构化数据替换为文章级 BlogPosting
@@ -164,6 +182,7 @@ function buildArticleHtml(indexHtml, post, postUrl) {
 export async function onRequestGet(context) {
   try {
     applyEnv(context.env);
+    await applyRemoteSite(context.env);
     const segs = Array.isArray(context.params.slug) ? context.params.slug : [context.params.slug];
     const rawId = segs.map(s => decodeURIComponent(String(s))).join('/');
 

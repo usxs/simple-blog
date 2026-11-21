@@ -15,6 +15,41 @@
 - `setupNeeded`：还没有任何管理员凭据时为 `true`，此时后台会显示初始化向导；
 - `dataWritable`：`data/` 目录不可写时为 `false`（通常是宿主机目录权限问题）。
 
+### `GET /api/site`
+
+站点信息，前台启动时读取，用来覆盖内置配置（后台「管理」页可修改）。
+
+```json
+{ "ok": true, "site": { "name": "简单博客", "avatarText": "简", "title": "简单博客",
+  "subtitle": "这里是我的个人博客，记录技术、折腾与生活。", "updatedAt": 0 } }
+```
+
+`updatedAt` 为 0 表示还在用环境变量里的初始值。响应头带 `Cache-Control: no-cache`。
+
+### `POST /api/auth/passkey/login-options` / `POST /api/auth/passkey/login`
+
+通行密钥免密登录（公开接口，仍需同源）。先取 challenge：
+
+```json
+{ "username": "admin" }        // 可省略，省略时用 allowCredentials 为空列表的 discoverable 流程
+```
+
+返回：
+
+```json
+{ "ok": true, "options": { "challenge": "…", "rpId": "api.example.com", "timeout": 60000,
+  "userVerification": "preferred", "allowCredentials": [{ "type": "public-key", "id": "…" }] } }
+```
+
+登录：
+
+```json
+{ "credential": { "id": "…", "rawId": "…", "type": "public-key",
+  "response": { "clientDataJSON": "…", "authenticatorData": "…", "signature": "…" } } }
+```
+
+成功返回 `200 {"ok":true,"username":"…"}` 并下发会话 Cookie；失败 `401`。
+
 ### `GET /api/sync?module=<模块>[&version=<哈希>]`
 
 `module` 取值：`posts` / `moments` / `tools` / `status` / `quirky` / `comments`。
@@ -83,10 +118,14 @@
 ### `POST /api/auth/login`
 
 ```json
-{ "username": "admin", "password": "…" }
+{ "username": "admin", "password": "…", "totpCode": "123456" }
 ```
 
-失败统一返回 `401 {"error":"用户名或密码错误"}`；触发限流返回 `429`（带重试间隔）。
+`totpCode` 可选，但账号启用两步验证后必填（也可填备用码，如 `ABCD-EFGH`）。
+
+- 缺少动态码：`401 {"ok":false,"needTotp":true,"error":"请输入两步验证码"}`
+- 动态码错误：`401 {"error":"两步验证码不正确"}`
+- 其它失败统一返回 `401 {"error":"用户名或密码错误"}`；触发限流返回 `429`（带重试间隔）。
 
 ### `POST /api/auth/logout`
 
@@ -99,6 +138,26 @@
 ```
 
 成功后旧会话全部失效，并轮换发放新的 Cookie。
+
+### 管理页相关接口
+
+| 接口 | 说明 |
+| --- | --- |
+| `GET /api/admin/overview` | 汇总数据：`{username, site, totp:{enabled,pending,backupCodesLeft}, passkeys, sessions, dataWritable, version}` |
+| `POST /api/admin/site` | 保存站点信息：`{name, avatarText, title, subtitle}`，长度上限 40/2/80/200 |
+| `POST /api/auth/change-username` | `{password, username}`；成功后旧会话失效 |
+| `POST /api/auth/totp/setup` | `{password}` → `{secret, otpauth}`，此时还没启用 |
+| `POST /api/auth/totp/enable` | `{code}` → `{backupCodes:[10 个明文备用码]}`（只显示这一次） |
+| `POST /api/auth/totp/disable` | `{password}` |
+| `POST /api/auth/backup-codes` | `{password}` → 重新生成 10 个备用码 |
+| `GET /api/auth/passkeys` | `{passkeys:[{id,name,createdAt,lastUsedAt}]}` |
+| `POST /api/auth/passkey/register-options` | `{password}` → WebAuthn `PublicKeyCredentialCreationOptions` |
+| `POST /api/auth/passkey/register` | `{credential, name}`，注册成功后立即可用 |
+| `POST /api/auth/passkey/delete` | `{password, id}` |
+| `GET /api/auth/sessions` | `{sessions:[{id,current,ip,ua,createdAt,lastSeenAt}], count}` |
+| `POST /api/auth/sessions/revoke-others` | 吊销除当前会话外的所有会话 |
+
+所有接口都需要有效的会话 Cookie；写操作还要通过同源校验（`Origin` / `Sec-Fetch-Site`）。
 
 ### `POST /api/save`
 
