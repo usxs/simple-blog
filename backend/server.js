@@ -651,7 +651,7 @@ const server = http.createServer((req, res) => {
           if (item.status) target.status = item.status;
           if (item.replyContent !== undefined) {
             target.replyContent = String(item.replyContent || '').trim();
-            target.replyAuthor = String(item.replyAuthor || 'Star Space').trim() || 'Star Space';
+            target.replyAuthor = String(item.replyAuthor || '简单博客').trim() || '简单博客';
             target.replyDate = target.replyContent
               ? (cnNowStamp())
               : '';

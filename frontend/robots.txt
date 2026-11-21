@@ -1,4 +1,4 @@
-# Star Space 前端主站（Cloudflare Pages）
+# 简单博客 前端主站（Cloudflare Pages）
 # /sitemap.xml 由 Pages Function 实时代理后端：每次发布/删除文章后自动更新
 User-agent: *
 Allow: /

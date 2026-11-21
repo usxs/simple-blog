@@ -1410,6 +1410,7 @@ button, input, textarea {
     overflow-x: auto;
   }
 }
+
 /* 窄屏（iPhone SE / 13 mini 等 ≤430px）：底部导航压缩到一屏放得下，不再横向滚动 */
 @media (max-width: 430px) {
   .mobile-dock {

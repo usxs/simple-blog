@@ -683,7 +683,7 @@ var cms = {
 
       var c = this.currentItem;
       var isApproved = c.status === 'approved';
-      var savedAdminName = localStorage.getItem('cms_reply_author') || c.replyAuthor || 'Star Space';
+      var savedAdminName = localStorage.getItem('cms_reply_author') || c.replyAuthor || '简单博客';
       var parentInfoHtml = c.parentId
         ? '<div>层级类型：<strong>层中层子回复</strong>（回复给 <strong>@' + this.escape(c.parentAuthor || '访客') + '</strong>，父评论 ID：' + this.escape(c.parentId) + '）</div>'
         : '<div>层级类型：<strong>主评论（顶层）</strong></div>';
@@ -706,7 +706,7 @@ var cms = {
         '</div>' +
         '<div class="field">' +
           '<label class="field-label">您的回复昵称（前端将在昵称右侧自动展示黑白认证对勾 ' + getVerifiedBadgeSvg() + '）</label>' +
-          '<input class="field-input" id="field-replyAuthor" type="text" value="' + this.escape(savedAdminName) + '" placeholder="例如：Star Space" />' +
+          '<input class="field-input" id="field-replyAuthor" type="text" value="' + this.escape(savedAdminName) + '" placeholder="例如：简单博客" />' +
         '</div>' +
         '<div class="field">' +
           '<label class="field-label">站长回复内容（将以缩进子层级展示在该评论下方；留空并保存可清除回复）</label>' +
@@ -823,7 +823,7 @@ var cms = {
     if (!this.currentItem) return;
     var authorEl = document.getElementById('field-replyAuthor');
     var contentEl = document.getElementById('field-replyContent');
-    var replyAuthor = authorEl ? authorEl.value.trim() : 'Star Space';
+    var replyAuthor = authorEl ? authorEl.value.trim() : '简单博客';
     var replyContent = contentEl ? contentEl.value.trim() : '';
 
     if (replyAuthor) {
@@ -834,7 +834,7 @@ var cms = {
       id: this.currentItem.id,
       postId: this.currentItem.postId,
       status: targetStatus || this.currentItem.status,
-      replyAuthor: replyAuthor || 'Star Space',
+      replyAuthor: replyAuthor || '简单博客',
       replyContent: replyContent
     };
 
