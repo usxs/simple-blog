@@ -39,6 +39,7 @@
 | --- | --- |
 | 账号登录 | 账密登录 + `scrypt` 加盐哈希 + 服务端会话 Cookie（HttpOnly / SameSite=Strict），带登录失败限流与 CSRF 防护 |
 | 文章管理 | Markdown 写作、前台实时预览、日期归档、按日期排序 |
+| Markdown 渲染 | 标题 / 列表（多级嵌套）/ 引用（可嵌套）/ 分隔线 / 表格（对齐）/ 任务清单 / 行内样式；围栏代码带语言标签、行号、一键复制与放大灯箱；```` ```mermaid ```` 流程图在浏览器端渲染 |
 | 动态 / 工具 / 状态 / 奇思妙想 | 多个可独立维护的内容板块，共用同一套增删改查接口 |
 | 图片上传 | 后台粘贴或选择图片，服务端自动转 WebP 并压缩到 2560px 内，原图不落盘 |
 | 评论 | 访客评论 + 验证码 + 后台审核 + 楼中楼回复，支持邮件/站点联系方式（不公开） |
@@ -213,6 +214,7 @@ POST /api/upload                       # 图片/附件上传（图片自动转 W
 6. **站点名称 / 域名要改多处**：`app.js` 的 `SITE_CONFIG`、`index.html` 的 meta、`functions/` 的环境变量、`robots.txt`。文章页与列表页的 meta 由 Functions 正则替换生成，只要 `index.html` 的结构（title/description/canonical/og 标签）在，改名不会失效。
 7. **SEO 与域名**：`canonical` 用的是 `SITE_URL`，如果站点同时存在 `example.com` 和 `www.example.com`，请固定一个并让另一个 301 过去，否则会被判重复内容。
 8. **备份**：只需备份 `backend/` 下的 `config.json`、`article/`、`Musings/`、`img/`、`file/`、`data/` 六个路径，建议 `tar` 打包后异地保存。
+9. **流程图依赖 CDN**：```` ```mermaid ```` 代码块由浏览器端按需从 jsDelivr 加载 `mermaid@11` 渲染，不在构建产物里；内网/离线环境不会报错，只是保留为一段源码文本。改 CDN 地址只需调整 `frontend/app.js` 与 `backend/admin.js` 里 `loadMermaid()` 的 `import()` 地址。
 
 ## 排障
 

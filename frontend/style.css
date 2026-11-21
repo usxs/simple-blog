@@ -1424,3 +1424,353 @@ button, input, textarea {
     font-size: 12px;
   }
 }
+
+/* ============================================================================
+ * Markdown 增强：引用 / 分隔线 / 表格横向滚动 / 代码块（语言 + 行号 + 复制 + 灯箱）
+ * / mermaid 流程图 / 图片灯箱
+ * ============================================================================ */
+.reader-content blockquote,
+.moment-body blockquote {
+  margin: 18px 0;
+  padding: 10px 16px;
+  border-left: 3px solid var(--border-strong);
+  border-radius: 0 6px 6px 0;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+}
+
+.reader-content blockquote p:last-child,
+.moment-body blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+.reader-content blockquote blockquote,
+.moment-body blockquote blockquote {
+  margin: 10px 0 0;
+  background: transparent;
+  border-left-color: var(--border);
+}
+
+.reader-content hr,
+.moment-body hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 26px 0;
+}
+
+.reader-content mark,
+.moment-body mark {
+  background: #FDE68A;
+  color: #141416;
+  padding: 0 3px;
+  border-radius: 3px;
+}
+
+html[data-theme="dark"] .reader-content mark,
+html[data-theme="dark"] .moment-body mark {
+  background: #4A4116;
+  color: #FDE68A;
+}
+
+.reader-content del,
+.moment-body del {
+  color: var(--text-muted);
+}
+
+.markdown-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  margin-bottom: 16px;
+}
+
+.reader-content .markdown-table-wrap table,
+.moment-body .markdown-table-wrap table {
+  margin-bottom: 0;
+  min-width: 100%;
+}
+
+.reader-content ul.task-list {
+  list-style: none;
+  padding-left: 2px;
+}
+
+.reader-content li.task-list-item input {
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+
+.reader-content img.md-image,
+.moment-body img.md-image {
+  cursor: zoom-in;
+  transition: opacity .12s ease;
+}
+
+.reader-content img.md-image:hover,
+.moment-body img.md-image:hover {
+  opacity: .92;
+}
+
+/* 代码块：头部工具条 + 行号 + 灯箱按钮 */
+.code-block {
+  margin-bottom: 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-subtle);
+  overflow: hidden;
+}
+
+.code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px 6px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+
+.code-lang {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: .3px;
+  color: var(--text-muted);
+  text-transform: lowercase;
+}
+
+.code-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.code-btn {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  line-height: 1;
+  padding: 5px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background .14s ease, color .14s ease;
+}
+
+.code-btn:hover {
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+.code-btn.is-done {
+  color: var(--status-ok);
+}
+
+.reader-content .code-block pre.code-pre,
+.moment-body .code-block pre.code-pre {
+  margin: 0;
+  padding: 12px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow-x: auto;
+  counter-reset: md-code-line;
+}
+
+.code-pre code {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.7;
+  background: none;
+  padding: 0;
+  border-radius: 0;
+}
+
+.code-pre .code-line {
+  display: block;
+  counter-increment: md-code-line;
+  padding: 0 14px 0 52px;
+  position: relative;
+  white-space: pre;
+}
+
+.code-pre .code-line::before {
+  content: counter(md-code-line);
+  position: absolute;
+  left: 0;
+  width: 36px;
+  padding-right: 10px;
+  text-align: right;
+  color: var(--text-muted);
+  opacity: .55;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* mermaid 流程图 */
+.mermaid-figure {
+  margin: 18px 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-surface);
+  overflow-x: auto;
+  text-align: center;
+}
+
+.mermaid-figure .mermaid {
+  font-family: var(--font-sans);
+  color: var(--text-secondary);
+  white-space: pre;
+  text-align: left;
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+.mermaid-figure .mermaid svg {
+  max-width: 100%;
+  height: auto;
+  display: inline-block;
+}
+
+.mermaid-figure .mermaid.mermaid-error {
+  white-space: pre-wrap;
+  color: var(--text-muted);
+  border-left: 3px dashed var(--border-strong);
+  padding-left: 12px;
+}
+
+/* 灯箱 */
+body.md-lightbox-locked {
+  overflow: hidden;
+}
+
+.md-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  background: rgba(9, 9, 11, .72);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+.md-lightbox.is-open {
+  display: flex;
+}
+
+.md-lightbox-inner {
+  display: flex;
+  flex-direction: column;
+  width: min(1080px, 100%);
+  max-height: 100%;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, .45);
+  overflow: hidden;
+}
+
+.md-lightbox.is-image .md-lightbox-inner {
+  width: auto;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.md-lightbox-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+
+.md-lightbox.is-image .md-lightbox-bar {
+  border: 0;
+  background: transparent;
+}
+
+.md-lightbox-lang {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.md-lightbox-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.md-lightbox-btn {
+  appearance: none;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  transition: color .14s ease, border-color .14s ease;
+}
+
+.md-lightbox-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.md-lightbox-btn.is-done {
+  color: var(--status-ok);
+  border-color: var(--status-ok);
+}
+
+.md-lightbox-body {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.md-lightbox-body pre {
+  margin: 0;
+  padding: 16px 0;
+  background: var(--bg-subtle);
+  border: 0;
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.75;
+  counter-reset: md-code-line;
+}
+
+.md-lightbox.is-image .md-lightbox-body {
+  overflow: visible;
+  padding: 0;
+}
+
+.md-lightbox-image {
+  max-width: min(1200px, 92vw);
+  max-height: 82vh;
+  border-radius: 8px;
+  display: block;
+}
+
+@media (max-width: 640px) {
+  .md-lightbox {
+    padding: 14px 10px;
+  }
+  .code-pre .code-line {
+    padding-left: 42px;
+    padding-right: 10px;
+  }
+  .code-pre .code-line::before {
+    width: 28px;
+    padding-right: 8px;
+  }
+}

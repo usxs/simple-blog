@@ -1159,6 +1159,185 @@ var router = {
   }
 };
 
+/* ================= Markdown 增强：复制 / 灯箱 / 流程图 ================= */
+(function () {
+  var mask = null;
+  var mermaidApi = null;
+  var mermaidLoading = null;
+
+  function codeText(codeEl) {
+    if (!codeEl) return '';
+    var rows = codeEl.querySelectorAll('.code-line');
+    if (!rows.length) return codeEl.textContent || '';
+    return Array.prototype.map.call(rows, function (row) {
+      return (row.textContent || '').replace(/\u200b/g, '');
+    }).join('\n');
+  }
+
+  function legacyCopy(text) {
+    var area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', 'readonly');
+    area.style.cssText = 'position:fixed;top:0;left:-9999px;opacity:0';
+    document.body.appendChild(area);
+    area.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+    document.body.removeChild(area);
+    return ok;
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text).then(function () { return true; }, function () { return legacyCopy(text); });
+    }
+    return Promise.resolve(legacyCopy(text));
+  }
+
+  function flash(btn, text) {
+    if (!btn) return;
+    var origin = btn.getAttribute('data-label') || btn.textContent;
+    btn.setAttribute('data-label', origin);
+    btn.textContent = text;
+    btn.classList.add('is-done');
+    clearTimeout(btn.__flashTimer);
+    btn.__flashTimer = setTimeout(function () {
+      btn.textContent = origin;
+      btn.classList.remove('is-done');
+    }, 1400);
+  }
+
+  function ensureMask() {
+    if (mask) return mask;
+    mask = document.createElement('div');
+    mask.className = 'md-lightbox';
+    mask.innerHTML =
+      '<div class="md-lightbox-inner">' +
+        '<div class="md-lightbox-bar">' +
+          '<span class="md-lightbox-lang"></span>' +
+          '<div class="md-lightbox-actions">' +
+            '<button type="button" class="md-lightbox-btn" data-action="copy">复制</button>' +
+            '<button type="button" class="md-lightbox-btn" data-action="close" aria-label="关闭">关闭</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="md-lightbox-body"></div>' +
+      '</div>';
+    mask.addEventListener('click', function (event) {
+      if (event.target === mask) return closeLightbox();
+      var action = event.target.closest('[data-action]');
+      if (!action) return;
+      if (action.getAttribute('data-action') === 'close') return closeLightbox();
+      if (action.getAttribute('data-action') === 'copy') {
+        copyText(codeText(mask.querySelector('.md-lightbox-body code'))).then(function (ok) {
+          flash(action, ok ? '已复制' : '复制失败');
+        });
+      }
+    });
+    document.body.appendChild(mask);
+    return mask;
+  }
+
+  function openLightbox(lang, innerHtml, extraClass) {
+    var box = ensureMask();
+    box.querySelector('.md-lightbox-lang').textContent = lang || '';
+    box.querySelector('.md-lightbox-body').innerHTML = innerHtml;
+    box.className = 'md-lightbox is-open' + (extraClass ? ' ' + extraClass : '');
+    document.body.classList.add('md-lightbox-locked');
+  }
+
+  function closeLightbox() {
+    if (!mask) return;
+    mask.className = 'md-lightbox';
+    mask.querySelector('.md-lightbox-body').innerHTML = '';
+    document.body.classList.remove('md-lightbox-locked');
+  }
+
+  document.addEventListener('click', function (event) {
+    var copyBtn = event.target.closest('.code-copy');
+    if (copyBtn) {
+      event.preventDefault();
+      var block = copyBtn.closest('.code-block');
+      copyText(codeText(block && block.querySelector('code'))).then(function (ok) { flash(copyBtn, ok ? '已复制' : '复制失败'); });
+      return;
+    }
+    var expandBtn = event.target.closest('.code-expand');
+    if (expandBtn) {
+      event.preventDefault();
+      var target = expandBtn.closest('.code-block');
+      if (!target) return;
+      var pre = target.querySelector('pre');
+      openLightbox(target.getAttribute('data-lang') || 'text', pre ? pre.outerHTML : '', 'is-code');
+      return;
+    }
+    var image = event.target.closest('img.md-image');
+    if (image && image.getAttribute('src')) {
+      event.preventDefault();
+      openLightbox(image.getAttribute('alt') || '', '<img class="md-lightbox-image" src="' + image.getAttribute('src') + '" alt="' + (image.getAttribute('alt') || '') + '" />', 'is-image');
+    }
+  });
+
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') closeLightbox();
+  });
+
+  function loadMermaid() {
+    if (mermaidLoading) return mermaidLoading;
+    mermaidLoading = import('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs')
+      .then(function (mod) {
+        var api = mod.default || mod;
+        api.initialize({
+          startOnLoad: false,
+          securityLevel: 'loose',
+          theme: document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default',
+          flowchart: { htmlLabels: true, curve: 'basis' },
+          sequence: { useMaxWidth: true }
+        });
+        mermaidApi = api;
+        return api;
+      })
+      .catch(function () { return null; });
+    return mermaidLoading;
+  }
+
+  var mermaidSeq = 0;
+  function renderMermaidBlocks() {
+    var nodes = Array.prototype.slice.call(document.querySelectorAll('.mermaid:not([data-rendered])'));
+    if (!nodes.length) return;
+    nodes.forEach(function (node) { node.setAttribute('data-rendered', '1'); });
+    loadMermaid().then(function (api) {
+      if (!api) {
+        nodes.forEach(function (node) { node.classList.add('mermaid-error'); });
+        return;
+      }
+      nodes.forEach(function (node) {
+        var source = node.textContent || '';
+        var id = 'mermaid-svg-' + (++mermaidSeq);
+        api.render(id, source).then(function (result) {
+          node.innerHTML = result.svg;
+          node.classList.add('mermaid-done');
+        }).catch(function () {
+          node.classList.add('mermaid-error');
+        });
+      });
+    });
+  }
+
+  var renderTimer = null;
+  function scheduleMermaid() {
+    clearTimeout(renderTimer);
+    renderTimer = setTimeout(renderMermaidBlocks, 80);
+  }
+
+  if (window.MutationObserver) {
+    var host = document.getElementById('page-content') || document.body;
+    new MutationObserver(scheduleMermaid).observe(host, { childList: true, subtree: true });
+  }
+  window.addEventListener('load', scheduleMermaid);
+
+  // 供外部（如后台预览）手动触发
+  window.markdownEnhance = function () { scheduleMermaid(); };
+})();
+
 // 浏览器前进/后退：跟随地址变化重渲染
 window.addEventListener('popstate', function () { router.handlePopState(); });
 
