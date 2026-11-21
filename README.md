@@ -21,6 +21,16 @@
 | ![登录](docs/screenshots/admin-login.png) | ![后台](docs/screenshots/admin.png) |
 | <sub>后台登录：账密 + 服务端会话</sub> | <sub>后台：文章增删改、图片上传、评论审核</sub> |
 
+### 移动端
+
+手机浏览器打开即是单列布局：侧边栏收起为**底部悬浮导航**，当前页面自动高亮；文章正文、代码块、评论表单、验证码都按宽度重排，不需要横向滚动或缩放。375px（iPhone SE）到 430px 的窄屏单独压缩过导航间距，六个入口一屏放得下。
+
+| 手机首页 | 手机文章列表 |
+| --- | --- |
+| ![移动端首页](docs/screenshots/mobile-home.png) | ![移动端文章列表](docs/screenshots/mobile-posts.png) |
+| 手机文章详情 | 手机评论区 |
+| ![移动端文章](docs/screenshots/mobile-article.png) | ![移动端评论](docs/screenshots/mobile-comments.png) |
+
 ---
 
 ## 功能
@@ -34,6 +44,7 @@
 | 评论 | 访客评论 + 验证码 + 后台审核 + 楼中楼回复，支持邮件/站点联系方式（不公开） |
 | SEO | 真实路径路由、文章页 SSR、动态 `sitemap.xml`、`robots.txt`、Open Graph、JSON-LD 结构化数据、IndexNow 即时推送 |
 | 服务器探针 | 可选，读取外部监控接口展示节点状态 |
+| 移动端 | ≤860px 自动切单列布局并显示底部悬浮导航，375–430px 窄屏做了专门压缩，六个入口一屏放得下 |
 
 ## 架构
 
@@ -58,6 +69,9 @@ Cloudflare Pages（前端静态资源）
 
 ```
 simple-blog/
+├── README.md                 # 项目说明、界面预览、部署与注意事项
+├── CHANGELOG.md              # 更新日志
+├── LICENSE                   # MIT
 ├── backend/                  # 后端服务
 │   ├── server.js             # 入口：路由、静态资源、公开 API
 │   ├── admin.html/css/js     # 后台管理界面（登录、编辑、上传、评论审核）
@@ -85,7 +99,8 @@ simple-blog/
 │   └── functions/            # Pages Functions：文章页 / 列表页 SSR、sitemap 代理
 └── docs/
     ├── DEPLOY.md             # 详细部署与排障
-    └── API.md                # 接口速查
+    ├── API.md                # 接口速查
+    └── screenshots/          # README 使用的界面截图
 ```
 
 ## 快速开始
@@ -209,6 +224,10 @@ POST /api/upload                       # 图片/附件上传（图片自动转 W
 | 前端能打开但文章 404 / 列表为空 | `API_BASE_URL` 配错，或后端 CORS 被拦；浏览器控制台看 `/api/sync` 请求 |
 | 图片上传后仍是 jpg | 构建时 `sharp` 没装上（看 `docker compose logs` 里的 warn），重新 `--build`；或设置了 `IMAGE_WEBP_DISABLE=1` |
 | sitemap 显示的是首页 | Pages Functions 未部署（目录名必须是 `functions/`），或用了 `_redirects` 但域名写错 |
+
+## 更新日志
+
+版本变更、修复记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 许可证
 

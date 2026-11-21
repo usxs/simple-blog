@@ -638,11 +638,25 @@ var router = {
   },
 
   // /post/<id> 路由：SSR 预渲染页直接水合（正文已在 HTML 中，评论仍由前端加载），否则常规渲染
+  // 底部移动端导航高亮：文章详情页归属「文章」，避免停在旧的 tab 上
+  syncDock: function (tab) {
+    var navEls = document.querySelectorAll('[data-nav]');
+    var active = tab === 'post' ? 'posts' : tab;
+    for (var i = 0; i < navEls.length; i++) {
+      if (navEls[i].getAttribute('data-nav') === active) {
+        navEls[i].setAttribute('aria-current', 'page');
+      } else {
+        navEls[i].removeAttribute('aria-current');
+      }
+    }
+  },
+
   renderPostRoute: async function (id) {
     var pre = window.__PRERENDERED_POST__;
     var container = document.getElementById('page-content');
     if (pre && String(pre.id) === String(id) && container && container.querySelector('.article-reader')) {
       this.current = 'post';
+      this.syncDock('post');
       container.classList.add('is-reading');
       window.scrollTo(0, 0);
       commentBox.loadSection(pre.id);
@@ -858,6 +872,8 @@ var router = {
       this.go('posts');
       return;
     }
+    this.current = 'post';
+    this.syncDock('post');
     window.scrollTo({ top: 0, behavior: 'smooth' });
     var container = document.getElementById('page-content');
     container.classList.add('is-reading');
