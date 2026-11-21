@@ -821,11 +821,12 @@ button, input, textarea {
 
 /* 文章页底部：MIT 许可证声明 */
 .article-license {
+  /* 分隔线与标题下方那条线（.reader-meta）等长：整行铺满，内容仍保持 760px 居中 */
   width: 100%;
-  max-width: 760px;          /* 与正文 / 评论区同宽，避免上下两条线长度不一致 */
-  margin: 28px auto 0;
-  padding-top: 16px;
-  border-top: 1px dashed var(--border);
+  max-width: none;
+  margin: 28px 0 0;
+  padding: 16px max(0px, calc((100% - 760px) / 2)) 0;
+  border-top: 1px solid var(--border);
   font-size: 12px;
   line-height: 1.7;
   color: var(--text-muted);
@@ -898,12 +899,12 @@ button, input, textarea {
  * 评论区：多级嵌套（层中层）+ 缩进结构 + 推特风格黑白认证徽章
  * ============================================================================ */
 .comments-section {
-  margin-top: 48px;
-  padding-top: 32px;
-  border-top: 1px dashed var(--border);   /* 与许可证上方虚线统一 */
-  max-width: 760px;
-  margin-left: auto;
-  margin-right: auto;
+  /* 与标题下方实线等长；左右内边距把内容收在 760px，位置不变 */
+  margin: 48px 0 0;
+  padding: 32px max(0px, calc((100% - 760px) / 2)) 0;
+  border-top: 1px solid var(--border);
+  width: 100%;
+  max-width: none;
 }
 
 .comments-head {
@@ -1780,6 +1781,7 @@ body.md-lightbox-locked {
 }
 
 /* ================= 栏目开关 / 自定义图标 / 栏目已关闭 ================= */
+.sidebar-nav li[hidden],
 .sidebar-nav .nav-item[hidden],
 .mobile-dock-btn[hidden] {
   display: none !important;

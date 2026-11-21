@@ -1,5 +1,7 @@
 # 简单博客
 
+**简体中文** · [English](README.en.md)
+
 一套可以自己部署的极简个人博客系统：**Cloudflare Pages 静态前端 + 自托管 Node 后端**。
 
 前端是零构建的纯静态 SPA（HTML/CSS/原生 JS），由 Pages 的 Functions 在边缘做服务端渲染，保证搜索引擎能拿到每篇文章的完整正文；后端是零框架依赖的 Node 服务，负责账号登录、文章/动态管理、图片上传与评论，数据全部以 Markdown / JSON 文件形式落盘，换个机器拷走目录就能搬家。
@@ -57,6 +59,7 @@
 | 部署版本 | 鼠标悬停侧边栏「节点 ONLINE」弹出小气泡，显示当前线上部署的短版本号、提交与分支，排查「线上到底是哪一版」很方便 |
 | 文章搜索 | 文章列表页搜索框：标题 / 摘要 / 标签模糊匹配，中文按子串、英文支持子序列；输入法组合结束后立即过滤，支持回车与 Esc 清空，列表只更新容器不重建输入框 |
 | 移动端 | ≤860px 自动切单列布局并显示底部悬浮导航，375–430px 窄屏做了专门压缩，六个入口一屏放得下 |
+| 渐进加载 | 站点配置（栏目开关 / 名称 / 路径 / 顺序）缓存在浏览器本地：首屏直接按上次配置渲染，不闪未关闭的栏目；首页不等网络，节点状态与探针自己慢慢刷新；后端宕机时前台照常可读 |
 
 ## 架构
 
@@ -117,52 +120,193 @@ simple-blog/
 
 ## 快速开始
 
-### 1. 部署后端
+下面是「从零到能访问」的完整流程，按顺序做即可。每一步都给了验证方法，出错能立刻定位。
+
+### 0. 准备
+
+| 需要 | 说明 |
+| --- | --- |
+| 一台服务器 | Linux（Debian/Ubuntu 均可），1 核 1G 起；VPS 或家里的机器都行，只要外网能访问 |
+| 域名 | 建议两个子域：`www.example.com` 给前端，`api.example.com` 给后端 |
+| Cloudflare 账号 | 前端用 Pages 免费托管，需要账号 |
+| Docker | 服务器上装 Docker Engine + Compose 插件（下面第 2 步会检查） |
+
+### 1. 拉代码
 
 ```bash
 git clone https://github.com/<your-name>/simple-blog.git
-cd simple-blog/backend
-
-cp .env.example .env
-vim .env            # 至少设置 ADMIN_PASSWORD、SITE_PUBLIC_URL、BACKEND_PUBLIC_URL
-
-# 数据目录归容器的 UID 1000 所有（否则写入会报 EACCES）
-sudo mkdir -p data article Musings img file
-sudo chown -R 1000:1000 data article Musings img file config.json
-
-docker compose up -d --build
-docker compose logs -f --tail 50
+cd simple-blog
 ```
 
-访问 `http://127.0.0.1:33001/` 就是管理后台。生产环境请用 Nginx（或 Cloudflare Tunnel / Caddy）反代并启用 HTTPS，例如把 `https://api.example.com` 指到 `127.0.0.1:33001`。
+### 2. 部署后端（服务器上）
 
-### 2. 部署前端
+#### 2.1 检查 Docker
 
-1. 把 `frontend/` 推到 GitHub，在 Cloudflare Pages 里「连接 Git 仓库」创建项目；
-2. 构建命令留空，输出目录填 `/`（或直接把 `frontend` 目录作为根）；
-3. 在 Pages 项目的 **Settings → Environment variables** 里配置：
+```bash
+docker --version          # 需要 20.10+
+docker compose version    # 需要 v2（命令是 docker compose，不是 docker-compose）
+```
+
+没有的话装一下（Debian/Ubuntu）：
+
+```bash
+curl -fsSL https://get.docker.com | sh
+```
+
+#### 2.2 准备数据目录并修正权限
+
+容器以 UID `1000` 运行，宿主机目录必须让这个用户能写，否则首次初始化会报「数据目录不可写」：
+
+```bash
+cd backend
+mkdir -p data article Musings img file
+touch config.json         # 必须是文件，不能是目录（Docker 会把不存在的挂载点建成目录）
+sudo chown -R 1000:1000 data article Musings img file config.json
+```
+
+#### 2.3 写环境变量
+
+```bash
+cp .env.example .env
+vim .env
+```
+
+至少要改这四项：
+
+```ini
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=换成你自己的强密码      # 首次启动用它创建管理员，之后不会再生效
+SITE_PUBLIC_URL=https://www.example.com   # 前端地址，写进 sitemap 与推送链接
+BACKEND_PUBLIC_URL=https://api.example.com # 后端地址，写进 robots.txt
+```
+
+其余变量（验证码密钥、IndexNow、探针数据源、站点名称初始值）可以先留空，后文会用到时再补。
+
+#### 2.4 启动
+
+```bash
+docker compose up -d --build
+docker compose ps           # 应看到 Up (healthy)
+docker compose logs --tail 50
+```
+
+> 只要改过代码或 `.env`，都要带 `--build` 重新构建；只重启容器不会更新代码。
+
+#### 2.5 验证后端
+
+```bash
+curl -s http://127.0.0.1:33001/api/auth/status
+# {"ok":true,"authed":false,"setupNeeded":false,"dataWritable":true}
+```
+
+`setupNeeded:false` 说明管理员已按 `.env` 创建好；`dataWritable:true` 说明目录权限正确。两个字段任一是 `false`，回到 2.2 检查目录权限。
+
+#### 2.6 给后端配域名与 HTTPS（Nginx 反代）
+
+把 `api.example.com` 反代到 `127.0.0.1:33001` 即可。示例（宝塔 / LNMP 面板里也能直接建反代站点）：
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name api.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/api.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.example.com/privkey.pem;
+
+    client_max_body_size 30m;          # 图片/附件上传
+
+    location / {
+        proxy_pass http://127.0.0.1:33001;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;   # 必填：后端据此判断是否给 Cookie 加 Secure
+        proxy_set_header X-Forwarded-Host  $host;     # Passkey 的 rpId 依赖它
+    }
+}
+```
+
+证书可以用 `certbot --nginx -d api.example.com` 一键签发。
+
+#### 2.7 登录后台
+
+浏览器打开 `https://api.example.com/admin.html`，用 `.env` 里的账密登录，就进入后台了（文章、评论、图片、栏目开关都在这里）。建议登录后立刻在「管理 → 管理员账号」把密码换成新的。
+
+### 3. 部署前端（Cloudflare Pages）
+
+前端是纯静态文件，不需要构建。两种方式任选：
+
+#### 方式 A：连接 Git 仓库（推荐，之后 push 即自动发布）
+
+1. Cloudflare Dashboard → **Workers & Pages** → **Create** → **Pages** → **Connect to Git**，选中你的仓库；
+2. 构建设置：
+
+| 项 | 值 |
+| --- | --- |
+| Framework preset | None |
+| Build command | 留空 |
+| Build output directory | `frontend` |
+
+3. 保存并部署，得到 `<随机串>.pages.dev` 域名。
+
+#### 方式 B：命令行上传（不接 Git 也行）
+
+```bash
+npm i -g wrangler
+wrangler pages deploy frontend --project-name simple-blog
+```
+
+> `functions/` 目录必须一起上传，`wrangler` 会自动把它编译成边缘函数；直接拖拽 HTML 不走 Functions，文章页就没有服务端渲染。
+
+#### 3.1 配置 Pages 环境变量
+
+Pages 项目 → **Settings → Environment variables**（Production 与 Preview 都加）：
 
 | 变量 | 示例 | 作用 |
 | --- | --- | --- |
-| `SITE_URL` | `https://www.example.com` | 站点主域名，用于 canonical / OG / sitemap（列表页与文章页 SSR 都依赖它） |
-| `API_BASE_URL` | `https://api.example.com` | 后端域名，Functions 用它抓文章与 sitemap |
-| `SITE_NAME` | `简单博客` | 站点名称 |
-| `SITE_BIO` | `记录技术与生活。` | 站点简介 |
+| `SITE_URL` | `https://www.example.com` | canonical / OG / sitemap 用的站点地址 |
+| `API_BASE_URL` | `https://api.example.com` | Functions 抓文章与 sitemap 的后端地址 |
+| `SITE_NAME` | `简单博客` | 站点名称（SSR 页面标题） |
+| `SITE_BIO` | `记录技术与生活。` | 站点简介（SSR 描述） |
 
-> 也可以不用环境变量，直接改 `frontend/functions/*.js` 里的 `DEFAULTS` 对象；但改完记得和 `frontend/index.html` 里的 title、canonical、OG 标签保持一致（首页 meta 是静态写死的）。
+#### 3.2 改站点自身的信息
 
-4. 还要改这些「你的站点信息」：
+- `frontend/app.js` 顶部 `SITE_CONFIG`：站点名、作者、`apiBaseUrl`（改成你的后端域名）、社交链接（留空即隐藏）、站点起始日期；
+- `frontend/index.html`：`<title>`、`description`、`canonical`、OG 标签、JSON-LD 里的域名；
+- `frontend/robots.txt`：`Sitemap:` 那一行的域名。
 
-- `frontend/app.js` 顶部的 `SITE_CONFIG`：站点名（默认「简单博客」）、作者、`apiBaseUrl`、社交链接（留空即隐藏）、备案号等；
-- `frontend/index.html` 里的 `<title>`、`description`、`canonical`、OG 标签、JSON-LD；
-- `frontend/robots.txt` 里的 `Sitemap:` 域名。
+改完提交，Pages 会自动重新发布（方式 B 需要重新执行 `wrangler pages deploy`）。
 
-### 3. 绑定域名并提交搜索引擎
+#### 3.3 绑定自己的域名
 
-- 主站 `www.example.com` → Cloudflare Pages；后端 `api.example.com` → 你的服务器（建议也走 Cloudflare 代理）。
-- Google Search Console / Bing Webmaster Tools 里添加站点，提交 `https://www.example.com/sitemap.xml` 即可，之后发布文章会自动更新 sitemap 并（若配置了 IndexNow）即时推送。
+Pages 项目 → **Custom domains** → 添加 `www.example.com`，按提示在 Cloudflare DNS 里加 CNAME。建议：
 
-更细的步骤、Nginx 配置、证书、备份与排障见 [docs/DEPLOY.md](docs/DEPLOY.md)。
+- 主域 `example.com` 301 到 `www.example.com`（或反过来，二选一，不要两边都能访问）；
+- 前端与后端都在 Cloudflare 代理下时，后端记得关掉会拦截 API 的防火墙规则。
+
+### 4. 上线检查清单
+
+逐条点一遍，全绿就说明部署没问题：
+
+| 检查 | 期望 |
+| --- | --- |
+| 打开 `https://www.example.com/` | 首页正常，侧边栏「节点」显示 ONLINE |
+| 打开任一文章 `/post/<id>` | 正文完整；查看网页源码，`<title>` 是文章标题，`reader-content` 里有正文（SSR 生效） |
+| `https://www.example.com/sitemap.xml` | 返回 XML，URL 都是真实路径（没有 `#/`） |
+| `https://api.example.com/admin.html` | 能登录后台 |
+| 后台上传一张图 | 返回的 Markdown 里是 `.webp`，前台显示正常 |
+| 前台提交一条评论 | 提示「待审核」，后台评论审核里能看到 |
+| 后台「管理 → 前台栏目」关掉一个栏目 | 前台侧边栏立即消失，直接访问该地址显示「栏目已关闭」 |
+
+### 5. 提交给搜索引擎
+
+1. Google Search Console 添加资源，**推荐用「网域」类型**（DNS TXT 验证），而不是「网址前缀」——否则 sitemap 的主机名对不上会一直提示「无法读取」；
+2. Bing Webmaster Tools 可以直接从 GSC 导入站点；
+3. 两边都提交 `https://www.example.com/sitemap.xml`；
+4. 想让 Bing 更快收录新文章：后端 `.env` 里填 `INDEXNOW_KEY=<32 位随机串>`，并把同名 `<KEY>.txt`（内容就是这个 key）放进 `frontend/` 根目录一起部署。
+
+更细的步骤、证书、备份与排障见 [docs/DEPLOY.md](docs/DEPLOY.md)。
 
 ## 环境变量
 
@@ -245,18 +389,20 @@ POST /api/auth/sessions/revoke-others  # 下线其它设备
 4. **图片格式**：`.jpg/.jpeg/.png/.gif` 会转成 WebP；SVG 与 AVIF 原样保留；已是 `.webp` 的不再重编码。转换后若反而更大，会保留原图。想关闭转换设 `IMAGE_WEBP_DISABLE=1`。
 5. **历史图片不追溯**：老文章的 Markdown 里写的是当时的文件名，重新转换会让链接失效，所以只对之后上传的图片生效。
 6. **站点名称 / 域名要改多处**：站点名称、头像文字、浏览器标题、副标题都可以直接在后台「管理」页改（前端启动时读 `/api/site`，文章页与列表页 SSR 也会读取），不需要重新部署；但 `index.html` 里的静态 meta、`functions/` 环境变量、`robots.txt` 里的域名仍需手工同步（用于搜索引擎与无 JS 场景）。
-7. **栏目开关 / 改名 / 改路径 / 图标**：都在「管理 → 前台栏目」里完成，保存后即时生效，不需要重新部署前端。关掉的栏目在前台侧边栏与手机底栏都会消失，后台侧边栏也一并隐藏（在管理页重新打开即可）。首页可改名换图标但不能关闭。
+7. **栏目开关 / 改名 / 改路径 / 图标 / 顺序**：都在「管理 → 前台栏目」里完成，保存后即时生效，不需要重新部署前端。关掉的栏目在前台侧边栏、手机底栏、后台侧边栏都会隐藏（在管理页重新打开即可）。首页可改名换图标但不能关闭。
     - 路径只能用字母、数字和短横线（1–24 位），不能与 `post`、`api`、`admin` 等保留路径冲突；两条栏目不能撞同一路径
-    - 改路径后旧地址仍然可用（自动 302 到新路径），但 `sitemap`、导航链接与 SSR 元信息都以新路径为准；如果之前被别人收藏过，建议改一次就定下来
+    - 改路径后旧地址仍然可用（自动 302 到新路径），但 `sitemap`、导航链接与 SSR 元信息都以新路径为准
     - 上传的图标存在 `img/日期/`，备份时一并带走
-    - 拖动「前台栏目」每行左侧的 ⋮⋮ 可以调整顺序，保存后前台侧边栏、手机底栏、后台侧边栏同时按新顺序排列
-11. **评论防刷**：同一 IP 两条评论至少间隔 30 秒，每小时最多 8 条、每天最多 30 条；验证码每 10 分钟最多签发 30 次。触发限制时接口返回 `429`（带 `Retry-After`），前台提交按钮会显示倒计时。需要给正常访客放宽，改 `backend/captcha.js` 的 `CAPTCHA_MAX` 与 `backend/server.js` 里的间隔/条数常量即可。
-12. **文章顺序**：后台列表与前台列表都以发布日期（`date`）从新到旧，日期相同再看修改时间。想调顺序直接改文章里的 `date`。
-8. **SEO 与域名**：`canonical` 用的是 `SITE_URL`，如果站点同时存在 `example.com` 和 `www.example.com`，请固定一个并让另一个 301 过去，否则会被判重复内容。
-9. **备份**：只需备份 `backend/` 下的 `config.json`、`article/`、`Musings/`、`img/`、`file/`、`data/` 六个路径，建议 `tar` 打包后异地保存。
-10. **两步验证的备用码**：启用 2FA 时生成的 10 个备用码只显示一次，请立刻保存；丢失验证器又没有备用码时，可在服务器上删除 `backend/data/auth.json` 里的 `totp` 字段后重启（会关闭 2FA）。
-10. **通行密钥需要 HTTPS**：`http://` 或直接用 IP 访问时浏览器不提供 Passkey 接口；后端会按 `X-Forwarded-Host` 推导 `rpId`，反代域名与后端域名不一致时用 `WEBAUTHN_RP_ID` / `WEBAUTHN_ORIGIN` 显式指定。注册的密钥与域名绑定，换域名后需要重新注册。
-11. **流程图依赖 CDN**：```` ```mermaid ```` 代码块由浏览器端按需从 jsDelivr 加载 `mermaid@11` 渲染，不在构建产物里；内网/离线环境不会报错，只是保留为一段源码文本。改 CDN 地址只需调整 `frontend/app.js` 与 `backend/admin.js` 里 `loadMermaid()` 的 `import()` 地址。
+    - 拖动每行左侧的 ⋮⋮ 可以调整顺序，保存后前台侧边栏、手机底栏、后台侧边栏同时按新顺序排列
+8. **站点配置会在浏览器本地缓存**：前台把最近一次 `/api/site`（栏目开关 / 名称 / 路径 / 顺序）存在 `localStorage` 的 `sp_site_cache_v1` 里，首屏直接按缓存渲染，所以不会先闪一下「本该隐藏的栏目」；后端不可达或很慢时也照常显示。改动会在下次打开页面时拉新并覆盖缓存（后端用 `updatedAt` 判断是否变化）。如果改完发现前台没更新，强制刷新（`Cmd/Ctrl + Shift + R`）或清掉这条缓存即可。
+9. **首屏不等后端**：首页、列表页、文章页都先用本地数据/SSR 内容渲染，侧边栏「节点 ONLINE」、探针数据、后台配置各自异步刷新；网络慢或后端挂了不会白屏，只是节点状态显示 OFFLINE。
+10. **SEO 与域名**：`canonical` 用的是 `SITE_URL`，如果站点同时存在 `example.com` 和 `www.example.com`，请固定一个并让另一个 301 过去，否则会被判重复内容。
+11. **备份**：只需备份 `backend/` 下的 `config.json`、`article/`、`Musings/`、`img/`、`file/`、`data/` 六个路径，建议 `tar` 打包后异地保存。
+12. **两步验证的备用码**：启用 2FA 时生成的 10 个备用码只显示一次，请立刻保存；丢失验证器又没有备用码时，可在服务器上删除 `backend/data/auth.json` 里的 `totp` 字段后重启（会关闭 2FA）。
+13. **通行密钥需要 HTTPS**：`http://` 或直接用 IP 访问时浏览器不提供 Passkey 接口；后端会按 `X-Forwarded-Host` 推导 `rpId`，反代域名与后端域名不一致时用 `WEBAUTHN_RP_ID` / `WEBAUTHN_ORIGIN` 显式指定。注册的密钥与域名绑定，换域名后需要重新注册。
+14. **流程图依赖 CDN**：```` ```mermaid ```` 代码块由浏览器端按需从 jsDelivr 加载 `mermaid@11` 渲染，不在构建产物里；内网/离线环境不会报错，只是保留为一段源码文本。改 CDN 地址只需调整 `frontend/app.js` 与 `backend/admin.js` 里 `loadMermaid()` 的 `import()` 地址。
+15. **评论防刷**：同一 IP 两条评论至少间隔 30 秒，每小时最多 8 条、每天最多 30 条；验证码每 10 分钟最多签发 30 次。触发限制时接口返回 `429`（带 `Retry-After`），前台提交按钮会显示倒计时。需要给正常访客放宽，改 `backend/captcha.js` 的 `CAPTCHA_MAX` 与 `backend/server.js` 里的间隔/条数常量即可。
+16. **文章顺序**：后台列表与前台列表都以发布日期（`date`）从新到旧，日期相同再看修改时间。想调顺序直接改文章里的 `date`。
 
 ## 排障
 
@@ -268,6 +414,8 @@ POST /api/auth/sessions/revoke-others  # 下线其它设备
 | 前端能打开但文章 404 / 列表为空 | `API_BASE_URL` 配错，或后端 CORS 被拦；浏览器控制台看 `/api/sync` 请求 |
 | 图片上传后仍是 jpg | 构建时 `sharp` 没装上（看 `docker compose logs` 里的 warn），重新 `--build`；或设置了 `IMAGE_WEBP_DISABLE=1` |
 | sitemap 显示的是首页 | Pages Functions 未部署（目录名必须是 `functions/`），或用了 `_redirects` 但域名写错 |
+| 改了栏目配置但前台没变 | 前端用的是本地缓存的站点配置：强制刷新（`Cmd/Ctrl + Shift + R`），或在控制台执行 `localStorage.removeItem('sp_site_cache_v1')` 后刷新 |
+| 侧边栏第一个栏目上方多一行空白 | 旧版本的排版 bug（重排后残留空 `<li>`），更新 `frontend/app.js` 与 `frontend/style.css` 即可 |
 
 ## 更新日志
 

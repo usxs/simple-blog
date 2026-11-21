@@ -44,6 +44,29 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet" />
+  <!-- 首屏防闪：用上次缓存的栏目开关先隐藏已关闭的栏目（app.js 随后会再校正名称/图标/顺序） -->
+  <script>
+    (function () {
+      try {
+        var raw = window.localStorage.getItem('sp_site_cache_v1');
+        if (!raw) return;
+        var site = (JSON.parse(raw) || {}).site;
+        if (!site || !site.modules) return;
+        var css = '';
+        Object.keys(site.modules).forEach(function (key) {
+          if (site.modules[key] && site.modules[key].enabled === false) {
+            css += '[data-nav="' + key + '"]{display:none!important}';
+            css += 'li:has(> [data-nav="' + key + '"]){display:none!important}';
+          }
+        });
+        if (!css) return;
+        var style = document.createElement('style');
+        style.id = 'site-cache-hide';
+        style.textContent = css;
+        document.head.appendChild(style);
+      } catch (e) { /* 缓存不可用时忽略，等 /api/site 回来再隐藏 */ }
+    })();
+  </script>
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>

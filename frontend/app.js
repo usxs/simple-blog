@@ -150,6 +150,8 @@ function normalizeModuleOrder(raw) {
 }
 
 // 按后台设置调整侧边栏与移动端底栏的先后顺序
+// 侧边栏结构是 <li><a data-nav></li>：必须整体移动 li，否则 <a> 被拔走后会留下一排空 li，
+// flex 的 gap 会让首个栏目上方多出一行空白
 function applyNavOrder(raw) {
   var order = normalizeModuleOrder(raw);
   SITE_CONFIG.moduleOrder = order;
@@ -158,7 +160,9 @@ function applyNavOrder(raw) {
     if (!box) return;
     var items = {};
     Array.prototype.slice.call(box.querySelectorAll('[data-nav]')).forEach(function (el) {
-      items[el.getAttribute('data-nav')] = el;
+      var node = el;
+      if (el.tagName === 'A' && el.parentNode && el.parentNode.tagName === 'LI') node = el.parentNode;
+      items[el.getAttribute('data-nav')] = node;
     });
     order.forEach(function (key) {
       if (items[key]) box.appendChild(items[key]);
@@ -176,7 +180,10 @@ function applySiteModules(raw, order) {
     var items = document.querySelectorAll('[data-nav="' + key + '"]');
     for (var i = 0; i < items.length; i++) {
       var el = items[i];
+      // 侧边栏渲染在 <li> 里，li 本身也要隐藏，否则会留下占位的空行
+      var wrap = (el.tagName === 'A' && el.parentNode && el.parentNode.tagName === 'LI') ? el.parentNode : el;
       el.hidden = !m.enabled;
+      wrap.hidden = !m.enabled;
       var label = el.querySelector('span');
       if (label) label.textContent = m.name;
       else if (el.tagName === 'BUTTON') el.textContent = m.name; // 移动端底栏是纯文字按钮
@@ -247,10 +254,78 @@ document.getElementById('footer-owner').textContent = SITE_CONFIG.owner;
 syncAvatarFavicon();
 
 // 运行时拉取后端站点信息（后台「管理」页可随时修改，无需重新部署前端）
-// 路由需要等它完成，才能判断栏目是否被关闭
+// 策略：本地缓存优先（首屏立刻正确、后端不可用也正常），后台再拉最新；
+// 只有后端 updatedAt 变化时才重新套用并覆盖缓存。
 SITE_CONFIG.siteReady = false;
 SITE_CONFIG.siteReadyPromise = null;
+SITE_CONFIG.cacheUpdatedAt = 0;
 
+var SITE_CACHE_KEY = 'sp_site_cache_v1';
+
+function readSiteCache() {
+  try {
+    var raw = window.localStorage.getItem(SITE_CACHE_KEY);
+    if (!raw) return null;
+    var data = JSON.parse(raw);
+    if (!data || !data.site) return null;
+    return data;
+  } catch (e) { return null; }
+}
+
+function writeSiteCache(site) {
+  try {
+    window.localStorage.setItem(SITE_CACHE_KEY, JSON.stringify({ site: site, savedAt: Date.now() }));
+  } catch (e) { /* 隐私模式/配额满时忽略 */ }
+}
+
+// 把后端 /api/site 的站点配置套用到页面（名称/头像/标题/简介/栏目）
+function applySitePayload(site) {
+  if (!site) return;
+  var ssrTitled = Boolean(window.__SSR_META__ && window.__SSR_META__.title);
+
+  if (site.name) {
+    SITE_CONFIG.name = String(site.name);
+    var nameEl = document.getElementById('site-name');
+    if (nameEl) nameEl.textContent = SITE_CONFIG.name;
+  }
+  if (site.avatarText) {
+    SITE_CONFIG.avatarText = String(site.avatarText);
+    var avatarEl = document.getElementById('site-avatar');
+    if (avatarEl) avatarEl.textContent = SITE_CONFIG.avatarText;
+  }
+  if (!ssrTitled) {
+    document.title = site.title ? String(site.title) : SITE_CONFIG.name;
+  }
+  if (site.modules) applySiteModules(site.modules, site.order);
+  if (site.subtitle) {
+    SITE_CONFIG.homeBio = String(site.subtitle);
+    var bioEl = document.querySelector('.home-bio');
+    if (bioEl) bioEl.textContent = SITE_CONFIG.homeBio;
+  }
+  syncAvatarFavicon();
+}
+
+// 配置到得比首屏晚时，若当前路径只有在新配置下才能识别（例如自定义栏目路径 /diary），
+// 重新按地址渲染一次，避免停在首页
+function rerouteIfPathNowKnown() {
+  try {
+    if (typeof router === 'undefined' || !router || router.current !== 'home') return;
+    var seg = String(window.location.pathname || '/').split('/').filter(Boolean)[0];
+    if (!seg) return;
+    var tab = routeToTab(seg);
+    if (tab && tab !== 'home') router.applyRoute();
+  } catch (e) { /* 路由还没准备好时忽略 */ }
+}
+
+// 1) 先同步套用缓存：侧边栏不会闪出已关闭栏目，首屏也不用等网络
+var cachedSiteData = readSiteCache();
+if (cachedSiteData && cachedSiteData.site) {
+  SITE_CONFIG.cacheUpdatedAt = Number(cachedSiteData.site.updatedAt || 0);
+  SITE_CONFIG.hasConfig = true;
+  applySitePayload(cachedSiteData.site);
+}
+
+// 2) 后台拉最新配置；失败就沿用缓存（后端挂了前端照常可用）
 (function applyRemoteSiteInfo() {
   var base = String(SITE_CONFIG.apiBaseUrl || '').replace(/\/+$/, '');
   if (!base) { SITE_CONFIG.siteReady = true; return; }
@@ -259,30 +334,16 @@ SITE_CONFIG.siteReadyPromise = null;
     .then(function (data) {
       if (!data || !data.ok || !data.site) return;
       var site = data.site;
-      var ssrTitled = Boolean(window.__SSR_META__ && window.__SSR_META__.title);
-
-      if (site.name) {
-        SITE_CONFIG.name = String(site.name);
-        var nameEl = document.getElementById('site-name');
-        if (nameEl) nameEl.textContent = SITE_CONFIG.name;
-      }
-      if (site.avatarText) {
-        SITE_CONFIG.avatarText = String(site.avatarText);
-        var avatarEl = document.getElementById('site-avatar');
-        if (avatarEl) avatarEl.textContent = SITE_CONFIG.avatarText;
-      }
-      if (!ssrTitled) {
-        document.title = site.title ? String(site.title) : SITE_CONFIG.name;
-      }
-      if (site.modules) applySiteModules(site.modules, site.order);
-      if (site.subtitle) {
-        SITE_CONFIG.homeBio = String(site.subtitle);
-        var bioEl = document.querySelector('.home-bio');
-        if (bioEl) bioEl.textContent = SITE_CONFIG.homeBio;
-      }
-      syncAvatarFavicon();
+      var nextUpdatedAt = Number(site.updatedAt || 0);
+      var changed = !SITE_CONFIG.hasConfig || nextUpdatedAt !== SITE_CONFIG.cacheUpdatedAt;
+      SITE_CONFIG.cacheUpdatedAt = nextUpdatedAt;
+      SITE_CONFIG.hasConfig = true;
+      if (!changed) return;
+      applySitePayload(site);
+      writeSiteCache(site);
+      rerouteIfPathNowKnown();
     })
-    .catch(function () { /* 后端不可达时保持内置配置 */ })
+    .catch(function () { /* 后端不可达时保持缓存/内置配置 */ })
     .then(function () { SITE_CONFIG.siteReady = true; });
 })();
 
@@ -1004,9 +1065,12 @@ var router = {
     }, 220);
   },
 
+  // 站点配置没到齐时最多等 1.2 秒：有缓存则立即返回，避免首页被网络阻塞
   waitSiteReady: function () {
-    if (SITE_CONFIG.siteReady) return Promise.resolve();
-    return SITE_CONFIG.siteReadyPromise || Promise.resolve();
+    if (SITE_CONFIG.siteReady || SITE_CONFIG.hasConfig) return Promise.resolve();
+    var ready = SITE_CONFIG.siteReadyPromise || Promise.resolve();
+    var timeout = new Promise(function (resolve) { setTimeout(resolve, 1200); });
+    return Promise.race([ready, timeout]);
   },
 
   go: async function (tab, skipUrl) {
@@ -1761,13 +1825,10 @@ var router = {
 // 浏览器前进/后退：跟随地址变化重渲染
 window.addEventListener('popstate', function () { router.handlePopState(); });
 
-// 首次进入：先等站点配置（栏目路径 / 开关），再按真实路径（/posts、/post/<id> 等）深链渲染，
-// 否则自定义路径（如 /diary）会在配置到达前被误判成首页。
-(SITE_CONFIG.siteReadyPromise || Promise.resolve()).then(function () {
-  return router.applyRoute();
-}, function () {
-  return router.applyRoute();
-});
+// 首次进入：立刻按地址渲染（页面完整性优先）。
+// 站点配置已在上面同步套用过缓存，网络慢/后端挂了也不会卡住首屏；
+// 自定义路径若在配置到达后才可识别，applySitePayload 会补一次 reroute。
+router.applyRoute();
 
 // 进站先探一次后端，让侧边栏「节点」在任意页面都能显示 ONLINE（而不是停在 CHECKING）
 syncClient.pingBackend();
