@@ -25,6 +25,132 @@ var SITE_CONFIG = {
   ]
 };
 
+var ICON_ORDER = ['home', 'book', 'message', 'wrench', 'activity', 'heart', 'star', 'code', 'camera', 'music', 'globe', 'folder', 'link', 'zap', 'coffee', 'image'];
+
+var ICON_SVGS = {
+  home: '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+  book: '<path d="M12 5v16"/><path d="M20 19a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-3.5A4.5 4.5 0 0 0 12 5a4.5 4.5 0 0 0-4.5-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4a5 5 0 0 1 4 2 5 5 0 0 1 4-2z"/>',
+  message: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  wrench: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.1-3.1c.3-.3.9-.2 1 .2a6 6 0 0 1-8.3 7.1l-7.9 7.9a1 1 0 0 1-3-3l7.9-7.9A6 6 0 0 1 17.6 2c.4.1.5.7.2 1z"/>',
+  activity: '<path d="M22 12h-2.5a2 2 0 0 0-1.9 1.5l-2.3 8.4a.25.25 0 0 1-.5 0L9.2 2.2a.25.25 0 0 0-.5 0L6.4 10.5A2 2 0 0 1 4.5 12H2"/>',
+  heart: '<path d="M2 9.5a5.5 5.5 0 0 1 9.6-3.7.56.56 0 0 0 .8 0A5.5 5.5 0 0 1 22 9.5c0 2.3-1.5 4-3 5.5l-5.5 5.3a2 2 0 0 1-3 0L5 15c-1.5-1.5-3-3.2-3-5.5"/><path d="M3.2 13H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.3"/>',
+  star: '<polygon points="12 2 15.1 8.3 22 9.3 17 14.1 18.2 21 12 17.8 5.8 21 7 14.1 2 9.3 8.9 8.3 12 2"/>',
+  code: '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
+  camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
+  music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+  globe: '<circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15 15 0 0 1 4 10 15 15 0 0 1-4 10 15 15 0 0 1-4-10 15 15 0 0 1 4-10z"/>',
+  folder: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9L9.6 3.9A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  link: '<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
+  zap: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+  coffee: '<path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" x2="6" y1="2" y2="4"/><line x1="10" x2="10" y1="2" y2="4"/><line x1="14" x2="14" y1="2" y2="4"/>',
+  image: '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>'
+};
+
+var ICON_FALLBACK = {
+  home: { name: '首页', icon: 'home' },
+  posts: { name: '文章', icon: 'book' },
+  moments: { name: '碎碎念', icon: 'message' },
+  tools: { name: '工具', icon: 'wrench' },
+  probe: { name: '探针', icon: 'activity' },
+  status: { name: '状态', icon: 'heart' },
+  quirky: { name: '奇奇怪怪', icon: 'star' }
+};
+
+// 前台栏目：后端「管理」页可开关 / 改名 / 换图标，GET /api/site 返回 modules
+var MODULE_KEYS = ['home', 'posts', 'moments', 'tools', 'probe', 'status', 'quirky'];
+
+function normalizeModuleConfig(raw) {
+  var out = {};
+  MODULE_KEYS.forEach(function (key) {
+    var def = ICON_FALLBACK[key] || { name: key, icon: 'star' };
+    var item = (raw && raw[key]) || {};
+    out[key] = {
+      enabled: item.enabled === undefined ? true : !!item.enabled,
+      name: String(item.name || def.name).slice(0, 12),
+      icon: String(item.icon || def.icon)
+    };
+  });
+  out.home.enabled = true; // 首页永远保留
+  return out;
+}
+
+function resolveIconUrl(icon) {
+  var s = String(icon || '').trim();
+  if (!s) return '';
+  if (/^https?:\/\//i.test(s)) return s;
+  if (s.charAt(0) === '/') {
+    return String(SITE_CONFIG.apiBaseUrl || '').replace(/\/+$/, '') + s;
+  }
+  return '';
+}
+
+// 用预设 svg 或上传的图片替换导航项里的图标节点（保持同样的尺寸与颜色继承）
+function setNavIcon(el, icon, fallbackId) {
+  if (!el) return;
+  var old = el.querySelector('svg, img.nav-icon-img');
+  if (!old) return;
+  var url = resolveIconUrl(icon);
+  var node;
+  if (url) {
+    node = document.createElement('img');
+    node.className = 'nav-icon-img';
+    node.alt = '';
+    node.loading = 'lazy';
+    node.src = url;
+  } else {
+    var id = ICON_SVGS[icon] ? icon : (ICON_SVGS[fallbackId] ? fallbackId : 'star');
+    node = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    node.setAttribute('viewBox', '0 0 24 24');
+    node.setAttribute('fill', 'none');
+    node.setAttribute('stroke', 'currentColor');
+    node.setAttribute('stroke-width', '1.8');
+    node.setAttribute('stroke-linecap', 'round');
+    node.setAttribute('stroke-linejoin', 'round');
+    node.setAttribute('aria-hidden', 'true');
+    node.innerHTML = ICON_SVGS[id];
+  }
+  old.parentNode.replaceChild(node, old);
+}
+
+// 把后端栏目配置应用到侧边栏 / 移动端导航 / 路由守卫
+function applySiteModules(raw) {
+  var cfg = normalizeModuleConfig(raw);
+  SITE_CONFIG.modules = cfg;
+  MODULE_KEYS.forEach(function (key) {
+    if (key === 'home') return;
+    var m = cfg[key];
+    var items = document.querySelectorAll('[data-nav="' + key + '"]');
+    for (var i = 0; i < items.length; i++) {
+      var el = items[i];
+      el.hidden = !m.enabled;
+      var label = el.querySelector('span');
+      if (label) label.textContent = m.name;
+      else if (el.tagName === 'BUTTON') el.textContent = m.name; // 移动端底栏是纯文字按钮
+      setNavIcon(el, m.icon, (ICON_FALLBACK[key] || {}).icon);
+    }
+  });
+  // 当前所在栏目已被关闭：直接提示，避免停留在不可达页面
+  // 路由对象在本文件后段才声明，用 typeof 保护（首屏 fetch 可能早于 router 定义）
+  if (typeof router !== 'undefined' && router.current && router.current !== 'home' && isModuleDisabled(router.current)) {
+    router.renderModuleClosed(router.current, true);
+  }
+}
+
+function isModuleDisabled(tab) {
+  var key = tab === 'post' ? 'posts' : tab;
+  var cfg = SITE_CONFIG.modules;
+  if (!cfg || !cfg[key]) return false;
+  if (key === 'home') return false;
+  return !cfg[key].enabled;
+}
+
+function moduleLabel(tab) {
+  var key = tab === 'post' ? 'posts' : tab;
+  var cfg = SITE_CONFIG.modules;
+  return (cfg && cfg[key] && cfg[key].name) || key;
+}
+
+
 // 推特/X 风格黑白自适应认证对勾徽章
 function getVerifiedBadgeSvg() {
   return '<span class="verified-badge" title="站长认证" aria-label="站长认证">' +
@@ -64,10 +190,14 @@ document.getElementById('footer-owner').textContent = SITE_CONFIG.owner;
 syncAvatarFavicon();
 
 // 运行时拉取后端站点信息（后台「管理」页可随时修改，无需重新部署前端）
+// 路由需要等它完成，才能判断栏目是否被关闭
+SITE_CONFIG.siteReady = false;
+SITE_CONFIG.siteReadyPromise = null;
+
 (function applyRemoteSiteInfo() {
   var base = String(SITE_CONFIG.apiBaseUrl || '').replace(/\/+$/, '');
-  if (!base) return;
-  fetch(base + '/api/site', { cache: 'no-store' })
+  if (!base) { SITE_CONFIG.siteReady = true; return; }
+  SITE_CONFIG.siteReadyPromise = fetch(base + '/api/site', { cache: 'no-store' })
     .then(function (res) { return res.ok ? res.json() : null; })
     .then(function (data) {
       if (!data || !data.ok || !data.site) return;
@@ -87,6 +217,7 @@ syncAvatarFavicon();
       if (!ssrTitled) {
         document.title = site.title ? String(site.title) : SITE_CONFIG.name;
       }
+      if (site.modules) applySiteModules(site.modules);
       if (site.subtitle) {
         SITE_CONFIG.homeBio = String(site.subtitle);
         var bioEl = document.querySelector('.home-bio');
@@ -94,7 +225,8 @@ syncAvatarFavicon();
       }
       syncAvatarFavicon();
     })
-    .catch(function () { /* 后端不可达时保持内置配置 */ });
+    .catch(function () { /* 后端不可达时保持内置配置 */ })
+    .then(function () { SITE_CONFIG.siteReady = true; });
 })();
 
 var icpEl = document.getElementById('site-icp');
@@ -665,6 +797,11 @@ var router = {
       }
     }
     var r = this.parseRoute();
+    if (r.tab === 'post') await this.waitSiteReady();
+    if (r.tab === 'post' && isModuleDisabled('post')) {
+      this.renderModuleClosed('post', true);
+      return;
+    }
     if (r.tab === 'post') {
       await this.renderPostRoute(r.postId);
       return;
@@ -701,6 +838,24 @@ var router = {
     await this.renderPost(id);
   },
 
+  // 栏目被站长关闭时的占位页（不报 404，保持地址可访问）
+  renderModuleClosed: function (tab, skipUrl) {
+    this.current = tab;
+    if (!skipUrl && tab !== 'post') this.syncUrl('/' + tab);
+    var container = document.getElementById('page-content');
+    container.classList.remove('is-reading');
+    var label = moduleLabel(tab);
+    container.innerHTML =
+      '<section class="module-closed">' +
+        '<h1 class="module-closed-title">' + escapeHtml(label) + ' 已关闭</h1>' +
+        '<p class="module-closed-text">站长暂时关闭了这个栏目，稍后再来看看吧。</p>' +
+        '<button class="btn btn-primary" type="button" onclick="router.go(\'home\')">回到首页</button>' +
+      '</section>';
+    this.syncDock(tab);
+    window.scrollTo(0, 0);
+    this.progressEnd();
+  },
+
   handlePopState: function () {
     this.applyRoute();
   },
@@ -721,7 +876,19 @@ var router = {
     }, 220);
   },
 
+  waitSiteReady: function () {
+    if (SITE_CONFIG.siteReady) return Promise.resolve();
+    return SITE_CONFIG.siteReadyPromise || Promise.resolve();
+  },
+
   go: async function (tab, skipUrl) {
+    if (tab !== 'home') {
+      await this.waitSiteReady();
+      if (isModuleDisabled(tab)) {
+        this.renderModuleClosed(tab, skipUrl);
+        return;
+      }
+    }
     if (tab !== 'probe') {
       if (this.probeRefreshTimer) clearTimeout(this.probeRefreshTimer);
       this.probeRefreshTimer = null;

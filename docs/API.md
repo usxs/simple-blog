@@ -20,8 +20,34 @@
 站点信息，前台启动时读取，用来覆盖内置配置（后台「管理」页可修改）。
 
 ```json
-{ "ok": true, "site": { "name": "简单博客", "avatarText": "简", "title": "简单博客",
-  "subtitle": "这里是我的个人博客，记录技术、折腾与生活。", "updatedAt": 0 } }
+{
+  "ok": true,
+  "site": {
+    "name": "简单博客",
+    "avatarText": "简",
+    "title": "简单博客",
+    "subtitle": "这里是我的个人博客，记录技术、折腾与生活。",
+    "modules": {
+      "home":    { "enabled": true,  "name": "首页",     "icon": "home" },
+      "posts":   { "enabled": true,  "name": "文章",     "icon": "book" },
+      "moments": { "enabled": true,  "name": "碎碎念",   "icon": "message" },
+      "tools":   { "enabled": true,  "name": "工具",     "icon": "wrench" },
+      "probe":   { "enabled": true,  "name": "探针",     "icon": "activity" },
+      "status":  { "enabled": true,  "name": "状态",     "icon": "heart" },
+      "quirky":  { "enabled": true,  "name": "奇奇怪怪", "icon": "star" }
+    },
+    "updatedAt": 0
+  }
+}
+```
+
+`modules` 描述前台每个栏目：`enabled` 为 `false` 时前台导航不显示该栏目，直接访问会得到「栏目已关闭」占位页；`name` 最多 12 字；`icon` 可以是内置图标名（`home/book/message/wrench/activity/heart/star/code/camera/music/globe/folder/link/zap/coffee/image`）、以 `/` 开头的站内图片路径，或 `http(s)` 绝对地址。`home` 固定显示，不可关闭。
+
+后台改栏目配置同样走 `POST /api/admin/site`，支持只传某几个栏目做局部合并：
+
+```jsonc
+POST /api/admin/site
+{ "modules": { "posts": { "enabled": false }, "quirky": { "name": "杂记", "icon": "/img/2026-11-22/xxx.webp" } } }
 ```
 
 `updatedAt` 为 0 表示还在用环境变量里的初始值。响应头带 `Cache-Control: no-cache`。

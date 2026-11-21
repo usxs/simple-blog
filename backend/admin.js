@@ -110,8 +110,54 @@ function bufferToB64u(buffer) {
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
+// 前台栏目：内置图标（与前端 app.js 的 ICON_SVGS 保持一致）
+var MODULE_ICON_ORDER = ['home', 'book', 'message', 'wrench', 'activity', 'heart', 'star', 'code', 'camera', 'music', 'globe', 'folder', 'link', 'zap', 'coffee', 'image'];
+
+var MODULE_ICON_SVGS = {
+  home: '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+  book: '<path d="M12 5v16"/><path d="M20 19a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-3.5A4.5 4.5 0 0 0 12 5a4.5 4.5 0 0 0-4.5-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4a5 5 0 0 1 4 2 5 5 0 0 1 4-2z"/>',
+  message: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  wrench: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.1-3.1c.3-.3.9-.2 1 .2a6 6 0 0 1-8.3 7.1l-7.9 7.9a1 1 0 0 1-3-3l7.9-7.9A6 6 0 0 1 17.6 2c.4.1.5.7.2 1z"/>',
+  activity: '<path d="M22 12h-2.5a2 2 0 0 0-1.9 1.5l-2.3 8.4a.25.25 0 0 1-.5 0L9.2 2.2a.25.25 0 0 0-.5 0L6.4 10.5A2 2 0 0 1 4.5 12H2"/>',
+  heart: '<path d="M2 9.5a5.5 5.5 0 0 1 9.6-3.7.56.56 0 0 0 .8 0A5.5 5.5 0 0 1 22 9.5c0 2.3-1.5 4-3 5.5l-5.5 5.3a2 2 0 0 1-3 0L5 15c-1.5-1.5-3-3.2-3-5.5"/><path d="M3.2 13H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.3"/>',
+  star: '<polygon points="12 2 15.1 8.3 22 9.3 17 14.1 18.2 21 12 17.8 5.8 21 7 14.1 2 9.3 8.9 8.3 12 2"/>',
+  code: '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
+  camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
+  music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+  globe: '<circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15 15 0 0 1 4 10 15 15 0 0 1-4 10 15 15 0 0 1-4-10 15 15 0 0 1 4-10z"/>',
+  folder: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9L9.6 3.9A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  link: '<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
+  zap: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+  coffee: '<path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" x2="6" y1="2" y2="4"/><line x1="10" x2="10" y1="2" y2="4"/><line x1="14" x2="14" y1="2" y2="4"/>',
+  image: '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>'
+};
+
+var MODULE_FALLBACK = {
+  home: { name: '首页', icon: 'home' },
+  posts: { name: '文章', icon: 'book' },
+  moments: { name: '碎碎念', icon: 'message' },
+  tools: { name: '工具', icon: 'wrench' },
+  probe: { name: '探针', icon: 'activity' },
+  status: { name: '状态', icon: 'heart' },
+  quirky: { name: '奇奇怪怪', icon: 'star' }
+};
+
+var MODULE_ORDER = ['home', 'posts', 'moments', 'tools', 'probe', 'status', 'quirky'];
+
+// 图标值可能是预设名，也可能是 /img/... 或 http(s) 地址
+function moduleIconHtml(icon, fallbackId) {
+  var key = String(icon || '').trim();
+  var preset = MODULE_ICON_SVGS[key] ? key : (MODULE_ICON_SVGS[fallbackId] ? fallbackId : 'book');
+  if (key && key !== preset && (key.charAt(0) === '/' || /^https?:\/\//i.test(key))) {
+    return '<img src="' + key.replace(/"/g, '&quot;') + '" alt="" />';
+  }
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + MODULE_ICON_SVGS[preset] + '</svg>';
+}
+
 var cms = {
   mod: 'posts',
+  modules: null,
+  iconTarget: null,
   markdownMode: 'content',
   store: { posts: [], moments: [], comments: [], tools: [], status: [], quirky: [] },
   currentItem: null,
@@ -1009,6 +1055,8 @@ var cms = {
       document.getElementById('site-avatar').value = site.avatarText || '';
       document.getElementById('site-title').value = site.title || '';
       document.getElementById('site-subtitle').value = site.subtitle || '';
+      this.applyModuleConfig(site.modules);
+      this.renderModules();
 
       document.getElementById('account-username').value = data.username || '';
 
@@ -1022,6 +1070,197 @@ var cms = {
     } catch (e) {
       if (String(e && e.message) === 'unauthorized') return;
       this.notify('管理信息加载失败：' + (e && e.message ? e.message : '未知错误'));
+    }
+  },
+
+  // ---------------- 前台栏目：开关 / 改名 / 换图标 ----------------
+  normalizeModules: function (raw) {
+    var out = {};
+    MODULE_ORDER.forEach(function (key) {
+      var def = MODULE_FALLBACK[key];
+      var item = (raw && raw[key]) || {};
+      out[key] = {
+        enabled: item.enabled === undefined ? true : !!item.enabled,
+        name: String(item.name || def.name).slice(0, 12),
+        icon: String(item.icon || def.icon)
+      };
+    });
+    return out;
+  },
+
+  // 侧边栏的文字与开关状态跟随配置
+  applyModuleConfig: function (modules) {
+    var self = this;
+    this.modules = this.normalizeModules(modules);
+    MODULE_ORDER.forEach(function (key) {
+      var m = self.modules[key];
+      var label = document.querySelector('.nav-label[data-label="' + key + '"]');
+      if (label) label.textContent = m.name;
+      var sw = document.querySelector('.nav-item-row .nav-switch[data-switch="' + key + '"]');
+      if (sw) {
+        sw.setAttribute('aria-checked', m.enabled ? 'true' : 'false');
+        var row = sw.closest('.nav-item-row');
+        if (row) row.setAttribute('data-disabled', m.enabled ? 'false' : 'true');
+        sw.title = '在前台' + (m.enabled ? '显示' : '隐藏') + '「' + m.name + '」，点击切换';
+      }
+    });
+  },
+
+  saveModules: async function (patch, okText) {
+    var err = document.getElementById('module-error');
+    if (err) err.textContent = '';
+    try {
+      var out = await this.api('/api/admin/site', { method: 'POST', body: { modules: patch } });
+      var saved = out && out.site && out.site.modules ? out.site.modules : this.modules;
+      this.applyModuleConfig(saved);
+      this.renderModules();
+      if (okText) this.notify(okText);
+      return true;
+    } catch (e) {
+      if (err && e.message !== 'unauthorized') err.textContent = '保存失败：' + e.message;
+      this.loadSettings();
+      return false;
+    }
+  },
+
+  toggleModule: async function (key) {
+    if (!this.modules || !this.modules[key]) return;
+    if (key === 'home') { this.notify('首页不能关闭'); return; }
+    var m = this.modules[key];
+    var patch = {};
+    patch[key] = { enabled: !m.enabled };
+    this.applyModuleConfig(Object.assign({}, this.modules, (function () { var o = {}; o[key] = Object.assign({}, m, patch[key]); return o; })()));
+    this.renderModules();
+    var ok = await this.saveModules(patch, '「' + m.name + '」已' + (!m.enabled ? '在前台显示' : '从前台隐藏'));
+    if (!ok) this.applyModuleConfig(this.modules);
+  },
+
+  onModuleNameChange: async function (key, value) {
+    if (!this.modules || !this.modules[key]) return;
+    var name = String(value || '').trim().slice(0, 12);
+    var input = document.querySelector('.module-name-input[data-name-for="' + key + '"]');
+    if (!name) {
+      if (input) input.value = this.modules[key].name;
+      return;
+    }
+    if (name === this.modules[key].name) return;
+    var patch = {};
+    patch[key] = { name: name };
+    var next = Object.assign({}, this.modules);
+    next[key] = Object.assign({}, this.modules[key], { name: name });
+    this.applyModuleConfig(next);
+    this.renderModules();
+    await this.saveModules(patch, '「' + name + '」名称已更新');
+  },
+
+  renderModules: function () {
+    var list = document.getElementById('module-list');
+    if (!list || !this.modules) return;
+    var self = this;
+    list.innerHTML = MODULE_ORDER.map(function (key) {
+      var m = self.modules[key];
+      var fallback = MODULE_FALLBACK[key];
+      var fixed = key === 'home';
+      return '<li class="module-row" data-module="' + key + '" data-disabled="' + (m.enabled ? 'false' : 'true') + '">' +
+          '<button class="module-icon-btn" type="button" data-icon-for="' + key + '" title="更换图标">' + moduleIconHtml(m.icon, fallback.icon) + '</button>' +
+          '<input class="module-name-input" data-name-for="' + key + '" maxlength="12" value="' + String(m.name).replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '" aria-label="栏目名称" />' +
+          '<span class="module-meta">' + (fixed ? '首页固定' : (m.enabled ? '显示中' : '已隐藏')) + '</span>' +
+          '<button class="nav-switch" type="button" role="switch" aria-checked="' + (m.enabled ? 'true' : 'false') + '" data-switch="' + key + '"' +
+            (fixed ? ' disabled title="首页不能关闭"' : ' title="在前台显示 / 隐藏「' + String(m.name).replace(/"/g, '&quot;') + '」"') +
+          '><span class="nav-switch-knob"></span></button>' +
+        '</li>';
+    }).join('');
+
+    list.querySelectorAll('[data-switch]').forEach(function (btn) {
+      btn.addEventListener('click', function () { self.toggleModule(btn.getAttribute('data-switch')); });
+    });
+    list.querySelectorAll('[data-icon-for]').forEach(function (btn) {
+      btn.addEventListener('click', function () { self.openIconPicker(btn.getAttribute('data-icon-for')); });
+    });
+    list.querySelectorAll('[data-name-for]').forEach(function (input) {
+      var key = input.getAttribute('data-name-for');
+      input.addEventListener('change', function () { self.onModuleNameChange(key, input.value); });
+      input.addEventListener('keydown', function (evt) { if (evt.key === 'Enter') { evt.preventDefault(); input.blur(); } });
+    });
+  },
+
+  openIconPicker: function (key) {
+    if (!this.modules || !this.modules[key]) return;
+    this.iconTarget = key;
+    var nameEl = document.getElementById('icon-modal-target');
+    if (nameEl) nameEl.textContent = this.modules[key].name;
+    var hint = document.getElementById('icon-upload-hint');
+    if (hint) hint.textContent = '';
+    var err = document.getElementById('icon-error');
+    if (err) err.textContent = '';
+    this.renderIconGrid();
+    var modal = document.getElementById('icon-modal');
+    if (modal) modal.style.display = '';
+  },
+
+  closeIconPicker: function () {
+    var modal = document.getElementById('icon-modal');
+    if (modal) modal.style.display = 'none';
+    this.iconTarget = null;
+  },
+
+  renderIconGrid: function () {
+    var grid = document.getElementById('icon-preset-grid');
+    if (!grid) return;
+    var self = this;
+    var current = this.iconTarget && this.modules[this.iconTarget] ? this.modules[this.iconTarget].icon : '';
+    grid.innerHTML = MODULE_ICON_ORDER.map(function (id) {
+      return '<button class="icon-picker-item" type="button" data-icon="' + id + '" aria-pressed="' + (current === id ? 'true' : 'false') + '" title="' + id + '">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + MODULE_ICON_SVGS[id] + '</svg>' +
+        '</button>';
+    }).join('');
+    grid.querySelectorAll('[data-icon]').forEach(function (btn) {
+      btn.addEventListener('click', function () { self.chooseIconPreset(btn.getAttribute('data-icon')); });
+    });
+  },
+
+  chooseIconPreset: async function (id) {
+    if (!this.iconTarget) return;
+    var key = this.iconTarget;
+    var icon = id || MODULE_FALLBACK[key].icon;
+    var patch = {};
+    patch[key] = { icon: icon };
+    var next = Object.assign({}, this.modules);
+    next[key] = Object.assign({}, this.modules[key], { icon: icon });
+    this.applyModuleConfig(next);
+    this.renderModules();
+    if (id) this.closeIconPicker();
+    await this.saveModules(patch, id ? '图标已更新' : '已恢复默认图标');
+  },
+
+  uploadModuleIcon: async function (file) {
+    if (!this.iconTarget || !file) return;
+    var key = this.iconTarget;
+    var hint = document.getElementById('icon-upload-hint');
+    var err = document.getElementById('icon-error');
+    if (err) err.textContent = '';
+    if (hint) hint.textContent = '上传中…';
+    try {
+      var base64 = await new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function () { resolve(String(reader.result || '').split(',')[1] || ''); };
+        reader.onerror = function () { reject(new Error('读取文件失败')); };
+        reader.readAsDataURL(file);
+      });
+      var out = await this.api('/api/upload', { method: 'POST', body: { kind: 'image', filename: file.name, data: base64 } });
+      var icon = out.relativeUrl || out.url || '';
+      if (!icon) throw new Error('上传结果异常');
+      var patch = {};
+      patch[key] = { icon: icon };
+      var next = Object.assign({}, this.modules);
+      next[key] = Object.assign({}, this.modules[key], { icon: icon });
+      this.applyModuleConfig(next);
+      this.renderModules();
+      this.closeIconPicker();
+      await this.saveModules(patch, '图标已上传并保存');
+    } catch (e) {
+      if (hint) hint.textContent = '';
+      if (err && e.message !== 'unauthorized') err.textContent = '上传失败：' + e.message;
     }
   },
 
@@ -1161,6 +1400,22 @@ var cms = {
         err.textContent = e2.message === 'unauthorized' ? '' : ('操作失败：' + e2.message);
       }
     });
+
+    // 栏目图标：上传按钮与遮罩关闭
+    var iconInput = document.getElementById('icon-upload-input');
+    if (iconInput) {
+      iconInput.addEventListener('change', function () {
+        var file = iconInput.files && iconInput.files[0];
+        iconInput.value = '';
+        if (file) self.uploadModuleIcon(file);
+      });
+    }
+    var iconModal = document.getElementById('icon-modal');
+    if (iconModal) {
+      iconModal.addEventListener('click', function (evt) {
+        if (evt.target === iconModal) self.closeIconPicker();
+      });
+    }
   },
 
   copy: function (text, okMsg) {

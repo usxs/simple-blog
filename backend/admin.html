@@ -32,13 +32,34 @@
       </div>
 
       <ul class="nav-list" id="mod-nav">
-        <li><button class="nav-btn active" data-mod="posts" onclick="cms.switchMod('posts')"><span>文章</span><span class="nav-count" id="count-posts">0</span></button></li>
-        <li><button class="nav-btn" data-mod="moments" onclick="cms.switchMod('moments')"><span>碎碎念</span><span class="nav-count" id="count-moments">0</span></button></li>
-        <li><button class="nav-btn" data-mod="comments" onclick="cms.switchMod('comments')"><span>评论审核</span><span class="nav-count" id="count-comments">0</span></button></li>
-        <li><button class="nav-btn" data-mod="tools" onclick="cms.switchMod('tools')"><span>工具</span><span class="nav-count" id="count-tools">0</span></button></li>
-        <li><button class="nav-btn" data-mod="status" onclick="cms.switchMod('status')"><span>状态</span><span class="nav-count" id="count-status">0</span></button></li>
-        <li><button class="nav-btn" data-mod="quirky" onclick="cms.switchMod('quirky')"><span>奇奇怪怪</span><span class="nav-count" id="count-quirky">0</span></button></li>
-        <li><button class="nav-btn" data-mod="settings" onclick="cms.switchMod('settings')"><span>管理</span></button></li>
+        <li class="nav-item-row">
+          <button class="nav-btn active" data-mod="posts" onclick="cms.switchMod('posts')"><span class="nav-label" data-label="posts">文章</span><span class="nav-count" id="count-posts">0</span></button>
+          <button class="nav-switch" type="button" role="switch" aria-checked="true" data-switch="posts" title="在前台显示 / 隐藏「文章」" onclick="cms.toggleModule('posts')"><span class="nav-switch-knob"></span></button>
+        </li>
+        <li class="nav-item-row">
+          <button class="nav-btn" data-mod="moments" onclick="cms.switchMod('moments')"><span class="nav-label" data-label="moments">碎碎念</span><span class="nav-count" id="count-moments">0</span></button>
+          <button class="nav-switch" type="button" role="switch" aria-checked="true" data-switch="moments" title="在前台显示 / 隐藏「碎碎念」" onclick="cms.toggleModule('moments')"><span class="nav-switch-knob"></span></button>
+        </li>
+        <li class="nav-item-row">
+          <button class="nav-btn" data-mod="comments" onclick="cms.switchMod('comments')"><span class="nav-label">评论审核</span><span class="nav-count" id="count-comments">0</span></button>
+          <span class="nav-only-badge" title="仅后台可见，不对前台显示">仅后台</span>
+        </li>
+        <li class="nav-item-row">
+          <button class="nav-btn" data-mod="tools" onclick="cms.switchMod('tools')"><span class="nav-label" data-label="tools">工具</span><span class="nav-count" id="count-tools">0</span></button>
+          <button class="nav-switch" type="button" role="switch" aria-checked="true" data-switch="tools" title="在前台显示 / 隐藏「工具」" onclick="cms.toggleModule('tools')"><span class="nav-switch-knob"></span></button>
+        </li>
+        <li class="nav-item-row">
+          <button class="nav-btn" data-mod="status" onclick="cms.switchMod('status')"><span class="nav-label" data-label="status">状态</span><span class="nav-count" id="count-status">0</span></button>
+          <button class="nav-switch" type="button" role="switch" aria-checked="true" data-switch="status" title="在前台显示 / 隐藏「状态」" onclick="cms.toggleModule('status')"><span class="nav-switch-knob"></span></button>
+        </li>
+        <li class="nav-item-row">
+          <button class="nav-btn" data-mod="quirky" onclick="cms.switchMod('quirky')"><span class="nav-label" data-label="quirky">奇奇怪怪</span><span class="nav-count" id="count-quirky">0</span></button>
+          <button class="nav-switch" type="button" role="switch" aria-checked="true" data-switch="quirky" title="在前台显示 / 隐藏「奇奇怪怪」" onclick="cms.toggleModule('quirky')"><span class="nav-switch-knob"></span></button>
+        </li>
+        <li class="nav-item-row">
+          <button class="nav-btn" data-mod="settings" onclick="cms.switchMod('settings')"><span class="nav-label">管理</span></button>
+          <span class="nav-only-badge" title="仅后台可见">仅后台</span>
+        </li>
       </ul>
 
       <div class="sidebar-footer">
@@ -114,12 +135,13 @@
           </header>
 
           <div class="settings-grid">
-            <section class="settings-card">
+            <section class="settings-card settings-card--wide">
               <div class="settings-card-head">
                 <h3>站点信息</h3>
                 <span class="settings-tip">保存后对前台立即生效</span>
               </div>
               <form id="site-form">
+                <div class="field-grid">
                 <div class="field">
                   <label class="field-label" for="site-name">站点名称</label>
                   <input class="field-input" id="site-name" maxlength="40" placeholder="显示在导航与侧边栏" />
@@ -136,11 +158,22 @@
                   <label class="field-label" for="site-subtitle">副标题 / 简介</label>
                   <input class="field-input" id="site-subtitle" maxlength="200" placeholder="首页显示的一句话介绍" />
                 </div>
+                </div>
                 <div class="settings-actions">
                   <button class="btn btn-primary" type="submit">保存站点信息</button>
                 </div>
                 <div class="auth-error" id="site-error"></div>
               </form>
+            </section>
+
+            <section class="settings-card settings-card--wide">
+              <div class="settings-card-head">
+                <h3>前台栏目</h3>
+                <span class="settings-tip">开关即时生效 · 可改名称与图标</span>
+              </div>
+              <p class="settings-tip">关闭的栏目会从前台侧边栏与移动端导航中隐藏，直接访问会提示「栏目已关闭」。图标支持内置图标与自行上传（PNG / JPG / SVG / WebP）。</p>
+              <ul class="module-list" id="module-list"></ul>
+              <div class="auth-error" id="module-error"></div>
             </section>
 
             <section class="settings-card">
@@ -281,6 +314,24 @@
   </div>
 
   <!-- 修改密码弹窗 -->
+  <div class="modal-mask" id="icon-modal" style="display:none;">
+    <div class="modal-card modal-card--wide">
+      <div class="modal-title">选择图标 · <span id="icon-modal-target"></span></div>
+      <p class="settings-tip">点选内置图标，或上传自己的图片（建议正方形，128×128 以上）。</p>
+      <div class="icon-picker-grid" id="icon-preset-grid"></div>
+      <div class="icon-picker-upload">
+        <button class="btn" type="button" onclick="document.getElementById('icon-upload-input').click()">上传图片</button>
+        <button class="btn" type="button" onclick="cms.chooseIconPreset('')">恢复默认图标</button>
+        <span class="settings-tip" id="icon-upload-hint"></span>
+      </div>
+      <input type="file" id="icon-upload-input" accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif" style="display:none;" />
+      <div class="auth-error" id="icon-error"></div>
+      <div class="btn-row">
+        <button class="btn" type="button" onclick="cms.closeIconPicker()">关闭</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-mask" id="password-modal" style="display:none;">
     <div class="modal-card">
       <div class="modal-title">修改管理员密码</div>
