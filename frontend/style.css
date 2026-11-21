@@ -1824,8 +1824,9 @@ body.md-lightbox-locked {
 }
 .deploy-tip {
   position: absolute;
-  left: 0;
+  left: 50%;
   bottom: calc(100% + 8px);
+  max-width: min(320px, calc(100vw - 24px));
   z-index: 30;
   padding: 6px 9px;
   border-radius: 7px;
@@ -1839,7 +1840,7 @@ body.md-lightbox-locked {
   box-shadow: 0 6px 20px rgba(0, 0, 0, .16);
   opacity: 0;
   visibility: hidden;
-  transform: translateY(3px);
+  transform: translate(-50%, 3px);
   transition: opacity .14s ease, transform .14s ease, visibility .14s;
   pointer-events: none;
 }
@@ -1849,5 +1850,5 @@ body.md-lightbox-locked {
 .backend-status:focus-within .deploy-tip {
   opacity: 1;
   visibility: visible;
-  transform: translateY(0);
+  transform: translate(-50%, 0);
 }

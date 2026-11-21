@@ -651,15 +651,18 @@ var cms = {
       btns[i].classList.toggle('active', btns[i].getAttribute('data-mod') === m);
     }
 
-    // 「管理」是独立页面，不参与列表 / 编辑器布局
-    var isSettings = m === 'settings';
+    // 「管理」「探针」都是独立页面，不参与列表 / 编辑器布局
+    var PAGES = { settings: 'admin-settings', probe: 'admin-probe' };
+    var pageId = PAGES[m] || '';
     var grid = document.querySelector('.cms-grid');
-    var settingsEl = document.getElementById('admin-settings');
-    if (grid) grid.style.display = isSettings ? 'none' : '';
-    if (settingsEl) settingsEl.hidden = !isSettings;
-    // 存储路径提示只属于内容类页面，「管理」页不显示
+    if (grid) grid.style.display = pageId ? 'none' : '';
+    ['admin-settings', 'admin-probe'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.hidden = (id !== pageId);
+    });
+    // 存储路径提示只属于内容类页面，独立页面不显示
     var hintEl = document.getElementById('storage-hint');
-    if (isSettings) {
+    if (pageId) {
       if (hintEl) hintEl.style.display = 'none';
       this.loadSettings();
       return;
@@ -1370,16 +1373,20 @@ var cms = {
     }
   },
 
-  // 侧边栏显示前端已部署版本（来自 GET /api/deploy-version）
+  // 侧边栏「状态 ONLINE」悬停气泡显示前端已部署版本（来自 GET /api/deploy-version）
   loadDeployVersion: async function () {
-    var el = document.getElementById('admin-version');
-    if (!el) return;
+    var badge = document.getElementById('conn-badge');
+    var tip = document.getElementById('conn-tip');
+    if (!badge || !tip) return;
     try {
       var data = await this.api('/api/deploy-version?_t=' + Date.now());
       if (!data || !data.version) return;
-      el.textContent = data.version;
-      el.title = '前端部署版本 ' + data.version + (data.branch ? ' · 分支 ' + data.branch : '');
-      el.hidden = false;
+      var lines = ['部署版本 ' + data.version];
+      if (data.commit) lines.push('提交 ' + String(data.commit).slice(0, 7));
+      if (data.branch) lines.push('分支 ' + data.branch);
+      tip.textContent = lines.join(' · ');
+      tip.hidden = false;
+      badge.setAttribute('data-deploy-version', data.version);
     } catch (e) {
       /* 拿不到版本不提示，避免干扰 */
     }

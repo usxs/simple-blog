@@ -119,6 +119,7 @@ button, input, textarea { font: inherit; color: inherit; background: none; borde
 }
 
 .backend-status {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -127,6 +128,39 @@ button, input, textarea { font: inherit; color: inherit; background: none; borde
   padding: 2px 7px;
   border-radius: 4px;
   background: var(--bg-subtle);
+  cursor: default;
+}
+
+/* 悬停「状态 ONLINE」弹出的版本气泡（居中于徽标，宽度随徽标自适应） */
+.admin-tip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  z-index: 60;
+  padding: 6px 9px;
+  border-radius: 7px;
+  white-space: nowrap;
+  font-family: var(--font-sans, system-ui, sans-serif);
+  font-size: 11px;
+  line-height: 1.5;
+  letter-spacing: 0;
+  color: var(--text-primary);
+  background: var(--bg-elevated, var(--bg-subtle));
+  border: 1px solid var(--border-subtle, var(--border));
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .28);
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, 3px);
+  transition: opacity .14s ease, transform .14s ease, visibility .14s;
+  pointer-events: none;
+}
+.admin-tip[hidden] { display: block; }
+.backend-status:hover .admin-tip,
+.backend-status:focus-visible .admin-tip,
+.backend-status:focus-within .admin-tip {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
 }
 
 .backend-status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted); }
@@ -1214,8 +1248,6 @@ body.md-lightbox-locked {
 .settings-card .settings-actions { margin-top: auto; padding-top: 14px; }
 .check-row { display: inline-flex; align-items: center; gap: 8px; margin: 2px 0 4px; font-size: 12px; color: var(--text-secondary); cursor: pointer; }
 .check-row input { width: 14px; height: 14px; accent-color: var(--accent, #4f8cff); }
-.admin-version { margin-left: auto; font: 500 10px/1 var(--font-mono, ui-monospace, monospace); color: var(--text-muted); letter-spacing: .02em; padding: 2px 5px; border: 1px solid var(--border); border-radius: 4px; cursor: default; }
-.admin-version[hidden] { display: none; }
 
 /* 账号安全类卡片：底部按钮与上方内容留出呼吸感 */
 #username-form .settings-actions,

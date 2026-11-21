@@ -270,7 +270,6 @@ SITE_CONFIG.siteReadyPromise = null;
       if (data.branch) lines.push('分支 ' + data.branch);
       tipEl.textContent = lines.join(' · ');
       tipEl.hidden = false;
-      badge.title = lines.join('\n');
       badge.setAttribute('data-deploy-version', version);
     })
     .catch(function () { /* 本地直开 / 无 Functions 时静默 */ });

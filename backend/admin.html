@@ -38,17 +38,18 @@
         <li class="nav-item-row" data-nav-row="tools"><button class="nav-btn" data-mod="tools" onclick="cms.switchMod('tools')"><span class="nav-label" data-label="tools">工具</span><span class="nav-count" id="count-tools">0</span></button></li>
         <li class="nav-item-row" data-nav-row="status"><button class="nav-btn" data-mod="status" onclick="cms.switchMod('status')"><span class="nav-label" data-label="status">状态</span><span class="nav-count" id="count-status">0</span></button></li>
         <li class="nav-item-row" data-nav-row="quirky"><button class="nav-btn" data-mod="quirky" onclick="cms.switchMod('quirky')"><span class="nav-label" data-label="quirky">奇奇怪怪</span><span class="nav-count" id="count-quirky">0</span></button></li>
+        <li class="nav-item-row" data-nav-row="probe-config"><button class="nav-btn" data-mod="probe" onclick="cms.switchMod('probe')"><span class="nav-label">探针</span></button></li>
         <li class="nav-item-row" data-nav-row="settings"><button class="nav-btn" data-mod="settings" onclick="cms.switchMod('settings')"><span class="nav-label">管理</span></button></li>
       </ul>
 
       <div class="sidebar-footer">
         <div class="sidebar-row">
           <span>状态</span>
-          <span class="backend-status" id="conn-badge" data-status="offline">
+          <span class="backend-status" id="conn-badge" data-status="offline" tabindex="0" aria-describedby="conn-tip">
             <span class="backend-status-dot"></span>
             <span id="conn-state">IDLE</span>
+            <span class="admin-tip" role="tooltip" id="conn-tip" hidden></span>
           </span>
-          <span class="admin-version" id="admin-version" hidden title="前端部署版本"></span>
         </div>
 
         <div class="sidebar-row">
@@ -156,41 +157,6 @@
               <div class="auth-error" id="module-error"></div>
             </section>
 
-            <section class="settings-card settings-card--wide">
-              <div class="settings-card-head">
-                <h3>探针</h3>
-                <span class="settings-tip">前台「探针」页的数据来源</span>
-              </div>
-              <form id="probe-form">
-                <div class="field-grid">
-                  <div class="field">
-                    <label class="field-label" for="probe-provider">数据来源</label>
-                    <select class="field-input" id="probe-provider">
-                      <option value="cf">CF 探针（CF-Server-Monitor）</option>
-                      <option value="minimal">极简探针（monitor）</option>
-                    </select>
-                  </div>
-                  <div class="field">
-                    <label class="field-label" for="probe-url">探针地址</label>
-                    <input class="field-input" id="probe-url" maxlength="300" placeholder="https://example.com" />
-                  </div>
-                  <div class="field">
-                    <label class="field-label" for="probe-panel">监控后台地址（可选）</label>
-                    <input class="field-input" id="probe-panel" maxlength="300" placeholder="https://example.com/#/" />
-                  </div>
-                </div>
-                <p class="settings-tip" id="probe-hint">CF 探针读取 /api/servers，极简探针读取 /api/nodes，填面板首页地址即可。</p>
-                <label class="check-row">
-                  <input type="checkbox" id="probe-enabled" />
-                  <span>在前台显示探针数据</span>
-                </label>
-                <div class="settings-actions">
-                  <button class="btn btn-primary" type="submit">保存探针设置</button>
-                </div>
-                <div class="auth-error" id="probe-error"></div>
-              </form>
-            </section>
-
             <section class="settings-card">
               <div class="settings-card-head">
                 <h3>管理员账号</h3>
@@ -276,6 +242,50 @@
             </section>
           </div>
         </section>
+    <section class="admin-settings" id="admin-probe" hidden>
+      <header class="settings-head">
+        <h2 class="settings-title">探针</h2>
+        <p class="settings-desc">前台「探针」页的数据来源 · 支持 CF-Server-Monitor 与极简探针</p>
+      </header>
+
+      <div class="settings-grid">
+        <section class="settings-card settings-card--wide">
+          <div class="settings-card-head">
+            <h3>数据来源</h3>
+            <span class="settings-tip">保存后立即生效，前台 30 秒内刷新</span>
+          </div>
+          <form id="probe-form">
+            <div class="field-grid">
+              <div class="field">
+                <label class="field-label" for="probe-provider">探针类型</label>
+                <select class="field-input" id="probe-provider">
+                  <option value="cf">CF 探针（CF-Server-Monitor）</option>
+                  <option value="minimal">极简探针（monitor）</option>
+                </select>
+              </div>
+              <div class="field">
+                <label class="field-label" for="probe-url">探针地址</label>
+                <input class="field-input" id="probe-url" maxlength="300" placeholder="https://example.com" />
+              </div>
+              <div class="field">
+                <label class="field-label" for="probe-panel">监控后台地址（可选）</label>
+                <input class="field-input" id="probe-panel" maxlength="300" placeholder="https://example.com/#/" />
+              </div>
+            </div>
+            <p class="settings-tip" id="probe-hint">CF 探针读取 /api/servers，极简探针读取 /api/nodes，填面板首页地址即可。</p>
+            <label class="check-row">
+              <input type="checkbox" id="probe-enabled" />
+              <span>在前台显示探针数据</span>
+            </label>
+            <div class="settings-actions">
+              <button class="btn btn-primary" type="submit">保存探针设置</button>
+            </div>
+            <div class="auth-error" id="probe-error"></div>
+          </form>
+        </section>
+      </div>
+    </section>
+
       </main>
     </div>
   </div>

@@ -49,7 +49,7 @@
 | 图片上传 | 后台粘贴或选择图片，服务端自动转 WebP 并压缩到 2560px 内，原图不落盘 |
 | 评论 | 访客评论 + 验证码 + 后台审核 + 楼中楼回复，支持邮件/站点联系方式（不公开） |
 | SEO | 真实路径路由、文章页 SSR、动态 `sitemap.xml`、`robots.txt`、Open Graph、JSON-LD 结构化数据、IndexNow 即时推送 |
-| 服务器探针 | 后台「管理 → 探针」可切换数据源：CF-Server-Monitor（`/api/servers`）或极简探针 monitor（`/api/nodes`），两种节点统一成同一套卡片 |
+| 服务器探针 | 后台侧边栏「探针」可切换数据源：CF-Server-Monitor（`/api/servers`）或极简探针 monitor（`/api/nodes`），两种节点统一成同一套卡片 |
 | 栏目开关 | 在「管理 → 前台栏目」一键决定前台是否显示；关闭后前台导航隐藏，直接访问该地址会显示「栏目已关闭」占位页 |
 | 栏目自定义 | 栏目可改名（最多 12 字）、改访问路径（如把 `/moments` 改成 `/diary`）、换图标：16 个内置图标任选，或自行上传 PNG / JPG / SVG / WebP |
 | 自定义路径 | 栏目路径可改，`/posts`、`/diary` 之类都行；改名后旧地址仍可访问并自动跳转，导航链接、`sitemap.xml`、SSR 元信息同步更新 |
@@ -196,7 +196,7 @@ GET  /api/public/post/<id>             # 单篇文章（供 Pages Functions SSR 
 GET  /api/site                         # 站点信息（名称/头像/标题/副标题/栏目开关/名称/路径/图标，前台启动时读取）
 GET  /version                          # （Pages 端）当前部署的短版本号
 GET  /api/deploy-version               # 后端代理读取上面的 /version（缓存 60s），后台侧边栏「状态」处显示
-GET  /api/probe-servers                # 探针节点列表（来源由后台「管理 → 探针」决定）
+GET  /api/probe-servers                # 探针节点列表（来源由后台侧边栏「探针」决定）
 GET  /api/captcha                      # 获取验证码题目与签名
 POST /api/comments/submit              # 提交评论（带验证码与蜜罐）
 GET  /sitemap.xml  GET /robots.txt     # SEO
