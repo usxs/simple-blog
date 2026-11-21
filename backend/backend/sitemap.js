@@ -3,6 +3,7 @@
 // 前端为 history 真实路径路由（/posts、/post/<id>），并由 CF Pages Functions 提供服务端渲染，
 // 每个地址都能返回含正文的真实 HTML，Google / Bing 等引擎可直接收录。
 const { readArticles } = require('./storage');
+const { getSite } = require('./site');
 
 // 前端主站地址（sitemap 中 <loc> 的前缀），可用环境变量 SITE_PUBLIC_URL 覆盖
 const PUBLIC_SITE_URL = String(process.env.SITE_PUBLIC_URL || 'https://example.com')
@@ -29,16 +30,29 @@ function esc(s) {
     .replace(/'/g, '&apos;');
 }
 
-// 固定页面：导航可达的全部前端视图（history 真实路径）
-const STATIC_PAGES = [
-  { path: '/', changefreq: 'daily', priority: '1.0' },
-  { path: '/posts', changefreq: 'daily', priority: '0.9' },
-  { path: '/moments', changefreq: 'daily', priority: '0.7' },
-  { path: '/tools', changefreq: 'weekly', priority: '0.6' },
-  { path: '/probe', changefreq: 'hourly', priority: '0.4' },
-  { path: '/status', changefreq: 'hourly', priority: '0.4' },
-  { path: '/quirky', changefreq: 'weekly', priority: '0.5' }
-];
+// 固定页面：导航可达的前端视图（history 真实路径）。
+// 栏目路径与开关来自站点配置（后台「管理 → 前台栏目」可改名 / 改路径 / 关闭），这里实时读取。
+const PAGE_META = {
+  posts:   { changefreq: 'daily', priority: '0.9' },
+  moments: { changefreq: 'daily', priority: '0.7' },
+  tools:   { changefreq: 'weekly', priority: '0.6' },
+  probe:   { changefreq: 'hourly', priority: '0.4' },
+  status:  { changefreq: 'hourly', priority: '0.4' },
+  quirky:  { changefreq: 'weekly', priority: '0.5' }
+};
+
+function staticPages() {
+  const pages = [{ path: '/', changefreq: 'daily', priority: '1.0' }];
+  let modules = {};
+  try { modules = getSite().modules || {}; } catch (e) { modules = {}; }
+  Object.keys(PAGE_META).forEach((key) => {
+    const mod = modules[key] || {};
+    if (mod.enabled === false) return;                     // 后台关闭的栏目不进 sitemap
+    const route = String(mod.route || key).replace(/^\/+|\/+$/g, '') || key;
+    pages.push({ path: '/' + route, changefreq: PAGE_META[key].changefreq, priority: PAGE_META[key].priority });
+  });
+  return pages;
+}
 
 function buildSitemap() {
   const lines = [
@@ -47,7 +61,7 @@ function buildSitemap() {
   ];
 
   const now = Date.now();
-  for (const p of STATIC_PAGES) {
+  for (const p of staticPages()) {
     lines.push('  <url>');
     lines.push(`    <loc>${esc(PUBLIC_SITE_URL + p.path)}</loc>`);
     lines.push(`    <lastmod>${lastmodOf(now)}</lastmod>`);

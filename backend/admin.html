@@ -32,34 +32,13 @@
       </div>
 
       <ul class="nav-list" id="mod-nav">
-        <li class="nav-item-row">
-          <button class="nav-btn active" data-mod="posts" onclick="cms.switchMod('posts')"><span class="nav-label" data-label="posts">文章</span><span class="nav-count" id="count-posts">0</span></button>
-          <button class="nav-switch" type="button" role="switch" aria-checked="true" data-switch="posts" title="在前台显示 / 隐藏「文章」" onclick="cms.toggleModule('posts')"><span class="nav-switch-knob"></span></button>
-        </li>
-        <li class="nav-item-row">
-          <button class="nav-btn" data-mod="moments" onclick="cms.switchMod('moments')"><span class="nav-label" data-label="moments">碎碎念</span><span class="nav-count" id="count-moments">0</span></button>
-          <button class="nav-switch" type="button" role="switch" aria-checked="true" data-switch="moments" title="在前台显示 / 隐藏「碎碎念」" onclick="cms.toggleModule('moments')"><span class="nav-switch-knob"></span></button>
-        </li>
-        <li class="nav-item-row">
-          <button class="nav-btn" data-mod="comments" onclick="cms.switchMod('comments')"><span class="nav-label">评论审核</span><span class="nav-count" id="count-comments">0</span></button>
-          <span class="nav-only-badge" title="仅后台可见，不对前台显示">仅后台</span>
-        </li>
-        <li class="nav-item-row">
-          <button class="nav-btn" data-mod="tools" onclick="cms.switchMod('tools')"><span class="nav-label" data-label="tools">工具</span><span class="nav-count" id="count-tools">0</span></button>
-          <button class="nav-switch" type="button" role="switch" aria-checked="true" data-switch="tools" title="在前台显示 / 隐藏「工具」" onclick="cms.toggleModule('tools')"><span class="nav-switch-knob"></span></button>
-        </li>
-        <li class="nav-item-row">
-          <button class="nav-btn" data-mod="status" onclick="cms.switchMod('status')"><span class="nav-label" data-label="status">状态</span><span class="nav-count" id="count-status">0</span></button>
-          <button class="nav-switch" type="button" role="switch" aria-checked="true" data-switch="status" title="在前台显示 / 隐藏「状态」" onclick="cms.toggleModule('status')"><span class="nav-switch-knob"></span></button>
-        </li>
-        <li class="nav-item-row">
-          <button class="nav-btn" data-mod="quirky" onclick="cms.switchMod('quirky')"><span class="nav-label" data-label="quirky">奇奇怪怪</span><span class="nav-count" id="count-quirky">0</span></button>
-          <button class="nav-switch" type="button" role="switch" aria-checked="true" data-switch="quirky" title="在前台显示 / 隐藏「奇奇怪怪」" onclick="cms.toggleModule('quirky')"><span class="nav-switch-knob"></span></button>
-        </li>
-        <li class="nav-item-row">
-          <button class="nav-btn" data-mod="settings" onclick="cms.switchMod('settings')"><span class="nav-label">管理</span></button>
-          <span class="nav-only-badge" title="仅后台可见">仅后台</span>
-        </li>
+        <li class="nav-item-row" data-nav-row="posts"><button class="nav-btn active" data-mod="posts" onclick="cms.switchMod('posts')"><span class="nav-label" data-label="posts">文章</span><span class="nav-count" id="count-posts">0</span></button></li>
+        <li class="nav-item-row" data-nav-row="moments"><button class="nav-btn" data-mod="moments" onclick="cms.switchMod('moments')"><span class="nav-label" data-label="moments">碎碎念</span><span class="nav-count" id="count-moments">0</span></button></li>
+        <li class="nav-item-row" data-nav-row="comments"><button class="nav-btn" data-mod="comments" onclick="cms.switchMod('comments')"><span class="nav-label">评论审核</span><span class="nav-count" id="count-comments">0</span></button></li>
+        <li class="nav-item-row" data-nav-row="tools"><button class="nav-btn" data-mod="tools" onclick="cms.switchMod('tools')"><span class="nav-label" data-label="tools">工具</span><span class="nav-count" id="count-tools">0</span></button></li>
+        <li class="nav-item-row" data-nav-row="status"><button class="nav-btn" data-mod="status" onclick="cms.switchMod('status')"><span class="nav-label" data-label="status">状态</span><span class="nav-count" id="count-status">0</span></button></li>
+        <li class="nav-item-row" data-nav-row="quirky"><button class="nav-btn" data-mod="quirky" onclick="cms.switchMod('quirky')"><span class="nav-label" data-label="quirky">奇奇怪怪</span><span class="nav-count" id="count-quirky">0</span></button></li>
+        <li class="nav-item-row" data-nav-row="settings"><button class="nav-btn" data-mod="settings" onclick="cms.switchMod('settings')"><span class="nav-label">管理</span></button></li>
       </ul>
 
       <div class="sidebar-footer">

@@ -19,7 +19,7 @@ const { ROOT_DIR } = require('./storage');
 const DATA_DIR = process.env.AUTH_DATA_DIR || path.join(ROOT_DIR, 'data');
 const SITE_FILE = path.join(DATA_DIR, 'site.json');
 
-const LIMITS = { name: 40, avatarText: 2, title: 80, subtitle: 200, moduleName: 12, icon: 300 };
+const LIMITS = { name: 40, avatarText: 2, title: 80, subtitle: 200, moduleName: 12, icon: 300, route: 24 };
 
 // 前台导航栏目（顺序即前台顺序）
 const MODULE_KEYS = ['home', 'posts', 'moments', 'tools', 'probe', 'status', 'quirky'];
@@ -30,14 +30,31 @@ const PRESET_ICONS = [
 ];
 
 const MODULE_DEFAULTS = {
-  home: { name: '首页', icon: 'home' },
-  posts: { name: '文章', icon: 'book' },
-  moments: { name: '碎碎念', icon: 'message' },
-  tools: { name: '工具', icon: 'wrench' },
-  probe: { name: '探针', icon: 'activity' },
-  status: { name: '状态', icon: 'heart' },
-  quirky: { name: '奇奇怪怪', icon: 'star' }
+  home: { name: '首页', icon: 'home', route: '' },
+  posts: { name: '文章', icon: 'book', route: 'posts' },
+  moments: { name: '碎碎念', icon: 'message', route: 'moments' },
+  tools: { name: '工具', icon: 'wrench', route: 'tools' },
+  probe: { name: '探针', icon: 'activity', route: 'probe' },
+  status: { name: '状态', icon: 'heart', route: 'status' },
+  quirky: { name: '奇奇怪怪', icon: 'star', route: 'quirky' }
 };
+
+// 这些一级路径被既有功能占用，不允许给栏目当自定义路由
+const RESERVED_ROUTES = [
+  'post', 'posts', 'admin', 'api', 'img', 'file', 'assets', 'static', 'data',
+  'sitemap', 'robots', 'sitemap.xml', 'robots.txt', 'version', 'favicon',
+  'index', 'index.html', 'markdown', 'style', 'app', 'functions',
+  'moments', 'tools', 'probe', 'status', 'quirky', 'comments', 'login'
+];
+
+function normalizeRoute(value, fallback) {
+  const raw = String(value == null ? '' : value).trim().toLowerCase();
+  if (!raw) return fallback;
+  const cleaned = raw.replace(/^\/+/, '').replace(/\/+$/, '');
+  if (!/^[a-z0-9][a-z0-9-]{0,23}$/.test(cleaned)) return fallback;
+  if (RESERVED_ROUTES.indexOf(cleaned) !== -1) return fallback;
+  return cleaned;
+}
 
 const DEFAULTS = {
   name: process.env.SITE_NAME || '简单博客',
@@ -74,13 +91,21 @@ function pickIcon(value, presetDefault) {
 function normalizeModules(stored) {
   const src = stored && typeof stored === 'object' ? stored : {};
   const out = {};
+  const used = [];
   MODULE_KEYS.forEach((key) => {
     const def = MODULE_DEFAULTS[key];
     const item = src[key] && typeof src[key] === 'object' ? src[key] : {};
+    let route = key === 'home' ? '' : normalizeRoute(item.route, def.route);
+    // 路由不允许重复：撞车时回退到该栏目的默认路由，默认路由也被占用则用 key
+    if (key !== 'home' && used.indexOf(route) !== -1) {
+      route = used.indexOf(def.route) === -1 ? def.route : key;
+    }
+    if (key !== 'home') used.push(route);
     out[key] = {
       enabled: item.enabled === undefined ? true : !!item.enabled,
       name: pickText(item.name, def.name, LIMITS.moduleName),
-      icon: pickIcon(item.icon, def.icon)
+      icon: pickIcon(item.icon, def.icon),
+      route
     };
   });
   return out;
@@ -120,10 +145,13 @@ function saveSite(patch) {
       modules[key] = {
         enabled: item.enabled === undefined ? base.enabled : !!item.enabled,
         name: item.name === undefined ? base.name : pickText(item.name, base.name, LIMITS.moduleName),
-        icon: item.icon === undefined ? base.icon : pickIcon(item.icon, base.icon)
+        icon: item.icon === undefined ? base.icon : pickIcon(item.icon, base.icon),
+        route: key === 'home' || item.route === undefined ? base.route : normalizeRoute(item.route, base.route)
       };
     });
   }
+
+  modules = normalizeModules(modules);
 
   const next = {
     name: pickText(p.name, current.name, LIMITS.name),
@@ -147,5 +175,7 @@ module.exports = {
   LIMITS,
   MODULE_KEYS,
   MODULE_DEFAULTS,
-  PRESET_ICONS
+  PRESET_ICONS,
+  RESERVED_ROUTES,
+  normalizeRoute
 };

@@ -1193,3 +1193,22 @@ body.md-lightbox-locked {
 /* 侧边栏：被关闭的栏目整体变淡，仍可点击进入后台编辑 */
 .nav-item-row[data-disabled="true"] .nav-btn { opacity: .55; }
 .nav-item-row[data-disabled="true"] .nav-btn:hover { opacity: .85; }
+
+/* ── 栏目行：名称 + 访问路径 ── */
+.module-main { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.module-route-row { display: flex; align-items: center; gap: 2px; font-size: 12px; color: var(--text-muted); }
+.module-route-prefix { font-family: var(--font-mono); opacity: .65; }
+.module-route-input {
+  flex: 1; min-width: 0; padding: 2px 4px; font-family: var(--font-mono); font-size: 12px;
+  color: var(--text-muted); background: transparent; border: 1px dashed transparent; border-radius: 5px;
+}
+.module-route-input:hover { border-color: var(--border-subtle); }
+.module-route-input:focus { outline: none; color: var(--text-primary); background: var(--bg-subtle); border-color: var(--border-strong); }
+.module-route-input:disabled { opacity: .5; }
+.module-route-input::placeholder { color: var(--text-muted); opacity: .6; }
+
+/* ── 账号安全四张卡片等高 ── */
+.settings-grid { align-items: stretch; }
+.settings-card { display: flex; flex-direction: column; }
+.settings-card:not(.settings-card--wide) { min-height: 322px; }
+.settings-card .settings-actions { margin-top: auto; }

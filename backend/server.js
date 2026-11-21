@@ -654,10 +654,7 @@ const server = http.createServer((req, res) => {
   // 9. 同步接口
   if (req.method === 'GET' && pathname === '/api/sync') {
     const mod = reqUrl.searchParams.get('module') || 'posts';
-    if (mod === 'comments' && !checkAuth(req)) {
-      res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
-      return res.end(JSON.stringify({ error: 'Unauthorized' }));
-    }
+    if (mod === 'comments' && !guardAuth(req, res)) return;
     const clientVer = reqUrl.searchParams.get('version') || '';
     const rawList = getModuleData(mod);
 

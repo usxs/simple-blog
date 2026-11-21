@@ -67,7 +67,8 @@ function normalizeModuleConfig(raw) {
     out[key] = {
       enabled: item.enabled === undefined ? true : !!item.enabled,
       name: String(item.name || def.name).slice(0, 12),
-      icon: String(item.icon || def.icon)
+      icon: String(item.icon || def.icon),
+      route: String(item.route === undefined ? (key === 'home' ? '' : key) : item.route).replace(/^\/+|\/+$/g, '')
     };
   });
   out.home.enabled = true; // 首页永远保留
@@ -112,6 +113,28 @@ function setNavIcon(el, icon, fallbackId) {
   old.parentNode.replaceChild(node, old);
 }
 
+// 栏目访问路径（可在后台「管理 → 前台栏目」自定义，如把 /moments 改成 /diary）
+function moduleRoute(key) {
+  var cfg = SITE_CONFIG.modules;
+  var r = cfg && cfg[key] && cfg[key].route;
+  r = String(r || (key === 'home' ? '' : key));
+  return r.replace(/^\/+|\/+$/g, '');
+}
+
+// 路径段 → 栏目 key（先按自定义路径匹配，再兼容旧的默认路径，保证老链接不失效）
+function routeToTab(seg) {
+  if (!seg) return null;
+  var cfg = SITE_CONFIG.modules || {};
+  var keys = typeof MODULE_KEYS !== 'undefined' ? MODULE_KEYS : Object.keys(cfg);
+  for (var i = 0; i < keys.length; i++) {
+    var key = keys[i];
+    if (key === 'home') continue;
+    if (moduleRoute(key) === seg) return key;
+  }
+  if (cfg[seg] && seg !== 'home') return seg;
+  return null;
+}
+
 // 把后端栏目配置应用到侧边栏 / 移动端导航 / 路由守卫
 function applySiteModules(raw) {
   var cfg = normalizeModuleConfig(raw);
@@ -127,8 +150,11 @@ function applySiteModules(raw) {
       if (label) label.textContent = m.name;
       else if (el.tagName === 'BUTTON') el.textContent = m.name; // 移动端底栏是纯文字按钮
       setNavIcon(el, m.icon, (ICON_FALLBACK[key] || {}).icon);
+      if (el.tagName === 'A') el.setAttribute('href', '/' + moduleRoute(key));
     }
   });
+  var homeEl = document.querySelector('[data-nav="home"]');
+  if (homeEl && homeEl.tagName === 'A' && homeEl.getAttribute('href') !== '/') homeEl.setAttribute('href', '/');
   // 当前所在栏目已被关闭：直接提示，避免停留在不可达页面
   // 路由对象在本文件后段才声明，用 typeof 保护（首屏 fetch 可能早于 router 定义）
   if (typeof router !== 'undefined' && router.current && router.current !== 'home' && isModuleDisabled(router.current)) {
@@ -227,6 +253,28 @@ SITE_CONFIG.siteReadyPromise = null;
     })
     .catch(function () { /* 后端不可达时保持内置配置 */ })
     .then(function () { SITE_CONFIG.siteReady = true; });
+})();
+
+// 部署版本徽标：读取 CF Pages Functions 的 /version（部署 id），悬停显示小弹窗
+(function showDeployVersion() {
+  var wrap = document.getElementById('deploy-version');
+  var textEl = document.getElementById('deploy-version-text');
+  var tipEl = document.getElementById('deploy-tip');
+  if (!wrap || !textEl) return;
+  fetch('/version', { cache: 'no-store' })
+    .then(function (res) { return res.ok ? res.json() : null; })
+    .then(function (data) {
+      if (!data || !data.version) return;
+      var version = String(data.version);
+      textEl.textContent = version;
+      var lines = ['部署版本 ' + version];
+      if (data.commit) lines.push('提交 ' + String(data.commit).slice(0, 7));
+      if (data.branch) lines.push('分支 ' + data.branch);
+      if (tipEl) tipEl.textContent = lines.join(' · ');
+      wrap.hidden = false;
+      wrap.title = lines.join('\n');
+    })
+    .catch(function () { /* 本地直开 / 无 Functions 时静默隐藏 */ });
 })();
 
 var icpEl = document.getElementById('site-icp');
@@ -770,9 +818,8 @@ var router = {
     if (seg[0] === 'post' && seg[1]) {
       return { tab: 'post', postId: seg.slice(1).join('/') };
     }
-    if (seg[0] && seg[0] !== 'home' && this.KNOWN_TABS.indexOf(seg[0]) !== -1) {
-      return { tab: seg[0] };
-    }
+    var tab = routeToTab(seg[0]);
+    if (tab) return { tab: tab };
     return { tab: 'home' };
   },
 
@@ -841,7 +888,7 @@ var router = {
   // 栏目被站长关闭时的占位页（不报 404，保持地址可访问）
   renderModuleClosed: function (tab, skipUrl) {
     this.current = tab;
-    if (!skipUrl && tab !== 'post') this.syncUrl('/' + tab);
+    if (!skipUrl && tab !== 'post') this.syncUrl('/' + moduleRoute(tab));
     var container = document.getElementById('page-content');
     container.classList.remove('is-reading');
     var label = moduleLabel(tab);
@@ -895,7 +942,7 @@ var router = {
       this.probeRequestId += 1;
     }
     this.current = tab;
-    if (!skipUrl) this.syncUrl(tab === 'home' ? '/' : '/' + tab);
+    if (!skipUrl) this.syncUrl(tab === 'home' ? '/' : '/' + moduleRoute(tab));
     var navEls = document.querySelectorAll('[data-nav]');
     for (var i = 0; i < navEls.length; i++) {
       if (navEls[i].getAttribute('data-nav') === tab) {
@@ -1604,5 +1651,10 @@ var router = {
 // 浏览器前进/后退：跟随地址变化重渲染
 window.addEventListener('popstate', function () { router.handlePopState(); });
 
-// 首次进入：按真实路径（/posts、/post/<id> 等）深链渲染，根路径显示首页
-router.applyRoute();
+// 首次进入：先等站点配置（栏目路径 / 开关），再按真实路径（/posts、/post/<id> 等）深链渲染，
+// 否则自定义路径（如 /diary）会在配置到达前被误判成首页。
+(SITE_CONFIG.siteReadyPromise || Promise.resolve()).then(function () {
+  return router.applyRoute();
+}, function () {
+  return router.applyRoute();
+});

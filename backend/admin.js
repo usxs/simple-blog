@@ -145,6 +145,11 @@ var MODULE_FALLBACK = {
 var MODULE_ORDER = ['home', 'posts', 'moments', 'tools', 'probe', 'status', 'quirky'];
 
 // 图标值可能是预设名，也可能是 /img/... 或 http(s) 地址
+function escAttr(value) {
+  return String(value === undefined || value === null ? '' : value)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 function moduleIconHtml(icon, fallbackId) {
   var key = String(icon || '').trim();
   var preset = MODULE_ICON_SVGS[key] ? key : (MODULE_ICON_SVGS[fallbackId] ? fallbackId : 'book');
@@ -232,6 +237,8 @@ var cms = {
     this.hideAuthOverlay();
     document.getElementById('auth-username').textContent = username || 'admin';
     this.loadAll();
+    // 侧边栏按「前台栏目」配置显示 / 隐藏（不需要先打开管理页）
+    this.loadSettings().catch(function () { /* 忽略：管理数据拉取失败不影响主流程 */ });
   },
 
   handle401: function () {
@@ -1082,7 +1089,8 @@ var cms = {
       out[key] = {
         enabled: item.enabled === undefined ? true : !!item.enabled,
         name: String(item.name || def.name).slice(0, 12),
-        icon: String(item.icon || def.icon)
+        icon: String(item.icon || def.icon),
+        route: String(item.route || def.route || key)
       };
     });
     return out;
@@ -1096,14 +1104,16 @@ var cms = {
       var m = self.modules[key];
       var label = document.querySelector('.nav-label[data-label="' + key + '"]');
       if (label) label.textContent = m.name;
-      var sw = document.querySelector('.nav-item-row .nav-switch[data-switch="' + key + '"]');
-      if (sw) {
-        sw.setAttribute('aria-checked', m.enabled ? 'true' : 'false');
-        var row = sw.closest('.nav-item-row');
-        if (row) row.setAttribute('data-disabled', m.enabled ? 'false' : 'true');
-        sw.title = '在前台' + (m.enabled ? '显示' : '隐藏') + '「' + m.name + '」，点击切换';
+      var row = document.querySelector('.nav-item-row[data-nav-row="' + key + '"]');
+      if (row) {
+        row.setAttribute('data-disabled', m.enabled ? 'false' : 'true');
+        row.style.display = m.enabled ? '' : 'none';
       }
     });
+    // 当前正在编辑的栏目被关闭时，退回到「文章」，避免停在已被隐藏的页面
+    if (this.mod && MODULE_ORDER.indexOf(this.mod) !== -1 && this.modules[this.mod] && !this.modules[this.mod].enabled) {
+      this.switchMod('posts');
+    }
   },
 
   saveModules: async function (patch, okText) {
@@ -1153,6 +1163,35 @@ var cms = {
     await this.saveModules(patch, '「' + name + '」名称已更新');
   },
 
+  onModuleRouteChange: async function (key, value) {
+    if (!this.modules || !this.modules[key] || key === 'home') return;
+    var input = document.querySelector('.module-route-input[data-route-for="' + key + '"]');
+    var raw = String(value || '').trim().toLowerCase().replace(/^\/+|\/+$/g, '');
+    if (!raw) {
+      if (input) input.value = this.modules[key].route || key;
+      return;
+    }
+    if (!/^[a-z0-9][a-z0-9-]{0,23}$/.test(raw)) {
+      this.notify('路径只能用字母、数字和短横线，且不能以短横线开头');
+      if (input) input.value = this.modules[key].route || key;
+      return;
+    }
+    var taken = MODULE_ORDER.some(function (k) { return k !== key && (this.modules[k].route || k) === raw; }, this);
+    if (taken) {
+      this.notify('路径 /' + raw + ' 已被其它栏目占用');
+      if (input) input.value = this.modules[key].route || key;
+      return;
+    }
+    if (raw === (this.modules[key].route || key)) return;
+    var patch = {};
+    patch[key] = { route: raw };
+    var next = Object.assign({}, this.modules);
+    next[key] = Object.assign({}, this.modules[key], { route: raw });
+    this.modules = next;
+    this.renderModules();
+    await this.saveModules(patch, '「' + this.modules[key].name + '」的访问路径已改为 /' + raw);
+  },
+
   renderModules: function () {
     var list = document.getElementById('module-list');
     if (!list || !this.modules) return;
@@ -1161,12 +1200,22 @@ var cms = {
       var m = self.modules[key];
       var fallback = MODULE_FALLBACK[key];
       var fixed = key === 'home';
+      var route = String(m.route || key || '');
+      var fixed = key === 'home';
       return '<li class="module-row" data-module="' + key + '" data-disabled="' + (m.enabled ? 'false' : 'true') + '">' +
           '<button class="module-icon-btn" type="button" data-icon-for="' + key + '" title="更换图标">' + moduleIconHtml(m.icon, fallback.icon) + '</button>' +
-          '<input class="module-name-input" data-name-for="' + key + '" maxlength="12" value="' + String(m.name).replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '" aria-label="栏目名称" />' +
+          '<div class="module-main">' +
+            '<input class="module-name-input" data-name-for="' + key + '" maxlength="12" value="' + escAttr(m.name) + '" aria-label="栏目名称" />' +
+            '<div class="module-route-row">' +
+              '<span class="module-route-prefix">' + (fixed ? '/' : '/') + '</span>' +
+              '<input class="module-route-input" data-route-for="' + key + '" maxlength="24" spellcheck="false"' +
+                (fixed ? ' disabled title="首页固定为根路径"' : ' title="前台访问路径，例如 diary"') +
+                ' value="' + escAttr(fixed ? '' : route) + '" placeholder="' + escAttr(key) + '" aria-label="访问路径" />' +
+            '</div>' +
+          '</div>' +
           '<span class="module-meta">' + (fixed ? '首页固定' : (m.enabled ? '显示中' : '已隐藏')) + '</span>' +
           '<button class="nav-switch" type="button" role="switch" aria-checked="' + (m.enabled ? 'true' : 'false') + '" data-switch="' + key + '"' +
-            (fixed ? ' disabled title="首页不能关闭"' : ' title="在前台显示 / 隐藏「' + String(m.name).replace(/"/g, '&quot;') + '」"') +
+            (fixed ? ' disabled title="首页不能关闭"' : ' title="在前台显示 / 隐藏「' + escAttr(m.name) + '」"') +
           '><span class="nav-switch-knob"></span></button>' +
         '</li>';
     }).join('');
@@ -1180,6 +1229,11 @@ var cms = {
     list.querySelectorAll('[data-name-for]').forEach(function (input) {
       var key = input.getAttribute('data-name-for');
       input.addEventListener('change', function () { self.onModuleNameChange(key, input.value); });
+      input.addEventListener('keydown', function (evt) { if (evt.key === 'Enter') { evt.preventDefault(); input.blur(); } });
+    });
+    list.querySelectorAll('[data-route-for]').forEach(function (input) {
+      var key = input.getAttribute('data-route-for');
+      input.addEventListener('change', function () { self.onModuleRouteChange(key, input.value); });
       input.addEventListener('keydown', function (evt) { if (evt.key === 'Enter') { evt.preventDefault(); input.blur(); } });
     });
   },

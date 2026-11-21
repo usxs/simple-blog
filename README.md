@@ -19,7 +19,9 @@
 | ![文章详情](docs/screenshots/article.png) | ![评论区](docs/screenshots/comments.png) |
 | <sub>文章详情：Markdown 渲染、代码块、MIT 授权声明</sub> | <sub>评论区：算术验证码、楼中楼回复</sub> |
 | ![登录](docs/screenshots/admin-login.png) | ![后台](docs/screenshots/admin.png) |
-| <sub>后台登录：账密 + 服务端会话</sub> | <sub>后台：文章增删改、图片上传、评论审核</sub> |
+| <sub>后台登录：账密 + 服务端会话，可开两步验证</sub> | <sub>后台：文章增删改、图片上传、评论审核</sub> |
+| ![管理](docs/screenshots/admin-settings.png) | ![账号安全](docs/screenshots/admin-settings-account.png) |
+| <sub>管理：站点信息与前台栏目（开关 / 改名 / 改路径 / 换图标）</sub> | <sub>账号安全：管理员账号、两步验证、通行密钥、登录会话</sub> |
 
 ### 移动端
 
@@ -48,8 +50,10 @@
 | 评论 | 访客评论 + 验证码 + 后台审核 + 楼中楼回复，支持邮件/站点联系方式（不公开） |
 | SEO | 真实路径路由、文章页 SSR、动态 `sitemap.xml`、`robots.txt`、Open Graph、JSON-LD 结构化数据、IndexNow 即时推送 |
 | 服务器探针 | 可选，读取外部监控接口展示节点状态 |
-| 栏目开关 | 后台侧边栏每个栏目后带开关，一键决定前台是否显示；关闭后前台导航隐藏，直接访问该地址会显示「栏目已关闭」占位页 |
-| 栏目自定义 | 栏目可改名（最多 12 字）与换图标：16 个内置图标任选，或自行上传 PNG / JPG / SVG / WebP，图标存在 `img/` 目录 |
+| 栏目开关 | 在「管理 → 前台栏目」一键决定前台是否显示；关闭后前台导航隐藏，直接访问该地址会显示「栏目已关闭」占位页 |
+| 栏目自定义 | 栏目可改名（最多 12 字）、改访问路径（如把 `/moments` 改成 `/diary`）、换图标：16 个内置图标任选，或自行上传 PNG / JPG / SVG / WebP |
+| 自定义路径 | 栏目路径可改，`/posts`、`/diary` 之类都行；改名后旧地址仍可访问并自动跳转，导航链接、`sitemap.xml`、SSR 元信息同步更新 |
+| 部署版本 | 侧边栏「节点」右侧显示当前线上部署的短版本号，鼠标悬停看提交与分支，排查「线上到底是哪一版」很方便 |
 | 文章搜索 | 文章列表页搜索框：标题 / 摘要 / 标签模糊匹配，中文按子串、英文支持子序列；输入法组合结束后立即过滤，支持回车与 Esc 清空，列表只更新容器不重建输入框 |
 | 移动端 | ≤860px 自动切单列布局并显示底部悬浮导航，375–430px 窄屏做了专门压缩，六个入口一屏放得下 |
 
@@ -103,7 +107,7 @@ simple-blog/
 │   ├── markdown.js
 │   ├── robots.txt
 │   ├── _redirects
-│   └── functions/            # Pages Functions：文章页 / 列表页 SSR、sitemap 代理
+│   └── functions/            # Pages Functions：文章页 / 列表页 SSR、sitemap 代理、部署版本端点
 └── docs/
     ├── DEPLOY.md             # 详细部署与排障
     ├── API.md                # 接口速查
@@ -186,7 +190,8 @@ GET  /api/sync?module=posts            # 文章列表（匿名返回摘要 + ETa
 GET  /api/search?q=<关键词>[&limit=20] # 文章搜索（中文子串 / 英文子序列，返回摘要片段）
 GET  /api/comments?postId=<id>         # 已审核评论
 GET  /api/public/post/<id>             # 单篇文章（供 Pages Functions SSR 抓取）
-GET  /api/site                         # 站点信息（名称/头像/标题/副标题/栏目开关与图标，前台启动时读取）
+GET  /api/site                         # 站点信息（名称/头像/标题/副标题/栏目开关/名称/路径/图标，前台启动时读取）
+GET  /version                          # （Pages 端）当前部署的短版本号，侧边栏「节点」右侧显示
 GET  /api/captcha                      # 获取验证码题目与签名
 POST /api/comments/submit              # 提交评论（带验证码与蜜罐）
 GET  /sitemap.xml  GET /robots.txt     # SEO
@@ -234,7 +239,10 @@ POST /api/auth/sessions/revoke-others  # 下线其它设备
 4. **图片格式**：`.jpg/.jpeg/.png/.gif` 会转成 WebP；SVG 与 AVIF 原样保留；已是 `.webp` 的不再重编码。转换后若反而更大，会保留原图。想关闭转换设 `IMAGE_WEBP_DISABLE=1`。
 5. **历史图片不追溯**：老文章的 Markdown 里写的是当时的文件名，重新转换会让链接失效，所以只对之后上传的图片生效。
 6. **站点名称 / 域名要改多处**：站点名称、头像文字、浏览器标题、副标题都可以直接在后台「管理」页改（前端启动时读 `/api/site`，文章页与列表页 SSR 也会读取），不需要重新部署；但 `index.html` 里的静态 meta、`functions/` 环境变量、`robots.txt` 里的域名仍需手工同步（用于搜索引擎与无 JS 场景）。
-7. **栏目开关与图标**：前台栏目（文章 / 碎碎念 / 工具 / 探针 / 状态 / 奇奇怪怪）可在后台侧边栏用开关即时显示或隐藏，改名与换图标在「管理 → 前台栏目」里完成；首页可改名换图标但不能关闭。上传的图标文件会存进 `img/`，请一并备份。
+7. **栏目开关 / 改名 / 改路径 / 图标**：都在「管理 → 前台栏目」里完成，保存后即时生效，不需要重新部署前端。关掉的栏目在前台侧边栏与手机底栏都会消失，后台侧边栏也一并隐藏（在管理页重新打开即可）。首页可改名换图标但不能关闭。
+    - 路径只能用字母、数字和短横线（1–24 位），不能与 `post`、`api`、`admin` 等保留路径冲突；两条栏目不能撞同一路径
+    - 改路径后旧地址仍然可用（自动 302 到新路径），但 `sitemap`、导航链接与 SSR 元信息都以新路径为准；如果之前被别人收藏过，建议改一次就定下来
+    - 上传的图标存在 `img/日期/`，备份时一并带走
 7. **SEO 与域名**：`canonical` 用的是 `SITE_URL`，如果站点同时存在 `example.com` 和 `www.example.com`，请固定一个并让另一个 301 过去，否则会被判重复内容。
 8. **备份**：只需备份 `backend/` 下的 `config.json`、`article/`、`Musings/`、`img/`、`file/`、`data/` 六个路径，建议 `tar` 打包后异地保存。
 9. **两步验证的备用码**：启用 2FA 时生成的 10 个备用码只显示一次，请立刻保存；丢失验证器又没有备用码时，可在服务器上删除 `backend/data/auth.json` 里的 `totp` 字段后重启（会关闭 2FA）。

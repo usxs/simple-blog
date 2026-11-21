@@ -28,13 +28,13 @@
     "title": "简单博客",
     "subtitle": "这里是我的个人博客，记录技术、折腾与生活。",
     "modules": {
-      "home":    { "enabled": true,  "name": "首页",     "icon": "home" },
-      "posts":   { "enabled": true,  "name": "文章",     "icon": "book" },
-      "moments": { "enabled": true,  "name": "碎碎念",   "icon": "message" },
-      "tools":   { "enabled": true,  "name": "工具",     "icon": "wrench" },
-      "probe":   { "enabled": true,  "name": "探针",     "icon": "activity" },
-      "status":  { "enabled": true,  "name": "状态",     "icon": "heart" },
-      "quirky":  { "enabled": true,  "name": "奇奇怪怪", "icon": "star" }
+      "home":    { "enabled": true,  "name": "首页",     "icon": "home",     "route": "" },
+      "posts":   { "enabled": true,  "name": "文章",     "icon": "book",     "route": "posts" },
+      "moments": { "enabled": true,  "name": "碎碎念",   "icon": "message",  "route": "moments" },
+      "tools":   { "enabled": true,  "name": "工具",     "icon": "wrench",   "route": "tools" },
+      "probe":   { "enabled": true,  "name": "探针",     "icon": "activity", "route": "probe" },
+      "status":  { "enabled": true,  "name": "状态",     "icon": "heart",    "route": "status" },
+      "quirky":  { "enabled": true,  "name": "奇奇怪怪", "icon": "star",     "route": "quirky" }
     },
     "updatedAt": 0
   }
@@ -43,11 +43,15 @@
 
 `modules` 描述前台每个栏目：`enabled` 为 `false` 时前台导航不显示该栏目，直接访问会得到「栏目已关闭」占位页；`name` 最多 12 字；`icon` 可以是内置图标名（`home/book/message/wrench/activity/heart/star/code/camera/music/globe/folder/link/zap/coffee/image`）、以 `/` 开头的站内图片路径，或 `http(s)` 绝对地址。`home` 固定显示，不可关闭。
 
+`route` 是栏目的前台访问路径（不含前导 `/`）：`posts` 对应 `/posts`，改成 `tech` 后前台地址变为 `/tech`；
+旧地址 `/posts` 仍可访问并自动跳转。路径限制 1–24 位，只允许字母、数字与短横线，不能与
+`post` / `api` / `admin` / `img` 等保留路径冲突，也不能两个栏目重复——后台会自动校验并回退到默认值。
+
 后台改栏目配置同样走 `POST /api/admin/site`，支持只传某几个栏目做局部合并：
 
 ```jsonc
 POST /api/admin/site
-{ "modules": { "posts": { "enabled": false }, "quirky": { "name": "杂记", "icon": "/img/2026-11-22/xxx.webp" } } }
+{ "modules": { "posts": { "enabled": false }, "moments": { "route": "diary" }, "quirky": { "name": "杂记", "icon": "/img/2026-11-22/xxx.webp" } } }
 ```
 
 `updatedAt` 为 0 表示还在用环境变量里的初始值。响应头带 `Cache-Control: no-cache`。
@@ -192,7 +196,7 @@ POST /api/admin/site
 | 接口 | 说明 |
 | --- | --- |
 | `GET /api/admin/overview` | 汇总数据：`{username, site, totp:{enabled,pending,backupCodesLeft}, passkeys, sessions, dataWritable, version}` |
-| `POST /api/admin/site` | 保存站点信息：`{name, avatarText, title, subtitle}`，长度上限 40/2/80/200 |
+| `POST /api/admin/site` | 保存站点信息：`{name, avatarText, title, subtitle, modules}`，长度上限 40/2/80/200，栏目 `name` 12 字、`route` 24 位 |
 | `POST /api/auth/change-username` | `{password, username}`；成功后旧会话失效 |
 | `POST /api/auth/totp/setup` | `{password}` → `{secret, otpauth}`，此时还没启用 |
 | `POST /api/auth/totp/enable` | `{code}` → `{backupCodes:[10 个明文备用码]}`（只显示这一次） |
