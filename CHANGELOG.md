@@ -25,8 +25,7 @@
 - 后台登录接口 `POST /api/auth/login` 支持可选的 `totpCode` 字段，缺少动态码时返回 `needTotp: true`。
 - `docker-compose.yml` 新增 `SITE_NAME` / `SITE_AVATAR` / `SITE_TITLE` / `SITE_SUBTITLE` 与
   `WEBAUTHN_RP_ID` / `WEBAUTHN_ORIGIN` 环境变量（均为可选）。
-- `.gitignore` 增加 `*.tar.gz`、`*.tgz`、`.backup-*`，避免把备份包误提交。
-
+  
 ### 修复
 
 - 后台「管理」页不再显示内容存储路径提示（如 `./Musings/*.md | ./img/日期/`），该提示只在文章、碎碎念、工具等
