@@ -49,11 +49,11 @@
 | 图片上传 | 后台粘贴或选择图片，服务端自动转 WebP 并压缩到 2560px 内，原图不落盘 |
 | 评论 | 访客评论 + 验证码 + 后台审核 + 楼中楼回复，支持邮件/站点联系方式（不公开） |
 | SEO | 真实路径路由、文章页 SSR、动态 `sitemap.xml`、`robots.txt`、Open Graph、JSON-LD 结构化数据、IndexNow 即时推送 |
-| 服务器探针 | 可选，读取外部监控接口展示节点状态 |
+| 服务器探针 | 后台「管理 → 探针」可切换数据源：CF-Server-Monitor（`/api/servers`）或极简探针 monitor（`/api/nodes`），两种节点统一成同一套卡片 |
 | 栏目开关 | 在「管理 → 前台栏目」一键决定前台是否显示；关闭后前台导航隐藏，直接访问该地址会显示「栏目已关闭」占位页 |
 | 栏目自定义 | 栏目可改名（最多 12 字）、改访问路径（如把 `/moments` 改成 `/diary`）、换图标：16 个内置图标任选，或自行上传 PNG / JPG / SVG / WebP |
 | 自定义路径 | 栏目路径可改，`/posts`、`/diary` 之类都行；改名后旧地址仍可访问并自动跳转，导航链接、`sitemap.xml`、SSR 元信息同步更新 |
-| 部署版本 | 侧边栏「节点」右侧显示当前线上部署的短版本号，鼠标悬停看提交与分支，排查「线上到底是哪一版」很方便 |
+| 部署版本 | 鼠标悬停侧边栏「节点 ONLINE」弹出小气泡，显示当前线上部署的短版本号、提交与分支，排查「线上到底是哪一版」很方便 |
 | 文章搜索 | 文章列表页搜索框：标题 / 摘要 / 标签模糊匹配，中文按子串、英文支持子序列；输入法组合结束后立即过滤，支持回车与 Esc 清空，列表只更新容器不重建输入框 |
 | 移动端 | ≤860px 自动切单列布局并显示底部悬浮导航，375–430px 窄屏做了专门压缩，六个入口一屏放得下 |
 
@@ -175,7 +175,10 @@ docker compose logs -f --tail 50
 | `CAPTCHA_SECRET` | 否 | 留空自动生成并持久化到 `data/captcha-secret.json` |
 | `INDEXNOW_KEY` | 否 | 填了才会在发布/删除文章后向 Bing 等推送 |
 | `INDEXNOW_KEY_LOCATION` | 否 | key 文件完整 URL，默认 `${SITE_PUBLIC_URL}/<KEY>.txt` |
-| `PROBE_SERVERS_URL` | 否 | 外部监控接口，留空则探针列表为空 |
+| `PROBE_ENABLED` | 否 | 是否启用前台探针数据，`0` 关闭（默认启用） |
+| `PROBE_PROVIDER` | 否 | 探针类型：`cf`（CF-Server-Monitor）或 `minimal`（极简探针 monitor） |
+| `PROBE_URL` | 否 | 探针面板首页地址，后端自动拼 `/api/servers`（cf）或 `/api/nodes`（minimal） |
+| `PROBE_PANEL_URL` | 否 | 「打开监控后台」按钮的跳转地址，留空则前台不显示该按钮 |
 | `SITE_NAME` / `SITE_AVATAR` / `SITE_TITLE` / `SITE_SUBTITLE` | 否 | 站点信息初始值；首次启动后可在后台「管理」页修改，改完立即生效 |
 | `WEBAUTHN_RP_ID` / `WEBAUTHN_ORIGIN` | 否 | 通行密钥的 RP ID 与来源；默认按请求的 `X-Forwarded-Host` 推导 |
 | `HOST_PORT` | 否 | 宿主机端口，默认 `33001` |
@@ -191,7 +194,9 @@ GET  /api/search?q=<关键词>[&limit=20] # 文章搜索（中文子串 / 英文
 GET  /api/comments?postId=<id>         # 已审核评论
 GET  /api/public/post/<id>             # 单篇文章（供 Pages Functions SSR 抓取）
 GET  /api/site                         # 站点信息（名称/头像/标题/副标题/栏目开关/名称/路径/图标，前台启动时读取）
-GET  /version                          # （Pages 端）当前部署的短版本号，侧边栏「节点」右侧显示
+GET  /version                          # （Pages 端）当前部署的短版本号
+GET  /api/deploy-version               # 后端代理读取上面的 /version（缓存 60s），后台侧边栏「状态」处显示
+GET  /api/probe-servers                # 探针节点列表（来源由后台「管理 → 探针」决定）
 GET  /api/captcha                      # 获取验证码题目与签名
 POST /api/comments/submit              # 提交评论（带验证码与蜜罐）
 GET  /sitemap.xml  GET /robots.txt     # SEO

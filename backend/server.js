@@ -14,6 +14,8 @@ const {
 const auth = require('./backend/auth');
 const { buildSitemap, PUBLIC_SITE_URL } = require('./backend/sitemap');
 const { notifyIndexNow } = require('./backend/indexnow');
+const site = require('./backend/site');
+const { fetchProbeServers } = require('./backend/probe-source');
 const image = require('./backend/image');
 
 const {
@@ -51,6 +53,38 @@ const PORT = Number(process.env.PORT) || 33001;
 // 可选的服务器探针数据源（兼容 CF-Server-Monitor 的 /api/servers 接口）。
 // 不配置时 /api/probe-servers 返回 501，前端探针页只显示自身配置的站点监控。
 const PROBE_SERVERS_URL = String(process.env.PROBE_SERVERS_URL || '').trim();
+
+// 前端部署版本：抓取站点根域的 /version（Cloudflare Pages Function），缓存 60 秒
+let deployVersionCache = { at: 0, info: null };
+function fetchDeployVersion(callback) {
+  const now = Date.now();
+  if (deployVersionCache.info && now - deployVersionCache.at < 60 * 1000) {
+    return callback(null, deployVersionCache.info);
+  }
+  const target = PUBLIC_SITE_URL.replace(/\/+$/, '') + '/version';
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6000);
+  fetch(target, { signal: controller.signal, headers: { 'User-Agent': 'simple-blog-backend/1.0' } })
+    .then((response) => {
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      return response.json();
+    })
+    .then((data) => {
+      clearTimeout(timer);
+      const info = {
+        version: String((data && data.version) || ''),
+        branch: String((data && data.branch) || ''),
+        commit: String((data && data.commit) || '')
+      };
+      if (!info.version) throw new Error('版本信息为空');
+      deployVersionCache = { at: Date.now(), info };
+      callback(null, info);
+    })
+    .catch((err) => {
+      clearTimeout(timer);
+      callback(err);
+    });
+}
 
 // 中国大陆时区（Asia/Shanghai, UTC+8）：评论时间、文章日期等统一按北京时间生成，
 // 不依赖容器/宿主机的系统时区设置（toISOString 恒为 UTC，会导致北京时间 0~8 点
@@ -604,49 +638,52 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // 8.5 读取外部服务器监控列表（可选，需配置 PROBE_SERVERS_URL）
+  // 8.5 探针服务器列表（数据来源可在后台「管理 → 探针」切换：CF 探针 / 极简探针）
   if (req.method === 'GET' && pathname === '/api/probe-servers') {
-    if (!PROBE_SERVERS_URL) {
-      res.writeHead(501, { 'Content-Type': 'application/json; charset=utf-8' });
-      return res.end(JSON.stringify({ error: '未配置 PROBE_SERVERS_URL，探针数据源未启用' }));
+    const probe = site.getSite().probe;
+    const sendJson = (status, payload) => {
+      if (res.headersSent) return;
+      res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=15' });
+      res.end(JSON.stringify(payload));
+    };
+    if (!probe.enabled) {
+      sendJson(200, { ok: true, enabled: false, servers: [], probe: { provider: probe.provider, label: probe.label } });
+      return;
     }
-    const upstream = https.get(PROBE_SERVERS_URL, { timeout: 8000 }, (upstreamRes) => {
-      let body = '';
-      upstreamRes.setEncoding('utf8');
-      upstreamRes.on('data', chunk => {
-        body += chunk;
-        if (body.length > 2 * 1024 * 1024) upstream.destroy(new Error('Monitor response too large'));
-      });
-      upstreamRes.on('error', () => {
-        if (!res.headersSent) {
-          res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
-          res.end(JSON.stringify({ error: 'Monitor response interrupted' }));
+    fetchProbeServers(probe)
+      .then((data) => {
+        sendJson(200, {
+          ok: true,
+          enabled: true,
+          provider: data.provider,
+          label: data.label,
+          panelUrl: data.panelUrl,
+          servers: data.servers,
+          stats: data.stats,
+          probe: { provider: probe.provider, label: probe.label }
+        });
+      })
+      .catch((err) => {
+        if (err && err.code === 'NO_URL') {
+          sendJson(200, { ok: true, enabled: true, servers: [], panelUrl: probe.panelUrl, probe: { provider: probe.provider, label: probe.label }, error: '未配置探针地址' });
+          return;
         }
+        console.warn('[probe] 拉取探针数据失败：', err && err.message ? err.message : err);
+        sendJson(502, { ok: false, error: '暂时无法读取探针数据：' + (err && err.message ? err.message : '未知错误') });
       });
-      upstreamRes.on('end', () => {
-        try {
-          const payload = JSON.parse(body);
-          if (upstreamRes.statusCode < 200 || upstreamRes.statusCode >= 300 || !Array.isArray(payload.servers)) {
-            res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
-            return res.end(JSON.stringify({ error: 'Monitor API returned an invalid response' }));
-          }
-          res.writeHead(200, {
-            'Content-Type': 'application/json; charset=utf-8',
-            'Cache-Control': 'public, max-age=30'
-          });
-          res.end(JSON.stringify(payload));
-        } catch (e) {
-          res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
-          res.end(JSON.stringify({ error: 'Unable to parse monitor response' }));
-        }
-      });
-    });
-    upstream.on('timeout', () => upstream.destroy(new Error('Monitor API timeout')));
-    upstream.on('error', () => {
-      if (!res.headersSent) {
-        res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ error: 'Unable to reach monitor API' }));
+    return;
+  }
+
+  // 8.6 前端部署版本（来自 Cloudflare Pages 的 /version，缓存 60 秒）
+  if (req.method === 'GET' && pathname === '/api/deploy-version') {
+    fetchDeployVersion((err, info) => {
+      if (res.headersSent) return;
+      if (err) {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=15' });
+        return res.end(JSON.stringify({ ok: false, error: '暂时无法读取前端版本' }));
       }
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=60' });
+      res.end(JSON.stringify({ ok: true, version: info.version, branch: info.branch, commit: info.commit, site: PUBLIC_SITE_URL }));
     });
     return;
   }

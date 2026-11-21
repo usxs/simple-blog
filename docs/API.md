@@ -36,6 +36,13 @@
       "status":  { "enabled": true,  "name": "状态",     "icon": "heart",    "route": "status" },
       "quirky":  { "enabled": true,  "name": "奇奇怪怪", "icon": "star",     "route": "quirky" }
     },
+    "probe": {
+      "enabled": true,
+      "provider": "cf",
+      "label": "CF 探针",
+      "url": "https://monitor.example.com",
+      "panelUrl": "https://monitor.example.com/#/"
+    },
     "updatedAt": 0
   }
 }
@@ -52,6 +59,16 @@
 ```jsonc
 POST /api/admin/site
 { "modules": { "posts": { "enabled": false }, "moments": { "route": "diary" }, "quirky": { "name": "杂记", "icon": "/img/2026-11-22/xxx.webp" } } }
+```
+
+`probe` 描述前台「探针」页的数据来源：`enabled` 为 `false` 时前台显示「探针未启用」；
+`provider` 只能是 `cf`（CF-Server-Monitor，读 `<url>/api/servers`）或 `minimal`（极简探针 monitor，读 `<url>/api/nodes`），
+由后端统一成同一种节点结构；`url` 必须是 `http(s)` 地址，`panelUrl` 为「打开监控后台」按钮的跳转地址（可留空）。
+后台改探针配置同样走 `POST /api/admin/site`：
+
+```jsonc
+POST /api/admin/site
+{ "probe": { "provider": "minimal", "url": "https://monitor.example.com", "panelUrl": "" } }
 ```
 
 `updatedAt` 为 0 表示还在用环境变量里的初始值。响应头带 `Cache-Control: no-cache`。
@@ -262,3 +279,57 @@ GET /img/<日期>/<文件名>    # 图片（长缓存）
 GET /file/<日期>/<文件名>   # 附件
 GET /                       # 管理后台（admin.html）
 ```
+
+---
+
+## 探针节点
+
+### `GET /api/probe-servers`
+
+前台「探针」页的数据来源，由后端代理上游并在两种探针之间做统一。无需登录。
+
+```json
+{
+  "ok": true,
+  "enabled": true,
+  "provider": "cf",
+  "label": "CF-Server-Monitor",
+  "panelUrl": "https://monitor.example.com/#/",
+  "servers": [
+    {
+      "id": "894f2e5c-…",
+      "name": "NetCup 1o",
+      "region": "DE",
+      "group": "Default",
+      "online": true,
+      "cpu": 17.3,
+      "load": 0,
+      "memUsed": 769.3,
+      "memTotal": 973,
+      "diskUsed": 6174,
+      "diskTotal": 30063,
+      "netIn": 118360,
+      "netOut": 6685,
+      "pings": [ { "label": "电信", "ms": 208 }, { "label": "BGP", "ms": 0 } ],
+      "lastUpdated": 1795286644000,
+      "uptime": 0
+    }
+  ],
+  "stats": { "total": 2, "online": 2, "offline": 0 }
+}
+```
+
+- 容量单位统一为 MB，速率单位为 B/s；`lastUpdated` 为毫秒时间戳
+- `provider=minimal` 时 `pings` 为空数组（极简探针不提供四网延迟）
+- 探针关闭时返回 `{"ok":true,"enabled":false,"servers":[]}`；未填地址时返回空列表并带 `error: "未配置探针地址"`
+- 上游不可达返回 `502 {"ok":false,"error":"…"}`，错误信息会带到前台
+
+### `GET /api/deploy-version`
+
+后端读取前端站点根域的 `/version`（Cloudflare Pages Function），缓存 60 秒，供后台侧边栏显示前端部署版本。
+
+```json
+{ "ok": true, "version": "bd358f4d", "branch": "main", "commit": "", "site": "https://www.example.com" }
+```
+
+前端未部署 Functions 或读取失败时返回 `{"ok":false,"error":"暂时无法读取前端版本"}`，HTTP 状态仍为 200。

@@ -34,8 +34,12 @@ services:
       # IndexNow：填了 key 才会在发布/删除文章后向 Bing/Yandex 等推送收录
       INDEXNOW_KEY: ${INDEXNOW_KEY:-}
       INDEXNOW_KEY_LOCATION: ${INDEXNOW_KEY_LOCATION:-}
-      # 可选的服务器探针数据源（兼容 CF-Server-Monitor 的 /api/servers），留空则探针列表为空
-      PROBE_SERVERS_URL: ${PROBE_SERVERS_URL:-}
+      # 探针数据来源（前台「探针」页）。改完即时生效，也可在后台「管理 → 探针」里改
+      #   PROBE_PROVIDER：cf（CF-Server-Monitor，读 /api/servers）或 minimal（极简探针，读 /api/nodes）
+      PROBE_ENABLED: ${PROBE_ENABLED:-1}
+      PROBE_PROVIDER: ${PROBE_PROVIDER:-cf}
+      PROBE_URL: ${PROBE_URL:-}
+      PROBE_PANEL_URL: ${PROBE_PANEL_URL:-}
       # 站点信息初始值（之后可在后台「管理」页随时修改，改动会立即在前台生效）
       SITE_NAME: ${SITE_NAME:-简单博客}
       SITE_AVATAR: ${SITE_AVATAR:-简}

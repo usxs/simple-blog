@@ -3,6 +3,26 @@
 本项目的所有重要变更记录在此文件中，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.5.0] - 2026-11-22
+
+### 新增
+
+- 探针数据源可在后台切换：新增「管理 → 探针」卡片，支持 CF-Server-Monitor 与极简探针（monitor），
+  两种接口在后端统一成同一种节点结构（`GET /api/probe-servers`），前台探针页无需区分来源
+- 新增 `GET /api/deploy-version`：后端读取前端 `/<version>`（缓存 60 秒），后台侧边栏「状态」旁显示前端部署版本
+- 探针环境变量：`PROBE_ENABLED` / `PROBE_PROVIDER` / `PROBE_URL` / `PROBE_PANEL_URL`
+
+### 变更
+
+- 部署版本号不再单独占位，改为鼠标悬停侧边栏「节点 ONLINE」弹出气泡
+- 管理页「管理员账号」「两步验证」的操作按钮与上方内容拉开间距
+- 前端任意页面进入时都会探活一次后端，侧边栏「节点」不再停留在 CHECKING
+
+### 修复
+
+- 探针页在未配置数据源时给出明确提示，而不是笼统的「暂时无法读取」
+- `/api/probe-servers` 支持两种上游失败原因回传，前端不再一律吞掉错误
+
 ## [1.4.0] - 2026-11-22
 
 ### 新增

@@ -111,13 +111,10 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>
             <span>节点</span>
           </span>
-          <span class="backend-status" id="backend-indicator" data-backend-status="offline">
+          <span class="backend-status" id="backend-indicator" data-backend-status="offline" tabindex="0" aria-describedby="deploy-tip">
             <span class="backend-status-dot"></span>
             <span id="backend-indicator-text">CHECKING</span>
-          </span>
-          <span class="deploy-version" id="deploy-version" hidden tabindex="0" aria-label="部署版本">
-            <span class="deploy-version-text" id="deploy-version-text">—</span>
-            <span class="deploy-tip" role="tooltip" id="deploy-tip">部署版本</span>
+            <span class="deploy-tip" role="tooltip" id="deploy-tip" hidden></span>
           </span>
         </div>
 

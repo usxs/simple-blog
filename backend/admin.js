@@ -239,6 +239,7 @@ var cms = {
     this.loadAll();
     // 侧边栏按「前台栏目」配置显示 / 隐藏（不需要先打开管理页）
     this.loadSettings().catch(function () { /* 忽略：管理数据拉取失败不影响主流程 */ });
+    this.loadDeployVersion();
   },
 
   handle401: function () {
@@ -1064,6 +1065,7 @@ var cms = {
       document.getElementById('site-subtitle').value = site.subtitle || '';
       this.applyModuleConfig(site.modules);
       this.renderModules();
+      this.renderProbeSettings(site.probe);
 
       document.getElementById('account-username').value = data.username || '';
 
@@ -1318,6 +1320,71 @@ var cms = {
     }
   },
 
+  // ---------------- 探针数据源 ----------------
+  renderProbeSettings: function (probe) {
+    var p = probe || {};
+    var provider = document.getElementById('probe-provider');
+    var url = document.getElementById('probe-url');
+    var panel = document.getElementById('probe-panel');
+    var enabled = document.getElementById('probe-enabled');
+    if (!provider || !url || !panel || !enabled) return;
+    provider.value = p.provider === 'minimal' ? 'minimal' : 'cf';
+    url.value = p.url || '';
+    panel.value = p.panelUrl || '';
+    enabled.checked = p.enabled === undefined ? true : !!p.enabled;
+    this.updateProbeHint();
+  },
+
+  updateProbeHint: function () {
+    var hint = document.getElementById('probe-hint');
+    var provider = document.getElementById('probe-provider');
+    if (!hint || !provider) return;
+    hint.textContent = provider.value === 'minimal'
+      ? '极简探针：填面板首页地址（读取 /api/nodes，只显示公开节点）。'
+      : 'CF 探针：填面板首页地址（读取 /api/servers）。';
+  },
+
+  saveProbe: async function () {
+    var err = document.getElementById('probe-error');
+    err.textContent = '';
+    var payload = {
+      enabled: document.getElementById('probe-enabled').checked,
+      provider: document.getElementById('probe-provider').value,
+      url: document.getElementById('probe-url').value.trim(),
+      panelUrl: document.getElementById('probe-panel').value.trim()
+    };
+    if (payload.url && !/^https?:\/\/[^\s]+$/i.test(payload.url)) {
+      err.textContent = '探针地址必须以 http:// 或 https:// 开头';
+      return;
+    }
+    if (payload.panelUrl && !/^https?:\/\/[^\s]+$/i.test(payload.panelUrl)) {
+      err.textContent = '监控后台地址必须以 http:// 或 https:// 开头';
+      return;
+    }
+    try {
+      var out = await this.api('/api/admin/site', { method: 'POST', body: { probe: payload } });
+      this.renderProbeSettings((out.site || {}).probe || payload);
+      this.notify('探针设置已保存，前台刷新后生效');
+    } catch (e) {
+      err.textContent = e.message === 'unauthorized' ? '' : ('保存失败：' + e.message);
+    }
+  },
+
+  // 侧边栏显示前端已部署版本（来自 GET /api/deploy-version）
+  loadDeployVersion: async function () {
+    var el = document.getElementById('admin-version');
+    if (!el) return;
+    try {
+      var data = await this.api('/api/deploy-version?_t=' + Date.now());
+      if (!data || !data.version) return;
+      el.textContent = data.version;
+      el.title = '前端部署版本 ' + data.version + (data.branch ? ' · 分支 ' + data.branch : '');
+      el.hidden = false;
+    } catch (e) {
+      /* 拿不到版本不提示，避免干扰 */
+    }
+  },
+
   bindSettings: function () {
     var self = this;
 
@@ -1454,6 +1521,18 @@ var cms = {
         err.textContent = e2.message === 'unauthorized' ? '' : ('操作失败：' + e2.message);
       }
     });
+
+    var probeForm = document.getElementById('probe-form');
+    if (probeForm) {
+      probeForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        self.saveProbe();
+      });
+    }
+    var probeProvider = document.getElementById('probe-provider');
+    if (probeProvider) {
+      probeProvider.addEventListener('change', function () { self.updateProbeHint(); });
+    }
 
     // 栏目图标：上传按钮与遮罩关闭
     var iconInput = document.getElementById('icon-upload-input');

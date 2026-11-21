@@ -257,24 +257,23 @@ SITE_CONFIG.siteReadyPromise = null;
 
 // 部署版本徽标：读取 CF Pages Functions 的 /version（部署 id），悬停显示小弹窗
 (function showDeployVersion() {
-  var wrap = document.getElementById('deploy-version');
-  var textEl = document.getElementById('deploy-version-text');
+  var badge = document.getElementById('backend-indicator');
   var tipEl = document.getElementById('deploy-tip');
-  if (!wrap || !textEl) return;
+  if (!badge || !tipEl) return;
   fetch('/version', { cache: 'no-store' })
     .then(function (res) { return res.ok ? res.json() : null; })
     .then(function (data) {
       if (!data || !data.version) return;
       var version = String(data.version);
-      textEl.textContent = version;
       var lines = ['部署版本 ' + version];
       if (data.commit) lines.push('提交 ' + String(data.commit).slice(0, 7));
       if (data.branch) lines.push('分支 ' + data.branch);
-      if (tipEl) tipEl.textContent = lines.join(' · ');
-      wrap.hidden = false;
-      wrap.title = lines.join('\n');
+      tipEl.textContent = lines.join(' · ');
+      tipEl.hidden = false;
+      badge.title = lines.join('\n');
+      badge.setAttribute('data-deploy-version', version);
     })
-    .catch(function () { /* 本地直开 / 无 Functions 时静默隐藏 */ });
+    .catch(function () { /* 本地直开 / 无 Functions 时静默 */ });
 })();
 
 var icpEl = document.getElementById('site-icp');
@@ -1283,12 +1282,26 @@ var router = {
       '<div class="module-header">' +
         '<h1 class="module-title">探针</h1>' +
         '<div class="probe-actions">' +
-          '<a href="' + escapeHtml(SITE_CONFIG.probeUrl) + '" target="_blank" rel="noopener noreferrer">打开监控后台 ↗</a>' +
+          '<a class="probe-panel-link" id="probe-panel-link" href="#" target="_blank" rel="noopener noreferrer" hidden>打开监控后台 ↗</a>' +
           '<button type="button" onclick="router.refreshProbeView()" aria-label="刷新服务器状态" title="刷新服务器状态">刷新</button>' +
         '</div>' +
       '</div>' +
       '<div class="probe-content" id="probe-content"><div class="empty-box">正在读取服务器状态…</div></div>';
     this.refreshProbeView();
+  },
+
+  // 监控后台入口：后台配置了 panelUrl 才显示
+  setProbePanelLink: function (url) {
+    var link = document.getElementById('probe-panel-link');
+    if (!link) return;
+    var target = String(url || '').trim();
+    if (!target) {
+      link.hidden = true;
+      link.removeAttribute('href');
+      return;
+    }
+    link.href = target;
+    link.hidden = false;
   },
 
   refreshProbeView: async function () {
@@ -1304,11 +1317,24 @@ var router = {
       var response = await fetch(base + '/api/probe-servers?_t=' + Date.now(), { cache: 'no-store' });
       if (!response.ok) throw new Error('HTTP ' + response.status);
       var payload = await response.json();
-      if (!Array.isArray(payload.servers)) throw new Error('Invalid monitor response');
-      if (this.current === 'probe' && requestId === this.probeRequestId) this.renderProbeServers(container, payload.servers);
+      if (!response.ok || payload.ok === false) {
+        throw new Error(payload && payload.error ? payload.error : ('HTTP ' + response.status));
+      }
+      if (!Array.isArray(payload.servers)) throw new Error('Invalid probe response');
+      if (this.current === 'probe' && requestId === this.probeRequestId) {
+        this.setProbePanelLink(payload.panelUrl);
+        if (payload.enabled === false) {
+          container.innerHTML = '<div class="empty-box">探针未启用。可在后台「管理 → 探针」中开启并选择数据来源。</div>';
+          return;
+        }
+        this.renderProbeServers(container, payload.servers, payload);
+      }
     } catch (err) {
       if (this.current === 'probe' && requestId === this.probeRequestId) {
-        container.innerHTML = '<div class="empty-box">暂时无法读取服务器状态，请稍后重试。</div>';
+        var reason = err && err.message ? String(err.message) : '';
+        container.innerHTML = '<div class="empty-box">' +
+          (reason && reason.indexOf('未配置探针地址') !== -1 ? '还没有配置探针地址，请在后台「管理 → 探针」中填写。' : '暂时无法读取服务器状态，请稍后重试。') +
+          '</div>';
       }
     } finally {
       if (requestId === this.probeRequestId) {
@@ -1320,48 +1346,49 @@ var router = {
     }
   },
 
-  renderProbeServers: function (container, servers) {
+  renderProbeServers: function (container, servers, meta) {
+    var info = meta || {};
+    var panelLabel = info.label || '监控';
+
     if (!servers.length) {
-      container.innerHTML = '<div class="empty-box">暂无公开服务器</div>';
+      container.innerHTML = '<div class="empty-box">暂无公开服务器</div>' +
+        (info.error ? '<div class="empty-box">' + escapeHtml(String(info.error)) + '</div>' : '');
       return;
     }
 
     var onlineCount = 0;
     var cards = '';
     for (var i = 0; i < servers.length; i++) {
-      var server = servers[i];
-      var lastUpdated = Number(server.last_updated);
-      var reportAge = Date.now() - lastUpdated;
-      var hasOnlineStatus = typeof server.is_online === 'boolean' || server.is_online === 0 || server.is_online === 1 || server.is_online === '0' || server.is_online === '1';
-      var online = hasOnlineStatus
-        ? server.is_online === true || server.is_online === 1 || server.is_online === '1'
-        : Number.isFinite(lastUpdated) && lastUpdated > 0 && reportAge >= -60000 && reportAge <= 5 * 60 * 1000;
+      var server = servers[i] || {};
+      var online = server.online === true;
       if (online) onlineCount += 1;
+
       var cpu = Number(server.cpu);
-      var ramTotal = Number(server.ram_total);
-      var ramUsed = Number(server.ram_used);
-      var diskTotal = Number(server.disk_total);
-      var diskUsed = Number(server.disk_used);
-      var networks = [
-        ['电信', server.ping_ct], ['联通', server.ping_cu],
-        ['移动', server.ping_cm], ['BGP', server.ping_bd]
-      ];
-      var pingHtml = '';
-      for (var n = 0; n < networks.length; n++) {
-        var pingValue = Number(networks[n][1]);
-        if (Number.isFinite(pingValue) && pingValue >= 0) {
-          pingHtml += '<span><small>' + networks[n][0] + '</small>' + pingValue.toFixed(0) + ' ms</span>';
-        }
-      }
-      var memoryLabel = Number.isFinite(ramTotal) && ramTotal > 0
-        ? (ramUsed / 1024).toFixed(1) + ' / ' + (ramTotal / 1024).toFixed(1) + ' GB'
+      var memTotal = Number(server.memTotal);
+      var memUsed = Number(server.memUsed);
+      var diskTotal = Number(server.diskTotal);
+      var diskUsed = Number(server.diskUsed);
+
+      var memoryLabel = Number.isFinite(memTotal) && memTotal > 0
+        ? (memUsed / 1024).toFixed(1) + ' / ' + (memTotal / 1024).toFixed(1) + ' GB'
         : '--';
-      var diskLabel = Number.isFinite(diskTotal) && diskTotal > 0
+      var diskPercent = Number.isFinite(diskTotal) && diskTotal > 0
         ? Math.round((diskUsed / diskTotal) * 100) + '%'
         : '--';
-      var networkLabel = Number.isFinite(Number(server.net_in_speed)) && Number.isFinite(Number(server.net_out_speed))
-        ? '↓ ' + formatProbeSpeed(server.net_in_speed) + ' · ↑ ' + formatProbeSpeed(server.net_out_speed)
+      var networkLabel = Number.isFinite(Number(server.netIn)) && Number.isFinite(Number(server.netOut))
+        ? '↓ ' + formatProbeSpeed(server.netIn) + ' · ↑ ' + formatProbeSpeed(server.netOut)
         : '--';
+
+      var pingHtml = '';
+      var pings = Array.isArray(server.pings) ? server.pings : [];
+      for (var n = 0; n < pings.length; n++) {
+        var pingValue = Number(pings[n] && pings[n].ms);
+        if (Number.isFinite(pingValue) && pingValue >= 0) {
+          pingHtml += '<span><small>' + escapeHtml(String(pings[n].label || '')) + '</small>' + pingValue.toFixed(0) + ' ms</span>';
+        }
+      }
+
+      var lastUpdated = Number(server.lastUpdated);
       var checked = lastUpdated > 0
         ? new Date(lastUpdated).toLocaleString('zh-CN', { hour12: false, timeZone: 'Asia/Shanghai' })
         : '等待上报';
@@ -1369,13 +1396,13 @@ var router = {
       cards +=
         '<article class="probe-server-card">' +
           '<div class="probe-server-heading">' +
-            '<div><h2>' + escapeHtml(server.name || '未命名服务器') + '</h2><span>' + escapeHtml(server.region || server.server_group || '未标记区域') + '</span></div>' +
+            '<div><h2>' + escapeHtml(server.name || '未命名服务器') + '</h2><span>' + escapeHtml(server.region || server.group || '未标记区域') + '</span></div>' +
             '<span class="probe-state" data-online="' + (online ? 'true' : 'false') + '"><i></i>' + (online ? '在线' : '离线') + '</span>' +
           '</div>' +
           '<div class="probe-metrics">' +
             '<div><small>CPU</small><strong>' + (Number.isFinite(cpu) ? cpu.toFixed(1) + '%' : '--') + '</strong></div>' +
             '<div><small>内存</small><strong>' + escapeHtml(memoryLabel) + '</strong></div>' +
-            '<div><small>磁盘</small><strong>' + escapeHtml(diskLabel) + '</strong></div>' +
+            '<div><small>磁盘</small><strong>' + escapeHtml(diskPercent) + '</strong></div>' +
             '<div><small>网络吞吐</small><strong>' + escapeHtml(networkLabel) + '</strong></div>' +
           '</div>' +
           (pingHtml ? '<div class="probe-ping-list">' + pingHtml + '</div>' : '') +
@@ -1385,7 +1412,8 @@ var router = {
 
     var overviewState = onlineCount === servers.length ? 'true' : (onlineCount ? 'warn' : 'false');
     container.innerHTML =
-      '<div class="probe-overview"><strong><i data-state="' + overviewState + '"></i>' + onlineCount + ' / ' + servers.length + ' 台服务器在线</strong><span>每 30 秒自动更新 · 数据由 CF-Server-Monitor 提供</span></div>' +
+      '<div class="probe-overview"><strong><i data-state="' + overviewState + '"></i>' + onlineCount + ' / ' + servers.length + ' 台服务器在线</strong>' +
+      '<span>每 30 秒自动更新 · 数据由 ' + escapeHtml(panelLabel) + ' 提供</span></div>' +
       '<div class="probe-server-list">' + cards + '</div>';
   },
 
@@ -1658,3 +1686,6 @@ window.addEventListener('popstate', function () { router.handlePopState(); });
 }, function () {
   return router.applyRoute();
 });
+
+// 进站先探一次后端，让侧边栏「节点」在任意页面都能显示 ONLINE（而不是停在 CHECKING）
+syncClient.pingBackend();

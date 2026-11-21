@@ -1818,34 +1818,13 @@ body.md-lightbox-locked {
   }
 }
 
-/* ── 部署版本徽标（侧边栏「节点」右侧） ── */
-.deploy-version {
+/* ── 部署版本气泡（悬停「节点 ONLINE」时出现） ── */
+.backend-status {
   position: relative;
-  display: inline-flex;
-  align-items: center;
-  margin-left: auto;
-  padding: 2px 6px;
-  border-radius: 6px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.4;
-  letter-spacing: .02em;
-  color: var(--text-muted);
-  background: var(--bg-subtle);
-  border: 1px solid transparent;
-  cursor: default;
-  user-select: none;
-}
-.deploy-version[hidden] { display: none; }
-.deploy-version:hover,
-.deploy-version:focus-visible {
-  color: var(--text-primary);
-  border-color: var(--border-subtle);
-  outline: none;
 }
 .deploy-tip {
   position: absolute;
-  right: 0;
+  left: 0;
   bottom: calc(100% + 8px);
   z-index: 30;
   padding: 6px 9px;
@@ -1864,8 +1843,10 @@ body.md-lightbox-locked {
   transition: opacity .14s ease, transform .14s ease, visibility .14s;
   pointer-events: none;
 }
-.deploy-version:hover .deploy-tip,
-.deploy-version:focus-visible .deploy-tip {
+.deploy-tip[hidden] { display: block; }
+.backend-status:hover .deploy-tip,
+.backend-status:focus-visible .deploy-tip,
+.backend-status:focus-within .deploy-tip {
   opacity: 1;
   visibility: visible;
   transform: translateY(0);

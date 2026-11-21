@@ -1211,4 +1211,17 @@ body.md-lightbox-locked {
 .settings-grid { align-items: stretch; }
 .settings-card { display: flex; flex-direction: column; }
 .settings-card:not(.settings-card--wide) { min-height: 322px; }
-.settings-card .settings-actions { margin-top: auto; }
+.settings-card .settings-actions { margin-top: auto; padding-top: 14px; }
+.check-row { display: inline-flex; align-items: center; gap: 8px; margin: 2px 0 4px; font-size: 12px; color: var(--text-secondary); cursor: pointer; }
+.check-row input { width: 14px; height: 14px; accent-color: var(--accent, #4f8cff); }
+.admin-version { margin-left: auto; font: 500 10px/1 var(--font-mono, ui-monospace, monospace); color: var(--text-muted); letter-spacing: .02em; padding: 2px 5px; border: 1px solid var(--border); border-radius: 4px; cursor: default; }
+.admin-version[hidden] { display: none; }
+
+/* 账号安全类卡片：底部按钮与上方内容留出呼吸感 */
+#username-form .settings-actions,
+#totp-off-box .settings-actions,
+#totp-setup-box .settings-actions,
+#totp-on-box .settings-actions { margin-top: 16px; padding-top: 4px; }
+
+/* 两步验证：未启用时的「启用两步验证」按钮与上方说明留出距离 */
+#totp-off-box { margin-top: 14px; }

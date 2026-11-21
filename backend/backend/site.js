@@ -6,6 +6,12 @@
  *
  * 初始值优先级：data/site.json > 环境变量 > 内置默认值。
  *
+ * probe 描述「探针」页的数据来源：
+ *   enabled   是否启用探针页数据（关闭后前台探针页显示未启用）
+ *   provider  数据来源：cf（CF-Server-Monitor）/ minimal（极简探针 monitor）
+ *   url       数据源地址（cf 取 <url>/api/servers；minimal 取 <url>/api/nodes）
+ *   panelUrl  可选，面板/监控后台地址，前台探针页用它显示「打开监控后台」入口
+ *
  * modules 描述前台导航里的每个栏目：
  *   enabled  是否在前台显示（关闭后前台导航隐藏，直接访问会提示已关闭）
  *   name     栏目显示名（可改）
@@ -19,7 +25,7 @@ const { ROOT_DIR } = require('./storage');
 const DATA_DIR = process.env.AUTH_DATA_DIR || path.join(ROOT_DIR, 'data');
 const SITE_FILE = path.join(DATA_DIR, 'site.json');
 
-const LIMITS = { name: 40, avatarText: 2, title: 80, subtitle: 200, moduleName: 12, icon: 300, route: 24 };
+const LIMITS = { name: 40, avatarText: 2, title: 80, subtitle: 200, moduleName: 12, icon: 300, route: 24, probeUrl: 300 };
 
 // 前台导航栏目（顺序即前台顺序）
 const MODULE_KEYS = ['home', 'posts', 'moments', 'tools', 'probe', 'status', 'quirky'];
@@ -54,6 +60,38 @@ function normalizeRoute(value, fallback) {
   if (!/^[a-z0-9][a-z0-9-]{0,23}$/.test(cleaned)) return fallback;
   if (RESERVED_ROUTES.indexOf(cleaned) !== -1) return fallback;
   return cleaned;
+}
+
+// 探针数据源：cf = CF-Server-Monitor，minimal = 极简探针（monitor）
+const PROBE_PROVIDERS = ['cf', 'minimal'];
+const PROBE_LABELS = { cf: 'CF 探针', minimal: '极简探针' };
+
+const PROBE_DEFAULTS = {
+  enabled: process.env.PROBE_ENABLED !== '0',
+  provider: String(process.env.PROBE_PROVIDER || 'cf').toLowerCase() === 'minimal' ? 'minimal' : 'cf',
+  url: String(process.env.PROBE_URL || process.env.PROBE_SERVERS_URL || '').trim(),
+  panelUrl: String(process.env.PROBE_PANEL_URL || '').trim()
+};
+
+function pickUrl(value) {
+  const s = String(value == null ? '' : value).trim().slice(0, LIMITS.probeUrl);
+  if (!s) return '';
+  return /^https?:\/\/[^\s]+$/i.test(s) ? s.replace(/\/+$/, '') : '';
+}
+
+/** 探针配置：来源只能是 cf / minimal，地址必须是 http(s) */
+function normalizeProbe(stored) {
+  const src = stored && typeof stored === 'object' ? stored : {};
+  const provider = PROBE_PROVIDERS.indexOf(String(src.provider || '').toLowerCase()) !== -1
+    ? String(src.provider).toLowerCase()
+    : PROBE_DEFAULTS.provider;
+  return {
+    enabled: src.enabled === undefined ? PROBE_DEFAULTS.enabled : !!src.enabled,
+    provider,
+    label: PROBE_LABELS[provider],
+    url: src.url === undefined ? PROBE_DEFAULTS.url : pickUrl(src.url),
+    panelUrl: src.panelUrl === undefined ? PROBE_DEFAULTS.panelUrl : pickUrl(src.panelUrl)
+  };
 }
 
 const DEFAULTS = {
@@ -123,6 +161,7 @@ function getSite() {
     title: pickText(source.title, DEFAULTS.title || name, LIMITS.title),
     subtitle: pickText(source.subtitle, DEFAULTS.subtitle, LIMITS.subtitle),
     modules: normalizeModules(source.modules),
+    probe: normalizeProbe(source.probe),
     updatedAt: Number(source.updatedAt) || 0
   };
 }
@@ -153,12 +192,24 @@ function saveSite(patch) {
 
   modules = normalizeModules(modules);
 
+  const currentProbe = current.probe;
+  let probe = currentProbe;
+  if (p.probe && typeof p.probe === 'object') {
+    probe = normalizeProbe({
+      enabled: p.probe.enabled === undefined ? currentProbe.enabled : p.probe.enabled,
+      provider: p.probe.provider === undefined ? currentProbe.provider : p.probe.provider,
+      url: p.probe.url === undefined ? currentProbe.url : p.probe.url,
+      panelUrl: p.probe.panelUrl === undefined ? currentProbe.panelUrl : p.probe.panelUrl
+    });
+  }
+
   const next = {
     name: pickText(p.name, current.name, LIMITS.name),
     avatarText: pickText(p.avatarText, current.avatarText, LIMITS.avatarText),
     title: pickText(p.title, current.title, LIMITS.title),
     subtitle: pickText(p.subtitle, current.subtitle, LIMITS.subtitle),
     modules,
+    probe,
     updatedAt: Date.now()
   };
   ensureDataDir();
@@ -177,5 +228,8 @@ module.exports = {
   MODULE_DEFAULTS,
   PRESET_ICONS,
   RESERVED_ROUTES,
-  normalizeRoute
+  normalizeRoute,
+  PROBE_PROVIDERS,
+  PROBE_LABELS,
+  normalizeProbe
 };

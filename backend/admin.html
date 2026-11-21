@@ -48,6 +48,7 @@
             <span class="backend-status-dot"></span>
             <span id="conn-state">IDLE</span>
           </span>
+          <span class="admin-version" id="admin-version" hidden title="前端部署版本"></span>
         </div>
 
         <div class="sidebar-row">
@@ -153,6 +154,41 @@
               <p class="settings-tip">关闭的栏目会从前台侧边栏与移动端导航中隐藏，直接访问会提示「栏目已关闭」。图标支持内置图标与自行上传（PNG / JPG / SVG / WebP）。</p>
               <ul class="module-list" id="module-list"></ul>
               <div class="auth-error" id="module-error"></div>
+            </section>
+
+            <section class="settings-card settings-card--wide">
+              <div class="settings-card-head">
+                <h3>探针</h3>
+                <span class="settings-tip">前台「探针」页的数据来源</span>
+              </div>
+              <form id="probe-form">
+                <div class="field-grid">
+                  <div class="field">
+                    <label class="field-label" for="probe-provider">数据来源</label>
+                    <select class="field-input" id="probe-provider">
+                      <option value="cf">CF 探针（CF-Server-Monitor）</option>
+                      <option value="minimal">极简探针（monitor）</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label class="field-label" for="probe-url">探针地址</label>
+                    <input class="field-input" id="probe-url" maxlength="300" placeholder="https://example.com" />
+                  </div>
+                  <div class="field">
+                    <label class="field-label" for="probe-panel">监控后台地址（可选）</label>
+                    <input class="field-input" id="probe-panel" maxlength="300" placeholder="https://example.com/#/" />
+                  </div>
+                </div>
+                <p class="settings-tip" id="probe-hint">CF 探针读取 /api/servers，极简探针读取 /api/nodes，填面板首页地址即可。</p>
+                <label class="check-row">
+                  <input type="checkbox" id="probe-enabled" />
+                  <span>在前台显示探针数据</span>
+                </label>
+                <div class="settings-actions">
+                  <button class="btn btn-primary" type="submit">保存探针设置</button>
+                </div>
+                <div class="auth-error" id="probe-error"></div>
+              </form>
             </section>
 
             <section class="settings-card">
