@@ -8,6 +8,21 @@
 
 ---
 
+## 界面预览
+
+> 截图来自本地实际运行的实例（示例数据），默认深色主题。
+
+| 前台 | 后台 |
+| --- | --- |
+| ![首页](docs/screenshots/home.png) | ![文章列表](docs/screenshots/posts.png) |
+| <sub>首页</sub> | <sub>文章列表：按日期倒排，可搜索，右侧统计</sub> |
+| ![文章详情](docs/screenshots/article.png) | ![评论区](docs/screenshots/comments.png) |
+| <sub>文章详情：Markdown 渲染、代码块、MIT 授权声明</sub> | <sub>评论区：算术验证码、楼中楼回复</sub> |
+| ![登录](docs/screenshots/admin-login.png) | ![后台](docs/screenshots/admin.png) |
+| <sub>后台登录：账密 + 服务端会话</sub> | <sub>后台：文章增删改、图片上传、评论审核</sub> |
+
+---
+
 ## 功能
 
 | 模块 | 说明 |
