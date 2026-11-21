@@ -52,6 +52,7 @@
 | 服务器探针 | 后台侧边栏「探针」可切换数据源：CF-Server-Monitor（`/api/servers`）或极简探针 monitor（`/api/nodes`），两种节点统一成同一套卡片 |
 | 栏目开关 | 在「管理 → 前台栏目」一键决定前台是否显示；关闭后前台导航隐藏，直接访问该地址会显示「栏目已关闭」占位页 |
 | 栏目自定义 | 栏目可改名（最多 12 字）、改访问路径（如把 `/moments` 改成 `/diary`）、换图标：16 个内置图标任选，或自行上传 PNG / JPG / SVG / WebP |
+| 栏目排序 | 在「管理 → 前台栏目」拖动左侧 ⋮⋮ 调整顺序，桌面侧边栏、手机底栏、后台侧边栏三处同步生效（顺序存在 `data/site.json`） |
 | 自定义路径 | 栏目路径可改，`/posts`、`/diary` 之类都行；改名后旧地址仍可访问并自动跳转，导航链接、`sitemap.xml`、SSR 元信息同步更新 |
 | 部署版本 | 鼠标悬停侧边栏「节点 ONLINE」弹出小气泡，显示当前线上部署的短版本号、提交与分支，排查「线上到底是哪一版」很方便 |
 | 文章搜索 | 文章列表页搜索框：标题 / 摘要 / 标签模糊匹配，中文按子串、英文支持子序列；输入法组合结束后立即过滤，支持回车与 Esc 清空，列表只更新容器不重建输入框 |
@@ -193,7 +194,7 @@ GET  /api/sync?module=posts            # 文章列表（匿名返回摘要 + ETa
 GET  /api/search?q=<关键词>[&limit=20] # 文章搜索（中文子串 / 英文子序列，返回摘要片段）
 GET  /api/comments?postId=<id>         # 已审核评论
 GET  /api/public/post/<id>             # 单篇文章（供 Pages Functions SSR 抓取）
-GET  /api/site                         # 站点信息（名称/头像/标题/副标题/栏目开关/名称/路径/图标，前台启动时读取）
+GET  /api/site                         # 站点信息（名称/头像/标题/副标题/栏目开关/名称/路径/图标/顺序，前台启动时读取）
 GET  /version                          # （Pages 端）当前部署的短版本号
 GET  /api/deploy-version               # 后端代理读取上面的 /version（缓存 60s），后台侧边栏「状态」处显示
 GET  /api/probe-servers                # 探针节点列表（来源由后台侧边栏「探针」决定）
@@ -248,9 +249,12 @@ POST /api/auth/sessions/revoke-others  # 下线其它设备
     - 路径只能用字母、数字和短横线（1–24 位），不能与 `post`、`api`、`admin` 等保留路径冲突；两条栏目不能撞同一路径
     - 改路径后旧地址仍然可用（自动 302 到新路径），但 `sitemap`、导航链接与 SSR 元信息都以新路径为准；如果之前被别人收藏过，建议改一次就定下来
     - 上传的图标存在 `img/日期/`，备份时一并带走
-7. **SEO 与域名**：`canonical` 用的是 `SITE_URL`，如果站点同时存在 `example.com` 和 `www.example.com`，请固定一个并让另一个 301 过去，否则会被判重复内容。
-8. **备份**：只需备份 `backend/` 下的 `config.json`、`article/`、`Musings/`、`img/`、`file/`、`data/` 六个路径，建议 `tar` 打包后异地保存。
-9. **两步验证的备用码**：启用 2FA 时生成的 10 个备用码只显示一次，请立刻保存；丢失验证器又没有备用码时，可在服务器上删除 `backend/data/auth.json` 里的 `totp` 字段后重启（会关闭 2FA）。
+    - 拖动「前台栏目」每行左侧的 ⋮⋮ 可以调整顺序，保存后前台侧边栏、手机底栏、后台侧边栏同时按新顺序排列
+11. **评论防刷**：同一 IP 两条评论至少间隔 30 秒，每小时最多 8 条、每天最多 30 条；验证码每 10 分钟最多签发 30 次。触发限制时接口返回 `429`（带 `Retry-After`），前台提交按钮会显示倒计时。需要给正常访客放宽，改 `backend/captcha.js` 的 `CAPTCHA_MAX` 与 `backend/server.js` 里的间隔/条数常量即可。
+12. **文章顺序**：后台列表与前台列表都以发布日期（`date`）从新到旧，日期相同再看修改时间。想调顺序直接改文章里的 `date`。
+8. **SEO 与域名**：`canonical` 用的是 `SITE_URL`，如果站点同时存在 `example.com` 和 `www.example.com`，请固定一个并让另一个 301 过去，否则会被判重复内容。
+9. **备份**：只需备份 `backend/` 下的 `config.json`、`article/`、`Musings/`、`img/`、`file/`、`data/` 六个路径，建议 `tar` 打包后异地保存。
+10. **两步验证的备用码**：启用 2FA 时生成的 10 个备用码只显示一次，请立刻保存；丢失验证器又没有备用码时，可在服务器上删除 `backend/data/auth.json` 里的 `totp` 字段后重启（会关闭 2FA）。
 10. **通行密钥需要 HTTPS**：`http://` 或直接用 IP 访问时浏览器不提供 Passkey 接口；后端会按 `X-Forwarded-Host` 推导 `rpId`，反代域名与后端域名不一致时用 `WEBAUTHN_RP_ID` / `WEBAUTHN_ORIGIN` 显式指定。注册的密钥与域名绑定，换域名后需要重新注册。
 11. **流程图依赖 CDN**：```` ```mermaid ```` 代码块由浏览器端按需从 jsDelivr 加载 `mermaid@11` 渲染，不在构建产物里；内网/离线环境不会报错，只是保留为一段源码文本。改 CDN 地址只需调整 `frontend/app.js` 与 `backend/admin.js` 里 `loadMermaid()` 的 `import()` 地址。
 

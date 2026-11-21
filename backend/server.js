@@ -6,6 +6,7 @@ const crypto = require('crypto');
 
 const {
   ipRateStore,
+  hitCaptchaBudget,
   getClientIp,
   generateMathCaptcha,
   verifyMathCaptcha
@@ -53,6 +54,10 @@ const PORT = Number(process.env.PORT) || 33001;
 // 可选的服务器探针数据源（兼容 CF-Server-Monitor 的 /api/servers 接口）。
 // 不配置时 /api/probe-servers 返回 501，前端探针页只显示自身配置的站点监控。
 const PROBE_SERVERS_URL = String(process.env.PROBE_SERVERS_URL || '').trim();
+
+// 评论提交的全局并发闸门：同一时刻最多处理 20 条，超出的直接快速失败，避免写队列堆到超时
+let pendingSubmits = 0;
+const MAX_PENDING_SUBMITS = 20;
 
 // 前端部署版本：抓取站点根域的 /version（Cloudflare Pages Function），缓存 60 秒
 let deployVersionCache = { at: 0, info: null };
@@ -255,8 +260,13 @@ const server = http.createServer((req, res) => {
 
   // 3. 获取算术验证码: GET /api/captcha
   if (req.method === 'GET' && pathname === '/api/captcha') {
+    const budget = hitCaptchaBudget(getClientIp(req));
+    if (!budget.ok) {
+      res.writeHead(429, { 'Content-Type': 'application/json; charset=utf-8', 'Retry-After': String(budget.retryAfter || 60) });
+      return res.end(JSON.stringify({ ok: false, error: '验证码请求过于频繁，请稍后再试', retryAfter: budget.retryAfter || 60 }));
+    }
     const cap = generateMathCaptcha();
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
     return res.end(JSON.stringify(cap));
   }
 
@@ -410,23 +420,41 @@ const server = http.createServer((req, res) => {
     const now = Date.now();
     const rec = ipRateStore.get(ip) || { lastSubmit: 0, countHour: 0, failCount: 0, blockedUntil: 0, lastActive: now };
 
-    if (now < rec.blockedUntil) {
-      res.writeHead(429, { 'Content-Type': 'application/json; charset=utf-8' });
-      return res.end(JSON.stringify({ ok: false, error: '请求过于频繁或错误次数过多，请 15 分钟后再试' }));
+    function tooMany(err, retryAfter, status) {
+      res.writeHead(status || 429, { 'Content-Type': 'application/json; charset=utf-8', 'Retry-After': String(retryAfter || 60) });
+      res.end(JSON.stringify({ ok: false, error: err, retryAfter: retryAfter || 60 }));
     }
 
-    if (now - rec.lastSubmit < 60 * 1000) {
-      res.writeHead(429, { 'Content-Type': 'application/json; charset=utf-8' });
-      return res.end(JSON.stringify({ ok: false, error: '发送太快啦，请等待 60 秒后再发送下一条评论' }));
+    if (now < rec.blockedUntil) {
+      return tooMany('请求过于频繁或错误次数过多，请 15 分钟后再试', Math.ceil((rec.blockedUntil - now) / 1000));
+    }
+
+    if (pendingSubmits >= MAX_PENDING_SUBMITS) {
+      return tooMany('当前评论提交较多，请稍后再试', 20, 503);
+    }
+
+    // 同一 IP 至少间隔 30 秒，且每小时 8 条、每天 30 条
+    if (now - rec.lastSubmit < 30 * 1000) {
+      const waitSec = Math.ceil((30 * 1000 - (now - rec.lastSubmit)) / 1000);
+      return tooMany('发送太快啦，请等待 ' + waitSec + ' 秒后再发送下一条评论', waitSec);
     }
 
     if (now - rec.lastActive > 3600 * 1000) {
       rec.countHour = 0;
     }
-    if (rec.countHour >= 10) {
-      res.writeHead(429, { 'Content-Type': 'application/json; charset=utf-8' });
-      return res.end(JSON.stringify({ ok: false, error: '当前 IP 每小时评论次数已达上限，请稍后再试' }));
+    if (rec.countHour >= 8) {
+      return tooMany('当前 IP 每小时评论次数已达上限，请稍后再试', 600);
     }
+
+    if (!rec.dayStart || now - rec.dayStart > 24 * 3600 * 1000) {
+      rec.dayStart = now;
+      rec.countDay = 0;
+    }
+    if ((rec.countDay || 0) >= 30) {
+      return tooMany('当前 IP 今天的评论次数已达上限，请明天再来', 3600);
+    }
+
+    pendingSubmits += 1;
 
     let body = '';
     req.on('data', chunk => {
@@ -479,6 +507,8 @@ const server = http.createServer((req, res) => {
         rec.lastSubmit = now;
         rec.lastActive = now;
         rec.countHour += 1;
+        rec.countDay = (rec.countDay || 0) + 1;
+        if (!rec.dayStart) rec.dayStart = now;
         rec.failCount = 0;
         ipRateStore.set(ip, rec);
 
@@ -525,6 +555,8 @@ const server = http.createServer((req, res) => {
       } catch (e) {
         res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ ok: false, error: '请求格式错误' }));
+      } finally {
+        pendingSubmits = Math.max(0, pendingSubmits - 1);
       }
     });
     return;

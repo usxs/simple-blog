@@ -36,6 +36,7 @@
       "status":  { "enabled": true,  "name": "状态",     "icon": "heart",    "route": "status" },
       "quirky":  { "enabled": true,  "name": "奇奇怪怪", "icon": "star",     "route": "quirky" }
     },
+    "order": ["home", "posts", "moments", "tools", "probe", "status", "quirky"],
     "probe": {
       "enabled": true,
       "provider": "cf",

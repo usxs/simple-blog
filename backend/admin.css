@@ -1115,9 +1115,10 @@ body.md-lightbox-locked {
 
 .module-row {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 92px auto;
+  grid-template-columns: 16px 34px minmax(0, 1fr) 92px auto;
   align-items: center;
   gap: 10px;
+  cursor: grab;
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -1125,6 +1126,18 @@ body.md-lightbox-locked {
 }
 
 .module-row[data-disabled="true"] { opacity: .6; }
+
+.module-row.dragging { opacity: .45; cursor: grabbing; }
+.module-row.drag-over { border-color: var(--text-secondary); box-shadow: inset 0 0 0 1px var(--border), 0 0 0 1px var(--text-muted); }
+
+.module-grip {
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: -2px;
+  color: var(--text-muted);
+  user-select: none;
+  cursor: grab;
+}
 
 .module-icon-btn {
   width: 34px;

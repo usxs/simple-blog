@@ -34,6 +34,35 @@ let CAPTCHA_SECRET = '';
 
 const ipRateStore = new Map();
 const usedCaptchaNonces = new Map();
+// 验证码签发频率：防止脚本无限刷题（刷新数字）拖垮服务
+const captchaRateStore = new Map();
+const CAPTCHA_WINDOW = 10 * 60 * 1000;   // 统计窗口 10 分钟
+const CAPTCHA_MAX = 30;                  // 窗口内最多签发 30 次
+const CAPTCHA_BLOCK = 10 * 60 * 1000;    // 超限后封禁 10 分钟
+
+/** 记录一次验证码签发；返回 { ok, retryAfter } */
+function hitCaptchaBudget(ip) {
+  const now = Date.now();
+  let rec = captchaRateStore.get(ip);
+  if (!rec) {
+    rec = { windowStart: now, count: 0, blockedUntil: 0, lastActive: now };
+    captchaRateStore.set(ip, rec);
+  }
+  rec.lastActive = now;
+  if (now < rec.blockedUntil) {
+    return { ok: false, retryAfter: Math.ceil((rec.blockedUntil - now) / 1000) };
+  }
+  if (now - rec.windowStart > CAPTCHA_WINDOW) {
+    rec.windowStart = now;
+    rec.count = 0;
+  }
+  rec.count += 1;
+  if (rec.count > CAPTCHA_MAX) {
+    rec.blockedUntil = now + CAPTCHA_BLOCK;
+    return { ok: false, retryAfter: Math.ceil(CAPTCHA_BLOCK / 1000) };
+  }
+  return { ok: true, remaining: CAPTCHA_MAX - rec.count };
+}
 
 function getClientIp(req) {
   const cfIp = req.headers['cf-connecting-ip'];
@@ -101,10 +130,17 @@ setInterval(() => {
       ipRateStore.delete(ip);
     }
   }
+  for (const [ip, rec] of captchaRateStore.entries()) {
+    if (now - rec.lastActive > 3600 * 1000 && now > rec.blockedUntil) {
+      captchaRateStore.delete(ip);
+    }
+  }
 }, 60 * 1000);
 
 module.exports = {
   ipRateStore,
+  captchaRateStore,
+  hitCaptchaBudget,
   getClientIp,
   generateMathCaptcha,
   verifyMathCaptcha

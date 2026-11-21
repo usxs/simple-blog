@@ -821,7 +821,9 @@ button, input, textarea {
 
 /* 文章页底部：MIT 许可证声明 */
 .article-license {
-  margin-top: 28px;
+  width: 100%;
+  max-width: 760px;          /* 与正文 / 评论区同宽，避免上下两条线长度不一致 */
+  margin: 28px auto 0;
   padding-top: 16px;
   border-top: 1px dashed var(--border);
   font-size: 12px;
@@ -898,8 +900,10 @@ button, input, textarea {
 .comments-section {
   margin-top: 48px;
   padding-top: 32px;
-  border-top: 1px solid var(--border);
+  border-top: 1px dashed var(--border);   /* 与许可证上方虚线统一 */
   max-width: 760px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .comments-head {

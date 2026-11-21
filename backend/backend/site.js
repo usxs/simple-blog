@@ -125,6 +125,20 @@ function pickIcon(value, presetDefault) {
   return presetDefault;
 }
 
+/** 栏目顺序：只保留已知 key、去重，缺的按默认顺序补在末尾 */
+function normalizeOrder(input) {
+  const arr = Array.isArray(input) ? input : [];
+  const out = [];
+  arr.forEach((k) => {
+    const key = String(k == null ? '' : k).trim();
+    if (MODULE_KEYS.indexOf(key) !== -1 && out.indexOf(key) === -1) out.push(key);
+  });
+  MODULE_KEYS.forEach((key) => {
+    if (out.indexOf(key) === -1) out.push(key);
+  });
+  return out;
+}
+
 /** 合并存储中的栏目配置与默认值，保证每个 key 都存在 */
 function normalizeModules(stored) {
   const src = stored && typeof stored === 'object' ? stored : {};
@@ -161,6 +175,7 @@ function getSite() {
     title: pickText(source.title, DEFAULTS.title || name, LIMITS.title),
     subtitle: pickText(source.subtitle, DEFAULTS.subtitle, LIMITS.subtitle),
     modules: normalizeModules(source.modules),
+    order: normalizeOrder(source.order),
     probe: normalizeProbe(source.probe),
     updatedAt: Number(source.updatedAt) || 0
   };
@@ -191,6 +206,7 @@ function saveSite(patch) {
   }
 
   modules = normalizeModules(modules);
+  const order = p.order === undefined ? current.order : normalizeOrder(p.order);
 
   const currentProbe = current.probe;
   let probe = currentProbe;
@@ -209,6 +225,7 @@ function saveSite(patch) {
     title: pickText(p.title, current.title, LIMITS.title),
     subtitle: pickText(p.subtitle, current.subtitle, LIMITS.subtitle),
     modules,
+    order,
     probe,
     updatedAt: Date.now()
   };
@@ -226,6 +243,7 @@ module.exports = {
   LIMITS,
   MODULE_KEYS,
   MODULE_DEFAULTS,
+  normalizeOrder,
   PRESET_ICONS,
   RESERVED_ROUTES,
   normalizeRoute,

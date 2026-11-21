@@ -24,15 +24,28 @@ function syncAvatarFavicon() {
   if (link) link.href = 'data:image/svg+xml,' + svg;
 }
 
+// 把 date 解析为毫秒（北京时间锚定），失败回退 mtime —— 与前台排序保持一致
+function adminDateMsOf(item) {
+  var raw = String((item && item.date) || '').trim();
+  if (raw) {
+    var iso = raw.replace(' ', 'T');
+    if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) iso += 'T00:00:00+08:00';
+    else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(iso)) iso += '+08:00';
+    var ms = Date.parse(iso);
+    if (!isNaN(ms)) return ms;
+  }
+  return Number(item && item.mtime) || 0;
+}
+
 function sortNewestFirst(arr) {
   if (!Array.isArray(arr)) return [];
   return arr.slice().sort(function (a, b) {
-    var ta = Number(a && a.mtime) || 0;
-    var tb = Number(b && b.mtime) || 0;
-    if (tb !== ta) return tb - ta;
-    var da = String((a && a.date) || '');
-    var db = String((b && b.date) || '');
-    if (db !== da) return db.localeCompare(da);
+    var da = adminDateMsOf(a);
+    var db = adminDateMsOf(b);
+    if (db !== da) return db - da;
+    var ma = Number(a && a.mtime) || 0;
+    var mb = Number(b && b.mtime) || 0;
+    if (mb !== ma) return mb - ma;
     return String((b && b.id) || '').localeCompare(String((a && a.id) || ''));
   });
 }
@@ -144,6 +157,19 @@ var MODULE_FALLBACK = {
 
 var MODULE_ORDER = ['home', 'posts', 'moments', 'tools', 'probe', 'status', 'quirky'];
 
+// 栏目顺序：只保留已知 key、去重，缺的按默认顺序补在末尾
+function normalizeModuleOrder(raw) {
+  var out = [];
+  (Array.isArray(raw) ? raw : []).forEach(function (k) {
+    var key = String(k || '').trim();
+    if (MODULE_ORDER.indexOf(key) !== -1 && out.indexOf(key) === -1) out.push(key);
+  });
+  MODULE_ORDER.forEach(function (key) {
+    if (out.indexOf(key) === -1) out.push(key);
+  });
+  return out;
+}
+
 // 图标值可能是预设名，也可能是 /img/... 或 http(s) 地址
 function escAttr(value) {
   return String(value === undefined || value === null ? '' : value)
@@ -162,7 +188,9 @@ function moduleIconHtml(icon, fallbackId) {
 var cms = {
   mod: 'posts',
   modules: null,
+  order: MODULE_ORDER.slice(),
   iconTarget: null,
+  dragKey: '',
   markdownMode: 'content',
   store: { posts: [], moments: [], comments: [], tools: [], status: [], quirky: [] },
   currentItem: null,
@@ -1066,7 +1094,7 @@ var cms = {
       document.getElementById('site-avatar').value = site.avatarText || '';
       document.getElementById('site-title').value = site.title || '';
       document.getElementById('site-subtitle').value = site.subtitle || '';
-      this.applyModuleConfig(site.modules);
+      this.applyModuleConfig(site.modules, site.order);
       this.renderModules();
       this.renderProbeSettings(site.probe);
 
@@ -1102,10 +1130,12 @@ var cms = {
   },
 
   // 侧边栏的文字与开关状态跟随配置
-  applyModuleConfig: function (modules) {
+  applyModuleConfig: function (modules, order) {
     var self = this;
     this.modules = this.normalizeModules(modules);
-    MODULE_ORDER.forEach(function (key) {
+    this.order = normalizeModuleOrder(order || this.order);
+    this.reorderNav();
+    this.order.forEach(function (key) {
       var m = self.modules[key];
       var label = document.querySelector('.nav-label[data-label="' + key + '"]');
       if (label) label.textContent = m.name;
@@ -1121,13 +1151,35 @@ var cms = {
     }
   },
 
-  saveModules: async function (patch, okText) {
+  // 后台侧边栏按栏目顺序重排（评论审核 / 管理固定在末尾）
+  reorderNav: function () {
+    var ul = document.getElementById('mod-nav');
+    if (!ul) return;
+    var self = this;
+    var rows = {};
+    var fixed = [];
+    Array.prototype.slice.call(ul.children).forEach(function (li) {
+      var key = li.getAttribute('data-nav-row');
+      if (key === 'probe-config') key = 'probe';   // 探针页在后台叫 probe-config，顺序跟随前台 probe
+      if (key && self.order.indexOf(key) !== -1) rows[key] = li;
+      else fixed.push(li);
+    });
+    var seq = [];
+    this.order.forEach(function (key) { if (rows[key]) seq.push(rows[key]); });
+    fixed.forEach(function (li) { seq.push(li); });
+    seq.forEach(function (li) { ul.appendChild(li); });
+  },
+
+  saveModules: async function (patch, okText, order) {
     var err = document.getElementById('module-error');
     if (err) err.textContent = '';
     try {
-      var out = await this.api('/api/admin/site', { method: 'POST', body: { modules: patch } });
+      var body = { modules: patch };
+      if (order) body.order = order;
+      var out = await this.api('/api/admin/site', { method: 'POST', body: body });
       var saved = out && out.site && out.site.modules ? out.site.modules : this.modules;
-      this.applyModuleConfig(saved);
+      var savedOrder = out && out.site && out.site.order ? out.site.order : this.order;
+      this.applyModuleConfig(saved, savedOrder);
       this.renderModules();
       if (okText) this.notify(okText);
       return true;
@@ -1201,13 +1253,16 @@ var cms = {
     var list = document.getElementById('module-list');
     if (!list || !this.modules) return;
     var self = this;
-    list.innerHTML = MODULE_ORDER.map(function (key) {
+    list.innerHTML = this.order.map(function (key, index) {
       var m = self.modules[key];
       var fallback = MODULE_FALLBACK[key];
       var fixed = key === 'home';
       var route = String(m.route || key || '');
       var fixed = key === 'home';
-      return '<li class="module-row" data-module="' + key + '" data-disabled="' + (m.enabled ? 'false' : 'true') + '">' +
+      return '<li class="module-row" data-module="' + key + '" draggable="true" data-index="' + index + '" data-disabled="' + (m.enabled ? 'false' : 'true') + '"' +
+          ' ondragstart="cms.onModuleDragStart(event, \'' + key + '\')" ondragover="cms.onModuleDragOver(event)"' +
+          ' ondrop="cms.onModuleDrop(event, \'' + key + '\')" ondragend="cms.onModuleDragEnd()">' +
+          '<span class="module-grip" aria-hidden="true" title="拖动调整顺序">⋮⋮</span>' +
           '<button class="module-icon-btn" type="button" data-icon-for="' + key + '" title="更换图标">' + moduleIconHtml(m.icon, fallback.icon) + '</button>' +
           '<div class="module-main">' +
             '<input class="module-name-input" data-name-for="' + key + '" maxlength="12" value="' + escAttr(m.name) + '" aria-label="栏目名称" />' +
@@ -1240,6 +1295,50 @@ var cms = {
       var key = input.getAttribute('data-route-for');
       input.addEventListener('change', function () { self.onModuleRouteChange(key, input.value); });
       input.addEventListener('keydown', function (evt) { if (evt.key === 'Enter') { evt.preventDefault(); input.blur(); } });
+    });
+  },
+
+  onModuleDragStart: function (ev, key) {
+    this.dragKey = key;
+    try { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', key); } catch (e) {}
+    var row = ev.currentTarget;
+    if (row && row.classList) row.classList.add('dragging');
+  },
+
+  onModuleDragOver: function (ev) {
+    if (!this.dragKey) return;
+    ev.preventDefault();
+    try { ev.dataTransfer.dropEffect = 'move'; } catch (e) {}
+    var row = ev.currentTarget;
+    var rows = document.querySelectorAll('#module-list .module-row');
+    for (var i = 0; i < rows.length; i++) rows[i].classList.remove('drag-over');
+    if (row && row.classList) row.classList.add('drag-over');
+  },
+
+  onModuleDrop: async function (ev, key) {
+    ev.preventDefault();
+    var from = this.dragKey;
+    this.dragKey = '';
+    document.querySelectorAll('#module-list .module-row').forEach(function (row) {
+      row.classList.remove('drag-over', 'dragging');
+    });
+    if (!from || from === key) return;
+    var order = this.order.slice();
+    var i = order.indexOf(from);
+    var j = order.indexOf(key);
+    if (i < 0 || j < 0) return;
+    order.splice(i, 1);
+    order.splice(j, 0, from);
+    this.order = order;
+    this.renderModules();
+    this.reorderNav();
+    await this.saveModules({}, '栏目顺序已更新', order);
+  },
+
+  onModuleDragEnd: function () {
+    this.dragKey = '';
+    document.querySelectorAll('#module-list .module-row').forEach(function (row) {
+      row.classList.remove('drag-over', 'dragging');
     });
   },
 

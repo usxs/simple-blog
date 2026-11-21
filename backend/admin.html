@@ -36,9 +36,9 @@
         <li class="nav-item-row" data-nav-row="moments"><button class="nav-btn" data-mod="moments" onclick="cms.switchMod('moments')"><span class="nav-label" data-label="moments">碎碎念</span><span class="nav-count" id="count-moments">0</span></button></li>
         <li class="nav-item-row" data-nav-row="comments"><button class="nav-btn" data-mod="comments" onclick="cms.switchMod('comments')"><span class="nav-label">评论审核</span><span class="nav-count" id="count-comments">0</span></button></li>
         <li class="nav-item-row" data-nav-row="tools"><button class="nav-btn" data-mod="tools" onclick="cms.switchMod('tools')"><span class="nav-label" data-label="tools">工具</span><span class="nav-count" id="count-tools">0</span></button></li>
+        <li class="nav-item-row" data-nav-row="probe-config"><button class="nav-btn" data-mod="probe" onclick="cms.switchMod('probe')"><span class="nav-label">探针</span></button></li>
         <li class="nav-item-row" data-nav-row="status"><button class="nav-btn" data-mod="status" onclick="cms.switchMod('status')"><span class="nav-label" data-label="status">状态</span><span class="nav-count" id="count-status">0</span></button></li>
         <li class="nav-item-row" data-nav-row="quirky"><button class="nav-btn" data-mod="quirky" onclick="cms.switchMod('quirky')"><span class="nav-label" data-label="quirky">奇奇怪怪</span><span class="nav-count" id="count-quirky">0</span></button></li>
-        <li class="nav-item-row" data-nav-row="probe-config"><button class="nav-btn" data-mod="probe" onclick="cms.switchMod('probe')"><span class="nav-label">探针</span></button></li>
         <li class="nav-item-row" data-nav-row="settings"><button class="nav-btn" data-mod="settings" onclick="cms.switchMod('settings')"><span class="nav-label">管理</span></button></li>
       </ul>
 
@@ -150,9 +150,9 @@
             <section class="settings-card settings-card--wide">
               <div class="settings-card-head">
                 <h3>前台栏目</h3>
-                <span class="settings-tip">开关即时生效 · 可改名称与图标</span>
+                <span class="settings-tip">拖动左侧 ⋮⋮ 调整顺序 · 开关即时生效 · 可改名称与图标</span>
               </div>
-              <p class="settings-tip">关闭的栏目会从前台侧边栏与移动端导航中隐藏，直接访问会提示「栏目已关闭」。图标支持内置图标与自行上传（PNG / JPG / SVG / WebP）。</p>
+              <p class="settings-tip">关闭的栏目会从前台侧边栏与移动端导航中隐藏，直接访问会提示「栏目已关闭」。拖动可调整先后顺序（前台导航、后台侧边栏同步生效）。图标支持内置图标与自行上传（PNG / JPG / SVG / WebP）。</p>
               <ul class="module-list" id="module-list"></ul>
               <div class="auth-error" id="module-error"></div>
             </section>

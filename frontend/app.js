@@ -136,9 +136,40 @@ function routeToTab(seg) {
 }
 
 // 把后端栏目配置应用到侧边栏 / 移动端导航 / 路由守卫
-function applySiteModules(raw) {
+// 栏目顺序：只保留已知 key、去重，缺的按默认顺序补在末尾
+function normalizeModuleOrder(raw) {
+  var out = [];
+  (Array.isArray(raw) ? raw : []).forEach(function (k) {
+    var key = String(k || '').trim();
+    if (MODULE_KEYS.indexOf(key) !== -1 && out.indexOf(key) === -1) out.push(key);
+  });
+  MODULE_KEYS.forEach(function (key) {
+    if (out.indexOf(key) === -1) out.push(key);
+  });
+  return out;
+}
+
+// 按后台设置调整侧边栏与移动端底栏的先后顺序
+function applyNavOrder(raw) {
+  var order = normalizeModuleOrder(raw);
+  SITE_CONFIG.moduleOrder = order;
+  ['.sidebar-nav', '#mobile-dock'].forEach(function (selector) {
+    var box = document.querySelector(selector);
+    if (!box) return;
+    var items = {};
+    Array.prototype.slice.call(box.querySelectorAll('[data-nav]')).forEach(function (el) {
+      items[el.getAttribute('data-nav')] = el;
+    });
+    order.forEach(function (key) {
+      if (items[key]) box.appendChild(items[key]);
+    });
+  });
+}
+
+function applySiteModules(raw, order) {
   var cfg = normalizeModuleConfig(raw);
   SITE_CONFIG.modules = cfg;
+  if (order) applyNavOrder(order);
   MODULE_KEYS.forEach(function (key) {
     if (key === 'home') return;
     var m = cfg[key];
@@ -243,7 +274,7 @@ SITE_CONFIG.siteReadyPromise = null;
       if (!ssrTitled) {
         document.title = site.title ? String(site.title) : SITE_CONFIG.name;
       }
-      if (site.modules) applySiteModules(site.modules);
+      if (site.modules) applySiteModules(site.modules, site.order);
       if (site.subtitle) {
         SITE_CONFIG.homeBio = String(site.subtitle);
         var bioEl = document.querySelector('.home-bio');
@@ -598,17 +629,61 @@ var commentBox = {
   refreshCaptcha: async function () {
     var qEl = document.getElementById('captcha-question');
     if (!qEl) return;
+    if (this.captchaBusy) return;                                 // 防止连点刷题
+    var waitMs = Number(this.captchaCooldownUntil || 0) - Date.now();
+    if (waitMs > 0) {
+      qEl.textContent = '请等待 ' + Math.ceil(waitMs / 1000) + ' 秒后再换题';
+      return;
+    }
+    this.captchaBusy = true;
+    qEl.setAttribute('data-busy', 'true');
     qEl.textContent = '加载中...';
     try {
       var base = SITE_CONFIG.apiBaseUrl.replace(/\/+$/, '');
       var res = await fetch(base + '/api/captcha?_t=' + Date.now(), { cache: 'no-store' });
+      if (res.status === 429) {
+        var limited = null;
+        try { limited = await res.json(); } catch (e2) {}
+        var retry = Number((limited && limited.retryAfter) || 60);
+        this.captchaCooldownUntil = Date.now() + retry * 1000;
+        qEl.textContent = '换题太频繁，请 ' + retry + ' 秒后再试';
+        return;
+      }
       if (!res.ok) throw new Error('Failed');
       var data = await res.json();
       this.captchaToken = data.token || '';
       qEl.textContent = (data.question || '? + ? =') + ' (点击换一题)';
     } catch (e) {
       qEl.textContent = '验证码加载失败，点击重试';
+    } finally {
+      this.captchaBusy = false;
+      qEl.removeAttribute('data-busy');
     }
+  },
+
+  // 被限流后禁用提交按钮并倒计时，避免用户一直点
+  startSubmitCooldown: function (seconds) {
+    var btnEl = document.getElementById('comment-submit-btn');
+    var msgEl = document.getElementById('comment-feedback');
+    if (!btnEl) return;
+    var left = Math.max(1, Math.ceil(Number(seconds) || 30));
+    var self = this;
+    btnEl.disabled = true;
+    if (this.submitCooldownTimer) clearInterval(this.submitCooldownTimer);
+    var tick = function () {
+      if (left <= 0) {
+        clearInterval(self.submitCooldownTimer);
+        self.submitCooldownTimer = null;
+        btnEl.disabled = false;
+        btnEl.textContent = '发送评论';
+        if (msgEl) msgEl.textContent = '';
+        return;
+      }
+      btnEl.textContent = '请等待 ' + left + ' 秒';
+      left -= 1;
+    };
+    tick();
+    this.submitCooldownTimer = setInterval(tick, 1000);
   },
 
   renderNodeRecursive: function (node, childrenMap, isChildLevel) {
@@ -726,6 +801,7 @@ var commentBox = {
   },
 
   submit: async function () {
+    if (this.submitting) return;                                  // 防连点重复提交
     var authorEl = document.getElementById('comment-author');
     var contactEl = document.getElementById('comment-contact');
     var contentEl = document.getElementById('comment-content');
@@ -749,6 +825,7 @@ var commentBox = {
       return;
     }
 
+    this.submitting = true;
     btnEl.disabled = true;
     msgEl.textContent = '正在提交...';
 
@@ -773,7 +850,11 @@ var commentBox = {
       if (!res.ok || !resData.ok) {
         msgEl.textContent = resData.error || '提交失败，请重试';
         btnEl.disabled = false;
-        this.refreshCaptcha();
+        // 被限流：按后端给的 retryAfter 倒计时，期间不允许再点
+        if (res.status === 429 && resData.retryAfter) {
+          this.startSubmitCooldown(resData.retryAfter);
+        }
+        if (res.status !== 429) this.refreshCaptcha();
         if (answerEl) answerEl.value = '';
         return;
       }
@@ -789,6 +870,8 @@ var commentBox = {
     } catch (err) {
       msgEl.textContent = '网络错误，请稍后再试';
       btnEl.disabled = false;
+    } finally {
+      this.submitting = false;
     }
   }
 };
