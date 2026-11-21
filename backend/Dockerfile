@@ -12,6 +12,9 @@ RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
 COPY server.js admin.js admin.html admin.css markdown.js ./
 COPY backend ./backend
 
+# 让容器内非 root 用户拥有 /app，便于写临时文件（config.json 是单文件挂载，写入走兜底路径）
+RUN chown -R 1000:1000 /app
+
 ENV NODE_ENV=production
 EXPOSE 33001
 

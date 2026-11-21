@@ -48,6 +48,7 @@
 | 评论 | 访客评论 + 验证码 + 后台审核 + 楼中楼回复，支持邮件/站点联系方式（不公开） |
 | SEO | 真实路径路由、文章页 SSR、动态 `sitemap.xml`、`robots.txt`、Open Graph、JSON-LD 结构化数据、IndexNow 即时推送 |
 | 服务器探针 | 可选，读取外部监控接口展示节点状态 |
+| 文章搜索 | 文章列表页搜索框：标题 / 摘要 / 标签模糊匹配，中文按子串、英文支持子序列；输入法组合结束后立即过滤，支持回车与 Esc 清空，列表只更新容器不重建输入框 |
 | 移动端 | ≤860px 自动切单列布局并显示底部悬浮导航，375–430px 窄屏做了专门压缩，六个入口一屏放得下 |
 
 ## 架构
@@ -179,7 +180,8 @@ docker compose logs -f --tail 50
 公开接口（无需登录）：
 
 ```
-GET  /api/sync?module=posts            # 文章列表（含正文，供前端列表与 SSR 使用）
+GET  /api/sync?module=posts            # 文章列表（匿名返回摘要 + ETag；登录后返回正文）
+GET  /api/search?q=<关键词>[&limit=20] # 文章搜索（中文子串 / 英文子序列，返回摘要片段）
 GET  /api/comments?postId=<id>         # 已审核评论
 GET  /api/public/post/<id>             # 单篇文章（供 Pages Functions SSR 抓取）
 GET  /api/site                         # 站点信息（名称/头像/标题/副标题，前台启动时读取）

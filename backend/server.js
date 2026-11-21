@@ -29,6 +29,9 @@ const {
   readArticles,
   readPostComments,
   savePostComments,
+  mutatePostComments,
+  summarizeItem,
+  searchArticles,
   collectCascadeIds,
   readAllCommentsAcrossArticles,
   readMusings,
@@ -148,6 +151,8 @@ const server = http.createServer((req, res) => {
     pathname.startsWith('/api/site') ||
     pathname.startsWith('/api/comments') ||
     pathname.startsWith('/api/sync') ||
+    pathname.startsWith('/api/search') ||
+    pathname.startsWith('/api/public/') ||
     pathname.startsWith('/api/probe-servers') ||
     pathname.startsWith('/img/') ||
     pathname.startsWith('/file/');
@@ -394,7 +399,7 @@ const server = http.createServer((req, res) => {
       body += chunk;
       if (body.length > 32 * 1024) req.destroy();
     });
-    req.on('end', () => {
+    req.on('end', async () => {
       try {
         const data = JSON.parse(body);
 
@@ -433,19 +438,9 @@ const server = http.createServer((req, res) => {
           return res.end(JSON.stringify({ ok: false, error: '目标文章不存在' }));
         }
 
-        const postComments = readPostComments(postId);
         let validParentId = '';
         let validParentAuthor = '';
-
-        if (parentId) {
-          const parentComment = postComments.find(c => String(c.id) === parentId && c.status === 'approved');
-          if (!parentComment) {
-            res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-            return res.end(JSON.stringify({ ok: false, error: '要回复的目标评论不存在或尚未通过审核' }));
-          }
-          validParentId = parentComment.id;
-          validParentAuthor = rawParentAuthor || parentComment.author || '匿名访客';
-        }
+        let parentError = '';
 
         rec.lastSubmit = now;
         rec.lastActive = now;
@@ -469,8 +464,27 @@ const server = http.createServer((req, res) => {
           replyContent: '',
           replyDate: ''
         };
-        postComments.unshift(newComment);
-        savePostComments(postId, postComments);
+        // 读-改-写在写锁里串行执行，避免并发提交互相覆盖掉对方的评论
+        await mutatePostComments(postId, (postComments) => {
+          if (parentId) {
+            const parentComment = postComments.find(c => String(c.id) === parentId && c.status === 'approved');
+            if (!parentComment) {
+              parentError = '要回复的目标评论不存在或尚未通过审核';
+              return { changed: false };
+            }
+            validParentId = parentComment.id;
+            validParentAuthor = rawParentAuthor || parentComment.author || '匿名访客';
+          }
+          newComment.parentId = validParentId;
+          newComment.parentAuthor = validParentAuthor;
+          postComments.unshift(newComment);
+          return { changed: true };
+        });
+
+        if (parentError) {
+          res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+          return res.end(JSON.stringify({ ok: false, error: parentError }));
+        }
 
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ ok: true }));
@@ -640,16 +654,61 @@ const server = http.createServer((req, res) => {
   // 9. 同步接口
   if (req.method === 'GET' && pathname === '/api/sync') {
     const mod = reqUrl.searchParams.get('module') || 'posts';
-    if (mod === 'comments' && !guardAuth(req, res)) return;
+    if (mod === 'comments' && !checkAuth(req)) {
+      res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify({ error: 'Unauthorized' }));
+    }
     const clientVer = reqUrl.searchParams.get('version') || '';
-    const list = getModuleData(mod);
-    const serverVer = getHash(list);
+    const rawList = getModuleData(mod);
 
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    // 列表接口默认只返回摘要，正文留给 /api/public/post/<id>；
+    // 后台（已登录）需要正文编辑，仍返回全文
+    const authed = auth.isAuthenticated(req);
+    const wantFull = authed && reqUrl.searchParams.get('full') !== '0';
+    const list = (mod === 'posts' && !wantFull) ? rawList.map(summarizeItem) : rawList;
+
+    const serverVer = getHash(list);
+    const etag = '"' + (wantFull ? 'f' : 's') + '-' + serverVer + '"';
+    const headers = {
+      'Content-Type': 'application/json; charset=utf-8',
+      'ETag': etag,
+      'Cache-Control': authed ? 'no-store' : 'public, max-age=5'
+    };
+
+    if (String(req.headers['if-none-match'] || '') === etag) {
+      res.writeHead(304, headers);
+      return res.end();
+    }
+
+    res.writeHead(200, headers);
     if (clientVer && clientVer === serverVer) {
       return res.end(JSON.stringify({ updated: false, version: serverVer, data: list }));
     }
     return res.end(JSON.stringify({ updated: true, version: serverVer, data: list }));
+  }
+
+  // 9.4 文章搜索：中文子串 + 英文子序列（模糊），只在服务端内存索引上遍历，不读全盘
+  if (req.method === 'GET' && pathname === '/api/search') {
+    const q = String(reqUrl.searchParams.get('q') || '').trim().slice(0, 120);
+    const limit = Number(reqUrl.searchParams.get('limit')) || 20;
+    let results = [];
+    let totalMatches = 0;
+    if (q) {
+      try {
+        const found = searchArticles(q, limit);
+        results = found.results;
+        totalMatches = found.total;
+      } catch (e) {
+        results = [];
+        totalMatches = 0;
+      }
+    }
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'public, max-age=30',
+      'X-Total-Count': String(totalMatches)
+    });
+    return res.end(JSON.stringify({ ok: true, query: q, count: totalMatches, results: results }));
   }
 
   // 9.5 公开单篇内容端点：供 Cloudflare Pages Functions 服务端渲染文章页使用（无需鉴权，可缓存）

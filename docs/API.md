@@ -52,11 +52,33 @@
 
 ### `GET /api/sync?module=<模块>[&version=<哈希>]`
 
+匿名请求 `module=posts` 时只返回摘要（`id/title/date/tag/mtime/excerpt`），并带 `ETag`：
+带上 `If-None-Match` 命中时返回 `304` 空体，省掉整包传输。登录后（或显式 `full=1`）返回含 `content` 的完整数据。
+
 `module` 取值：`posts` / `moments` / `tools` / `status` / `quirky` / `comments`。
 
 - 除 `comments` 外均为公开，`posts` 的条目包含正文 `content`（前端列表与 SSR 都会用到）；
 - 传 `version` 可做增量判断，命中时返回 `{"updated": false, ...}`；
 - `module=comments` 需要登录，返回含待审核评论的完整列表。
+
+### `GET /api/search?q=<关键词>&limit=<1-50>`
+
+文章搜索。中文按子串匹配，英文支持子序列（打错几个字母也能命中），标题 / 标签 / 正文按权重排序。
+
+- 匿名可访问，`Cache-Control: public, max-age=30`
+- 响应头带 `X-Total-Count`（命中总数，不含分页）
+- 结果只返回摘要片段，正文请走 `/api/public/post/<id>`
+
+```json
+{
+  "ok": true,
+  "query": "缓存",
+  "count": 12,
+  "results": [
+    { "id": "2026-11-20-post", "title": "…", "date": "2026-11-20", "tag": "…", "score": 6, "snippet": "…命中词前后各 48 字…" }
+  ]
+}
+```
 
 ### `GET /api/public/post/<id>`
 

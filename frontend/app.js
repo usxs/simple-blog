@@ -1,10 +1,3 @@
-/* ==========================================================================
- * 站点配置（部署前请按需修改以下字段）
- * - apiBaseUrl: 后端 API 域名，必须与后端容器对外域名一致（含协议）
- * - probeUrl:   可选，外部监控面板地址；留空则探针页不显示「打开监控后台」入口
- * - socials:    社交链接，留空的项会自动隐藏，不会渲染无效链接
- * - whitelistDomains: 评论/内容中允许自动生成链接的域名后缀（防垃圾外链）
- * ========================================================================== */
 var SITE_CONFIG = {
   name: '简单博客',
   owner: '博主',
@@ -285,6 +278,15 @@ var syncClient = {
     } catch (e) {
       this.setIndicator('offline', 'OFFLINE');
     }
+  },
+  // 列表接口只返回摘要，正文按需从公开单篇端点取
+  fetchPost: async function (id) {
+    var base = SITE_CONFIG.apiBaseUrl.replace(/\/+$/, '');
+    var res = await fetch(base + '/api/public/post/' + encodeURIComponent(String(id)) + '?_t=' + Date.now(), { method: 'GET', cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    var payload = await res.json();
+    if (!payload || !payload.post) throw new Error('empty post');
+    return payload.post;
   },
   fetchModule: async function (moduleName) {
     var cached = this.getCache(moduleName);
@@ -812,38 +814,10 @@ var router = {
     var sortedPosts = sortNewestFirst(posts);
     var totalChars = 0;
     for (var i = 0; i < sortedPosts.length; i++) {
-      totalChars += String(sortedPosts[i].content || '').length;
+      totalChars += String(sortedPosts[i].excerpt || sortedPosts[i].content || '').length;
     }
     var days = Math.max(1, Math.floor((Date.now() - new Date(SITE_CONFIG.siteStartDate).getTime()) / 86400000));
-    var q = this.searchQuery.toLowerCase();
-    var filtered = [];
-    for (var j = 0; j < sortedPosts.length; j++) {
-      var p = sortedPosts[j];
-      if (!q || String(p.title || '').toLowerCase().indexOf(q) !== -1 || String(p.content || '').toLowerCase().indexOf(q) !== -1) {
-        filtered.push(p);
-      }
-    }
-
-    var listHtml = '';
-    if (filtered.length) {
-      listHtml = '<ul class="post-list">';
-      for (var k = 0; k < filtered.length; k++) {
-        var item = filtered[k];
-        listHtml +=
-          '<li class="post-row">' +
-            '<a class="post-row-link" href="/post/' + encodeURIComponent(String(item.id)) + '" onclick="router.openPost(\'' + escapeHtml(item.id) + '\');return false;">' +
-              '<div class="post-row-top">' +
-                '<h2 class="post-row-title">' + escapeHtml(item.title) + '</h2>' +
-                '<time class="post-row-date">' + escapeHtml(item.date || '') + '</time>' +
-              '</div>' +
-              '<p class="post-row-firstline">' + escapeHtml(extractFirstLine(item.content)) + '</p>' +
-            '</a>' +
-          '</li>';
-      }
-      listHtml += '</ul>';
-    } else {
-      listHtml = '<div class="empty-box">暂无文章数据</div>';
-    }
+    this.cachedPosts = sortedPosts;
 
     container.innerHTML =
       '<div class="page-wrap-with-aside">' +
@@ -852,10 +826,10 @@ var router = {
             '<span class="subnav-btn">近期发布</span>' +
             '<div class="blog-search">' +
               '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.34-4.34"/></svg>' +
-              '<input type="text" placeholder="搜索文章..." value="' + escapeHtml(this.searchQuery) + '" oninput="router.onSearch(this.value)" />' +
+              '<input type="text" id="blog-search-input" placeholder="搜索文章..." value="' + escapeHtml(this.searchQuery) + '" autocomplete="off" spellcheck="false" aria-label="搜索文章" />' +
             '</div>' +
           '</div>' +
-          listHtml +
+          '<div id="post-list-host"></div>' +
         '</div>' +
         '<aside class="blog-aside">' +
           '<div class="blog-stats">' +
@@ -868,17 +842,91 @@ var router = {
           '</div>' +
         '</aside>' +
       '</div>';
+
+    this.bindPostSearch();
+    this.updatePostList();
+  },
+
+  // 搜索框统一用 addEventListener 绑定：IME 组合期间不触发，组合结束后补一次，
+  // 并支持回车 / Esc，避免内联 oninput 在中文输入时漏掉最后一次输入。
+  bindPostSearch: function () {
+    var input = document.getElementById('blog-search-input');
+    if (!input) return;
+    var self = this;
+    this.imeComposing = false;
+    input.addEventListener('compositionstart', function () {
+      self.imeComposing = true;
+    });
+    input.addEventListener('compositionend', function () {
+      self.imeComposing = false;
+      setTimeout(function () {
+        if (!self.imeComposing) self.onPostSearchInput(input.value, null);
+      }, 0);
+    });
+    input.addEventListener('input', function (evt) {
+      if (self.imeComposing || evt.isComposing) return;
+      self.onPostSearchInput(input.value, null);
+    });
+    input.addEventListener('keydown', function (evt) {
+      if (evt.isComposing || self.imeComposing) return;
+      if (evt.key === 'Enter') {
+        evt.preventDefault();
+        self.onPostSearchInput(input.value, null);
+      } else if (evt.key === 'Escape') {
+        input.value = '';
+        self.onPostSearchInput('', null);
+      }
+    });
+  },
+
+  filterPosts: function (posts, q) {
+    var needle = String(q || '').trim().toLowerCase();
+    if (!needle) return posts;
+    var out = [];
+    for (var i = 0; i < posts.length; i++) {
+      var p = posts[i];
+      var hay = String(p.title || '') + ' ' + String(p.excerpt || p.content || '') + ' ' + String(p.tag || '');
+      if (hay.toLowerCase().indexOf(needle) !== -1) out.push(p);
+    }
+    return out;
+  },
+
+  buildPostRows: function (list) {
+    if (!list.length) return '<div class="empty-box">没有匹配的文章</div>';
+    var html = '<ul class="post-list">';
+    for (var k = 0; k < list.length; k++) {
+      var item = list[k];
+      html +=
+        '<li class="post-row">' +
+          '<a class="post-row-link" href="/post/' + encodeURIComponent(String(item.id)) + '" onclick="router.openPost(\'' + escapeHtml(item.id) + '\');return false;">' +
+            '<div class="post-row-top">' +
+              '<h2 class="post-row-title">' + escapeHtml(item.title) + '</h2>' +
+              '<time class="post-row-date">' + escapeHtml(item.date || '') + '</time>' +
+            '</div>' +
+            '<p class="post-row-firstline">' + escapeHtml(item.excerpt || extractFirstLine(item.content)) + '</p>' +
+          '</a>' +
+        '</li>';
+    }
+    html += '</ul>';
+    return html;
+  },
+
+  updatePostList: function () {
+    var host = document.getElementById('post-list-host');
+    if (!host) return;
+    host.innerHTML = this.buildPostRows(this.filterPosts(this.cachedPosts || [], this.searchQuery));
+  },
+
+  // 输入法组合期间不触发过滤，避免把拼音/候选字当成搜索词，也避免重建输入框
+  onPostSearchInput: function (val, evt) {
+    if (evt && evt.isComposing) return;
+    this.searchQuery = String(val || '');
+    this.updatePostList();
   },
 
   onSearch: function (val) {
-    this.searchQuery = val;
-    var container = document.getElementById('page-content');
-    this.renderPostsView(container, this.cachedPosts);
-    var input = container.querySelector('.blog-search input');
-    if (input) {
-      input.focus();
-      input.setSelectionRange(val.length, val.length);
-    }
+    this.searchQuery = String(val || '');
+    this.updatePostList();
   },
 
   openPost: async function (id) {
@@ -905,6 +953,21 @@ var router = {
     if (!post) {
       this.go('posts');
       return;
+    }
+    // /api/sync 匿名只回摘要（无 content），正文单独取，否则文章页只剩标题
+    if (!post.content) {
+      try {
+        var fullPost = await syncClient.fetchPost(post.id);
+        if (fullPost && fullPost.content) {
+          post = Object.assign({}, post, fullPost);
+          for (var c = 0; c < this.cachedPosts.length; c++) {
+            if (String(this.cachedPosts[c].id) === String(post.id)) {
+              this.cachedPosts[c] = Object.assign({}, this.cachedPosts[c], { content: fullPost.content });
+              break;
+            }
+          }
+        }
+      } catch (e) {}
     }
     this.current = 'post';
     this.syncDock('post');
@@ -1002,14 +1065,11 @@ var router = {
   },
 
   renderProbeView: function (container) {
-    var openPanelHtml = SITE_CONFIG.probeUrl
-      ? '<a href="' + escapeHtml(SITE_CONFIG.probeUrl) + '" target="_blank" rel="noopener noreferrer">打开监控后台 ↗</a>'
-      : '';
     container.innerHTML =
       '<div class="module-header">' +
         '<h1 class="module-title">探针</h1>' +
         '<div class="probe-actions">' +
-          openPanelHtml +
+          '<a href="' + escapeHtml(SITE_CONFIG.probeUrl) + '" target="_blank" rel="noopener noreferrer">打开监控后台 ↗</a>' +
           '<button type="button" onclick="router.refreshProbeView()" aria-label="刷新服务器状态" title="刷新服务器状态">刷新</button>' +
         '</div>' +
       '</div>' +
@@ -1371,6 +1431,8 @@ var router = {
   // 供外部（如后台预览）手动触发
   window.markdownEnhance = function () { scheduleMermaid(); };
 })();
+
+
 
 // 浏览器前进/后退：跟随地址变化重渲染
 window.addEventListener('popstate', function () { router.handlePopState(); });

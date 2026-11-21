@@ -60,6 +60,185 @@ function sanitizeId(rawId) {
   return cleaned || ('post-' + Date.now());
 }
 
+// ---- 原子写：临时名带 pid + 随机串，避免并发写同一文件时踩到同一个 .tmp ----
+// 注意：config.json 这类「单文件 bind mount」不能用 rename 覆盖（会 EBUSY），
+// 目录也不一定有写权限，所以失败时退化为直接覆盖写。
+function writeFileAtomic(file, data, encoding) {
+  const tmp = file + '.' + process.pid + '.' + crypto.randomBytes(4).toString('hex') + '.tmp';
+  try {
+    fs.writeFileSync(tmp, data, encoding || 'utf8');
+    fs.renameSync(tmp, file);
+    return;
+  } catch (e) {
+    try { fs.unlinkSync(tmp); } catch (ignored) {}
+    // 兜底：直接写目标文件（非原子，但保证可用；单文件挂载场景走这里）
+    fs.writeFileSync(file, data, encoding || 'utf8');
+  }
+}
+
+// ---- 进程内串行队列：同一个 key 的「读-改-写」排队执行，避免互相覆盖 ----
+const writeChains = new Map();
+function withWriteLock(key, task) {
+  const prev = writeChains.get(key) || Promise.resolve();
+  const run = prev.then(() => task(), () => task());
+  const tail = run.then(() => {}, () => {});
+  writeChains.set(key, tail);
+  tail.then(() => {
+    if (writeChains.get(key) === tail) writeChains.delete(key);
+  });
+  return run;
+}
+
+// ---- 解析缓存：只重新解析真正变过的 .md（mtime + size 判定）----
+const mdCache = new Map();
+
+function parseMdFileCached(filePath, fileId) {
+  try {
+    const stat = fs.statSync(filePath);
+    const hit = mdCache.get(filePath);
+    if (hit && hit.mtimeMs === stat.mtimeMs && hit.size === stat.size && hit.fileId === fileId) {
+      return Object.assign({}, hit.parsed);
+    }
+    const parsed = parseMdFile(filePath, fileId);
+    if (!parsed) {
+      mdCache.delete(filePath);
+      return null;
+    }
+    mdCache.set(filePath, { mtimeMs: stat.mtimeMs, size: stat.size, fileId: fileId, parsed: parsed });
+    return Object.assign({}, parsed);
+  } catch (e) {
+    mdCache.delete(filePath);
+    return null;
+  }
+}
+
+function pruneMdCache(alivePaths) {
+  if (mdCache.size <= alivePaths.size * 2 + 32) return;
+  mdCache.forEach((_v, key) => {
+    if (!alivePaths.has(key)) mdCache.delete(key);
+  });
+}
+
+// 列表用摘要：去掉正文，只留首行/前 N 个字符
+function stripMarkdownForExcerpt(text) {
+  return String(text || '')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/^\s{0,3}>\s?/gm, '')
+    .replace(/^\s*[-*+]\s+/gm, '')
+    .replace(/[`*_~]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function excerptOf(content, max) {
+  const text = stripMarkdownForExcerpt(content);
+  const limit = Number(max) || 140;
+  return text.length > limit ? text.slice(0, limit) + '…' : text;
+}
+
+function summarizeItem(item) {
+  const out = {
+    id: item.id,
+    title: item.title,
+    date: item.date,
+    tag: item.tag,
+    mtime: item.mtime,
+    excerpt: excerptOf(item.content, 140)
+  };
+  return out;
+}
+
+// ---- 搜索：中文按子串，英文/数字额外支持子序列（模糊）----
+function searchNormalize(text) {
+  return String(text || '').toLowerCase().replace(/[\s\u3000]+/g, '');
+}
+
+function isSubsequence(needle, haystack) {
+  if (!needle) return true;
+  let i = 0;
+  for (let j = 0; j < haystack.length && i < needle.length; j++) {
+    if (haystack[j] === needle[i]) i++;
+  }
+  return i === needle.length;
+}
+
+function snippetAround(text, term, radius) {
+  const plain = stripMarkdownForExcerpt(text);
+  const lower = plain.toLowerCase();
+  const idx = lower.indexOf(term.toLowerCase());
+  const r = radius || 48;
+  if (idx === -1) return plain.slice(0, r * 2) + (plain.length > r * 2 ? '…' : '');
+  const start = Math.max(0, idx - r);
+  const end = Math.min(plain.length, idx + term.length + r);
+  return (start > 0 ? '…' : '') + plain.slice(start, end) + (end < plain.length ? '…' : '');
+}
+
+function scorePost(post, terms) {
+  const title = searchNormalize(post.title);
+  const tag = searchNormalize(post.tag);
+  const body = searchNormalize(post.content);
+  const bodyRaw = String(post.content || '').toLowerCase();
+  let score = 0;
+  const hits = [];
+
+  for (let i = 0; i < terms.length; i++) {
+    const t = terms[i];
+    let hit = 0;
+    if (title === t) hit += 60;
+    else if (title.indexOf(t) !== -1) hit += 24;
+    else if (isSubsequence(t, title) && /^[a-z0-9#+._-]+$/.test(t)) hit += 10;
+    if (tag.indexOf(t) !== -1) hit += 8;
+    if (body.indexOf(t) !== -1) hit += 6;
+    else if (isSubsequence(t, body) && /^[a-z0-9#+._-]+$/.test(t)) hit += 2;
+    if (!hit && bodyRaw.indexOf(t) !== -1) hit += 3;
+    if (hit) hits.push(t);
+    score += hit;
+  }
+
+  return {
+    score: score,
+    matchedAll: hits.length === terms.length,
+    firstTerm: hits[0] || terms[0]
+  };
+}
+
+function searchArticles(query, limit) {
+  const q = String(query || '').trim();
+  if (!q) return [];
+  const terms = searchNormalize(q).split(/[,，|]+/).filter(Boolean);
+  if (!terms.length) return [];
+
+  const posts = readArticles();
+  const scored = [];
+  for (let i = 0; i < posts.length; i++) {
+    const r = scorePost(posts[i], terms);
+    if (r.score <= 0) continue;
+    scored.push({ post: posts[i], r: r });
+  }
+
+  let picked = scored.filter(x => x.r.matchedAll);
+  if (!picked.length) picked = scored;
+
+  picked.sort((a, b) => {
+    if (b.r.score !== a.r.score) return b.r.score - a.r.score;
+    return (Number(b.post.mtime) || 0) - (Number(a.post.mtime) || 0);
+  });
+
+  const max = Math.min(Math.max(Number(limit) || 20, 1), 50);
+  const results = picked.slice(0, max).map(x => ({
+    id: x.post.id,
+    title: x.post.title,
+    date: x.post.date,
+    tag: x.post.tag,
+    score: x.r.score,
+    snippet: snippetAround(x.post.content, x.r.firstTerm, 48)
+  }));
+  return { total: picked.length, results: results };
+}
+
 // date 字段 → 可比毫秒数（北京时间锚定）；解析失败回退 mtime
 function dateMsOf(item) {
   const raw = String((item && item.date) || '').trim();
@@ -91,7 +270,7 @@ function parseMdFile(filePath, fileId) {
     const raw = fs.readFileSync(filePath, 'utf8').replace(/^\uFEFF/, '');
     const stat = fs.statSync(filePath);
     const fallbackDate = cnDateOf(stat.mtime);
-    const meta = { id: fileId, title: fileId, date: fallbackDate, tag: '', mtime: stat.mtimeMs };
+    const meta = { id: fileId, title: fileId, date: fallbackDate, tag: '', mtime: Math.round(stat.mtimeMs) };
     let body = raw;
 
     const match = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
@@ -114,7 +293,7 @@ function parseMdFile(filePath, fileId) {
       title: String(meta.title || fileId),
       date: String(meta.date || fallbackDate),
       tag: String(meta.tag || ''),
-      mtime: Number(meta.mtime) || stat.mtimeMs,
+      mtime: Math.round(Number(meta.mtime) || stat.mtimeMs),
       content: String(body || '')
     };
   } catch (err) {
@@ -164,9 +343,9 @@ migrateLegacyArticles();
 function readArticles() {
   try {
     if (!fs.existsSync(ARTICLE_DIR)) return [];
-    migrateLegacyArticles();
     const entries = fs.readdirSync(ARTICLE_DIR, { withFileTypes: true });
     const list = [];
+    const alive = new Set();
 
     for (let i = 0; i < entries.length; i++) {
       const ent = entries[i];
@@ -176,11 +355,14 @@ function readArticles() {
         const mdFiles = fs.readdirSync(subDir).filter(f => f.toLowerCase().endsWith('.md'));
         if (mdFiles.length > 0) {
           const targetMd = mdFiles.includes(folderName + '.md') ? (folderName + '.md') : mdFiles[0];
-          const parsed = parseMdFile(path.join(subDir, targetMd), folderName);
+          const mdPath = path.join(subDir, targetMd);
+          alive.add(mdPath);
+          const parsed = parseMdFileCached(mdPath, folderName);
           if (parsed) list.push(parsed);
         }
       }
     }
+    pruneMdCache(alive);
     return sortNewestFirst(list);
   } catch (e) {
     return [];
@@ -203,8 +385,18 @@ function savePostComments(postId, commentsList) {
   const safeId = sanitizeId(postId);
   const subDir = path.join(ARTICLE_DIR, safeId);
   if (!fs.existsSync(subDir)) fs.mkdirSync(subDir, { recursive: true });
-  const cmtPath = path.join(subDir, 'comments.json');
-  fs.writeFileSync(cmtPath, JSON.stringify(commentsList, null, 2), 'utf8');
+  writeFileAtomic(path.join(subDir, 'comments.json'), JSON.stringify(commentsList, null, 2));
+}
+
+// 在写锁里做「读-改-写」，避免并发请求互相覆盖掉评论
+function mutatePostComments(postId, mutator) {
+  const safeId = sanitizeId(postId);
+  return withWriteLock('comments:' + safeId, () => {
+    const list = readPostComments(safeId);
+    const result = mutator(list) || {};
+    if (result.changed !== false) savePostComments(safeId, list);
+    return result;
+  });
 }
 
 // 递归收集某条评论及其所有子孙评论 ID，方便级联删除
@@ -276,7 +468,7 @@ function getConfig() {
 }
 
 function saveConfig(cfg) {
-  fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2), 'utf8');
+  writeFileAtomic(CONFIG_FILE, JSON.stringify(cfg, null, 2));
 }
 
 function getHash(data) {
@@ -310,5 +502,11 @@ module.exports = {
   getConfig,
   saveConfig,
   getHash,
-  getModuleData
+  getModuleData,
+  writeFileAtomic,
+  withWriteLock,
+  mutatePostComments,
+  summarizeItem,
+  excerptOf,
+  searchArticles
 };
