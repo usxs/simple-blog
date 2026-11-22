@@ -275,6 +275,7 @@ button, input, textarea {
   width: 100%;
   max-width: 960px;
   min-width: 0;
+  margin: 0 auto;
   padding: 40px 40px 80px;
 }
 
@@ -300,12 +301,18 @@ button, input, textarea {
 
 .sidebar-site-footer .footer-copy {
   display: block;
-  line-height: 1.6;
+  line-height: 1.55;
+  font-size: 10px;
+  letter-spacing: -0.15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sidebar-site-footer .footer-rights {
-  display: inline-block;
+  display: inline;
   white-space: nowrap;
+  opacity: .85;
 }
 
 .sidebar-site-footer .footer-meta strong {
@@ -331,7 +338,7 @@ button, input, textarea {
   height: 24px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   text-decoration: none;
   transition: color 0.15s ease, border-color 0.15s ease;
 }
@@ -350,8 +357,9 @@ button, input, textarea {
 }
 
 .footer-badge-icon svg {
-  width: 13px;
-  height: 13px;
+  width: 15px;
+  height: 15px;
+  display: block;
 }
 
 .footer-badge-tip {
