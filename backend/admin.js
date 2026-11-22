@@ -10,7 +10,7 @@ function getVerifiedBadgeSvg() {
 }
 
 function syncAvatarFavicon() {
-  var avatarEl = document.getElementById('site-avatar');
+  var avatarEl = document.getElementById('admin-avatar');
   var charText = String(avatarEl ? avatarEl.textContent : 'S').trim().slice(0, 2);
   var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   var bg = isDark ? '%23F4F4F5' : '%23141416';
@@ -22,6 +22,14 @@ function syncAvatarFavicon() {
     '</text></svg>';
   var link = document.getElementById('dynamic-favicon');
   if (link) link.href = 'data:image/svg+xml,' + svg;
+}
+
+// 侧边栏头像文字 + favicon 同步（头像文字最多 2 字，空则回退 S）
+function setSidebarAvatar(text) {
+  var el = document.getElementById('admin-avatar');
+  var value = String(text || '').trim().slice(0, 2);
+  if (el) el.textContent = value || 'S';
+  syncAvatarFavicon();
 }
 
 // 把 date 解析为毫秒（北京时间锚定），失败回退 mtime —— 与前台排序保持一致
@@ -1092,6 +1100,7 @@ var cms = {
       var site = data.site || {};
       document.getElementById('site-name').value = site.name || '';
       document.getElementById('site-avatar').value = site.avatarText || '';
+      setSidebarAvatar(site.avatarText || site.name || '');
       document.getElementById('site-title').value = site.title || '';
       document.getElementById('site-subtitle').value = site.subtitle || '';
       this.applyModuleConfig(site.modules, site.order);
@@ -1510,6 +1519,7 @@ var cms = {
         var site = out.site || payload;
         document.getElementById('site-name').value = site.name;
         document.getElementById('site-avatar').value = site.avatarText;
+        setSidebarAvatar(site.avatarText || site.name);
         document.getElementById('site-title').value = site.title;
         document.getElementById('site-subtitle').value = site.subtitle;
         self.notify('站点信息已保存，前台刷新后生效');

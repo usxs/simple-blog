@@ -3,6 +3,12 @@
 本项目的所有重要变更记录在此文件中，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.7.2] - 2026-11-22
+
+### 修复
+
+- 后台「管理 → 站点信息」修改头像文字后保存不生效：侧边栏头像与表单输入框使用了同一个 `id="site-avatar"`，`getElementById` 取到的是侧边栏的 `div`，读到的始终是旧值。已把侧边栏头像改为 `id="admin-avatar"`，保存后侧边栏头像与站点图标（favicon）同步更新
+
 ## [1.7.1] - 2026-11-22
 
 ### 文档
