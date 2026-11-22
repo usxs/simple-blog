@@ -29,3 +29,6 @@ backend/file/*
 Thumbs.db
 .idea/
 .vscode/
+
+# MkDocs 构建产物
+site/

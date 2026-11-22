@@ -1,0 +1,85 @@
+site_name: 简单博客
+site_description: Cloudflare Pages + 自托管 Node 后端的极简个人博客系统
+site_url: https://usxs.github.io/simple-blog/
+repo_url: https://github.com/usxs/simple-blog
+repo_name: usxs/simple-blog
+edit_uri: edit/main/handbook/
+docs_dir: handbook
+copyright: MIT License · simple-blog contributors
+
+theme:
+  name: material
+  language: zh
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: black
+      accent: grey
+      toggle:
+        icon: material/weather-night
+        name: 切换到深色
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: grey
+      toggle:
+        icon: material/weather-sunny
+        name: 切换到浅色
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.inlinehilite
+  - toc:
+      permalink: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify {kwds: {case: lower}}
+
+plugins:
+  - search
+
+nav:
+  - 首页: index.md
+  - 开始使用:
+      - 部署前准备: start/prerequisites.md
+      - 部署后端: start/backend.md
+      - 部署前端: start/frontend.md
+      - 域名与 HTTPS: start/https.md
+      - 搜索引擎与 SEO: start/seo.md
+  - 使用手册:
+      - 登录与后台: guide/admin.md
+      - 写文章与瞬间: guide/content.md
+      - 评论与审核: guide/comments.md
+      - 友链: guide/links.md
+      - 通知推送: guide/notify.md
+      - 安全设置: guide/security.md
+      - 站点配置: guide/site.md
+  - 参考:
+      - 环境变量: ref/env.md
+      - 接口速查: ref/api.md
+      - 数据与目录: ref/data.md
+      - Docker 镜像: ref/docker.md
+  - 运维:
+      - 备份与升级: ops/backup.md
+      - 常见问题: ops/faq.md
+      - 排错手册: ops/troubleshooting.md
+  - 安全说明: security.md
+  - 更新日志: changelog.md

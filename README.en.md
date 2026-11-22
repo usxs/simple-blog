@@ -12,6 +12,8 @@
 [![Stars](https://img.shields.io/github/stars/usxs/simple-blog?logo=github&logoColor=white)](https://github.com/usxs/simple-blog/stargazers)
 [![Last commit](https://img.shields.io/github/last-commit/usxs/simple-blog?logo=git&logoColor=white)](https://github.com/usxs/simple-blog/commits/main)
 
+**Docs**: <https://usxs.github.io/simple-blog/> (deployment guide, handbook, FAQ)
+
 A minimal, self-hosted personal blog: **Cloudflare Pages static frontend + self-hosted Node backend**.
 
 The frontend is a build-free static SPA (HTML/CSS/vanilla JS). Pages Functions render each article at the edge so search engines always receive the full text in the HTML. The backend is a zero-framework Node service handling login, content management, image uploads and comments — everything is stored as Markdown / JSON files, so moving to another machine is just copying a directory.

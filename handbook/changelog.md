@@ -1,0 +1,21 @@
+# 更新日志
+
+完整、逐条的变更记录在仓库根目录的 [`CHANGELOG.md`](https://github.com/usxs/simple-blog/blob/main/CHANGELOG.md)。
+
+## 近期版本
+
+| 版本 | 要点 |
+| --- | --- |
+| 1.15.0 | 后端镜像发布到 Docker Hub；新增 `docker-compose.hub.yml` 与 GitHub Actions 自动构建 |
+| 1.14.0 | Bark 推送可读性、友链驳回原因、回复称呼、后台入口改 401 |
+| 1.13.x | 友链模块、通知推送（邮件 + Bark + 模板）、可改后台入口、去顶部进度条、加载动效 |
+| 1.12.0 | 移动端液态玻璃底栏（滚动自动隐藏）、页面过渡与骨架屏 |
+| 1.11.x | 管理页重排与二级菜单、间距统一、卡片标题对齐 |
+| 1.10.x | 移除评论崩溃隐患、CORS 修复、栏目自定义路径、部署版本徽标 |
+| 1.9.x | 页脚备案与社交链接、管理页重做 |
+| 1.8.0 | 评论防刷、拖拽排序、文章排序统一 |
+| 1.7.x | 站点配置本地缓存、首屏不等待后端、英文 README |
+| 1.6.0 及更早 | 账密登录、2FA、Passkey、SEO（SSR / sitemap / IndexNow）、WebP 上传、Markdown 增强 |
+
+!!! tip "订阅更新"
+    GitHub 仓库右上角 **Watch → Custom → Releases**，有新版本会收到通知。
