@@ -1,7 +1,7 @@
 'use strict';
 
-// 碎碎念 → Telegram 频道同步
-// 参考 halo-plugin-telegram-moment：新建碎碎念时发到频道，编辑时重发（先删旧消息），删除时撤回。
+// 瞬间 → Telegram 频道同步
+// 参考 halo-plugin-telegram-moment：新建瞬间时发到频道，编辑时重发（先删旧消息），删除时撤回。
 // 配置存 data/telegram.json（0600），消息映射存 data/telegram-map.json。
 
 const fs = require('fs');
@@ -129,7 +129,7 @@ function api(cfg, method, payload) {
   });
 }
 
-// 把 Markdown 碎碎念压成适合发频道的纯文本
+// 把 Markdown 瞬间压成适合发频道的纯文本
 function toPlainText(markdown) {
   let text = String(markdown || '');
   text = text.replace(/```[a-zA-Z]*\n([\s\S]*?)```/g, function (_m, code) { return code.trim(); });
@@ -228,11 +228,11 @@ function readMap() {
   return readJson(MAP_FILE, {});
 }
 
-// 新建 / 编辑碎碎念：先撤回旧消息，再发新的（编辑后内容与图片都可能变，重发最稳）
+// 新建 / 编辑瞬间：先撤回旧消息，再发新的（编辑后内容与图片都可能变，重发最稳）
 async function syncMoment(moment) {
   const cfg = getConfig();
   if (!cfg.enabled || !cfg.botToken || !cfg.chatId) return { ok: false, skipped: true };
-  if (!moment || !moment.id) return { ok: false, skipped: true, error: '缺少碎碎念 ID' };
+  if (!moment || !moment.id) return { ok: false, skipped: true, error: '缺少瞬间 ID' };
 
   const map = readMap();
   const old = map[moment.id];
@@ -246,7 +246,7 @@ async function syncMoment(moment) {
   return { ok: ids.length > 0, messageIds: ids };
 }
 
-// 删除碎碎念：撤回频道里的消息
+// 删除瞬间：撤回频道里的消息
 async function forgetMoment(momentId) {
   const cfg = getConfig();
   const map = readMap();
@@ -267,7 +267,7 @@ async function testConnection() {
   const me = await api(cfg, 'getMe', {});
   const msg = await api(cfg, 'sendMessage', {
     chat_id: cfg.chatId,
-    text: '✅ 碎碎念同步已连通\n这是一条来自后台「碎碎念同步」的测试消息。',
+    text: '✅ 瞬间同步已连通\n这是一条来自后台「瞬间同步」的测试消息。',
     disable_notification: true
   });
   return {

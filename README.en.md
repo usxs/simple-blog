@@ -14,28 +14,63 @@ The frontend is a build-free static SPA (HTML/CSS/vanilla JS). Pages Functions r
 
 > Taken from a locally running instance with demo data. The site ships light and dark themes that follow your device / system setting.
 
-| Frontend | Admin |
+### Front end
+
+| Home | Post list |
 | --- | --- |
 | ![Home](docs/screenshots/home.png) | ![Post list](docs/screenshots/posts.png) |
-| <sub>Home</sub> | <sub>Post list: newest first, searchable, stats on the right</sub> |
+| <sub>Home: avatar, one-line bio and social links; node status and filing badges in the sidebar</sub> | <sub>Post list: newest first, fuzzy search over title / excerpt / tags</sub> |
+
+| Post detail | Comments |
+| --- | --- |
 | ![Post detail](docs/screenshots/article.png) | ![Comments](docs/screenshots/comments.png) |
-| <sub>Post detail: Markdown rendering, code blocks, MIT notice</sub> | <sub>Comments: arithmetic captcha, threaded replies</sub> |
+| <sub>Post detail: Markdown rendering, language label and line numbers, MIT notice</sub> | <sub>Comments: arithmetic captcha, threaded replies, aligned with the article</sub> |
+
+| Moments | Links |
+| --- | --- |
+| ![Moments](docs/screenshots/moment.png) | ![Links](docs/screenshots/links.png) |
+| <sub>Moments: short notes, newest first; can be mirrored to a Telegram channel</sub> | <sub>Links: falls back to the first character when no icon is given</sub> |
+
+| Apply for a link |
+| --- |
+| ![Apply for a link](docs/screenshots/links-apply.png) |
+| <sub>Apply: URL, name, icon URL and an optional email — nothing is uploaded to your server</sub> |
+
+### Admin
+
+| Login | Posts |
+| --- | --- |
 | ![Login](docs/screenshots/admin-login.png) | ![Admin](docs/screenshots/admin.png) |
-| <sub>Admin login: password + server-side session, 2FA optional</sub> | <sub>Admin: create/edit posts, upload images, moderate comments</sub> |
+| <sub>Login: password + server-side session, optional 2FA and passkeys</sub> | <sub>Posts: Markdown editing and preview, image upload, comment moderation</sub> |
+
+| Links review | Notifications |
+| --- | --- |
+| ![Links review](docs/screenshots/admin-links.png) | ![Notifications](docs/screenshots/admin-notify.png) |
+| <sub>Links review: pending / approved / rejected, reject with a reason, add links manually</sub> | <sub>Notifications: SMTP mail and Bark, with per-channel switches for the site owner</sub> |
+
+| Template editor | Moment sync |
+| --- | --- |
+| ![Template editor](docs/screenshots/admin-notify-templates.png) | ![Moment sync](docs/screenshots/admin-telegram.png) |
+| <sub>Template editor: eight templates in three groups, variables allowed</sub> | <sub>Moment sync: posts to a Telegram channel, re-sends on edit, deletes on removal</sub> |
+
+| Settings (site & sections) | Account security |
+| --- | --- |
 | ![Settings](docs/screenshots/admin-settings.png) | ![Account security](docs/screenshots/admin-settings-account.png) |
-| <sub>Settings: site info and front-end sections (toggle / rename / path / icon)</sub> | <sub>Account security: username, 2FA, passkeys, sessions</sub> |
+| <sub>Settings: site info, sections, footer filings, social links and admin path</sub> | <sub>Account security: username, 2FA, passkeys, sessions</sub> |
 
 ### Mobile
 
-On phones the sidebar collapses into a **floating bottom navigation** and the current page is highlighted automatically. Article text, code blocks, the comment form and the captcha all reflow — no horizontal scrolling or zooming. Widths from 375px (iPhone SE) to 430px get extra-compressed spacing so all six entries fit on one row.
+On phones the sidebar collapses into a **liquid-glass bottom bar** that hides on scroll down and returns on scroll up (except on the home page); the current section is marked by a sliding capsule. Spacing is compressed from 375px (iPhone SE) to 430px so all eight entries fit on one row — article text, code blocks, the comment form and the captcha all reflow without horizontal scrolling.
 
 | Mobile home | Mobile post list |
 | --- | --- |
 | ![Mobile home](docs/screenshots/mobile-home.png) | ![Mobile post list](docs/screenshots/mobile-posts.png) |
-| Mobile post detail | Mobile comments |
-| ![Mobile post](docs/screenshots/mobile-article.png) | ![Mobile comments](docs/screenshots/mobile-comments.png) |
+| <sub>Glass bottom bar with a sliding capsule</sub> | <sub>Single-column cards with excerpts and tags</sub> |
 
----
+| Mobile post detail | Mobile links |
+| --- | --- |
+| ![Mobile post](docs/screenshots/mobile-article.png) | ![Mobile links](docs/screenshots/mobile-links.png) |
+| <sub>Article body and code blocks reflow to the width</sub> | <sub>One-card-per-row list with the apply button on top</sub> |
 
 ## Features
 
@@ -54,7 +89,7 @@ On phones the sidebar collapses into a **floating bottom navigation** and the cu
 | Details | A compact “back to top” button appears once a page is longer than the viewport; the admin sidebar submenu opens on hover and can be pinned via the arrow |
 | Server probe | The admin sidebar "Probe" page can switch data sources: CF-Server-Monitor (`/api/servers`) or the minimal monitor probe (`/api/nodes`); both are normalized into the same cards |
 | Section toggles | Decide per section whether it appears on the frontend ("Settings → Sections"); disabled sections are hidden from the nav and their URLs show a "closed" placeholder page |
-| Section customization | Rename (≤ 12 chars), change the URL path (e.g. `/moments` → `/diary`), pick one of 16 built-in icons or upload your own PNG / JPG / SVG / WebP |
+| Section customization | Rename (≤ 12 chars), change the URL path (e.g. `/moment` → `/diary`), pick one of 16 built-in icons or upload your own PNG / JPG / SVG / WebP |
 | Section ordering | Drag the ⋮⋮ handle in "Settings → Sections"; desktop sidebar, mobile dock and admin sidebar all follow the new order (persisted in `data/site.json`) |
 | Custom paths | Sections can use custom paths such as `/diary`; old URLs keep working and redirect, and nav links, `sitemap.xml` and SSR metadata follow the new path |
 | Footer & filings | ICP / police / Moe-ICP filing numbers are editable in the admin (empty = hidden). The public site shows icon-only badges: hover to read the number, click to open the official lookup page. The `© year name · All Rights Reserved.` line has its own on/off switch. Everything sits at the bottom of the sidebar and is hidden below 860px; the monochrome icons follow the light/dark theme |

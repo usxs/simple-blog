@@ -70,7 +70,7 @@ var SCHEMAS = {
     ]
   },
   moments: {
-    label: '碎碎念',
+    label: '瞬间',
     storageHint: '存储: ./Musings/*.md | 图片: ./img/日期/ | 文件: ./file/日期/',
     fields: [
       { key: 'tag', label: '标签 (可选)', type: 'text', placeholder: '例如：日常 / 折腾' },
@@ -156,7 +156,7 @@ var MODULE_ICON_SVGS = {
 var MODULE_FALLBACK = {
   home: { name: '首页', icon: 'home' },
   posts: { name: '文章', icon: 'book' },
-  moments: { name: '碎碎念', icon: 'message' },
+  moments: { name: '瞬间', icon: 'message' },
   links: { name: '友链', icon: 'link' },
   tools: { name: '工具', icon: 'wrench' },
   probe: { name: '探针', icon: 'activity' },
@@ -1844,10 +1844,10 @@ var cms = {
       badge.setAttribute('data-on', ready ? 'true' : 'false');
     }
     if (status) {
-      if (!c.enabled) status.textContent = '开关关闭时不会同步任何碎碎念。';
+      if (!c.enabled) status.textContent = '开关关闭时不会同步任何瞬间。';
       else if (!c.hasToken) status.textContent = '还差 Bot Token，填好并保存后开始同步。';
       else if (!c.chatId) status.textContent = '还差频道 / 会话 ID。';
-      else status.textContent = '已同步 ' + (synced || 0) + ' 条碎碎念；新建、编辑会重发，删除会撤回。';
+      else status.textContent = '已同步 ' + (synced || 0) + ' 条瞬间；新建、编辑会重发，删除会撤回。';
     }
   },
 
@@ -1866,7 +1866,7 @@ var cms = {
     if (tokenVal) payload.botToken = tokenVal;
     this.api('/api/admin/telegram', { method: 'POST', body: payload }).then(function (res) {
       cms.renderTelegram(res.config, res.synced);
-      cms.notify('碎碎念同步设置已保存');
+      cms.notify('瞬间同步设置已保存');
       if (status) status.textContent = '已保存。' + (res.config && res.config.enabled ? '可以点「发送测试消息」验证。' : '');
     }).catch(function (e) {
       if (err) err.textContent = e.message || '保存失败';

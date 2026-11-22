@@ -30,7 +30,7 @@
     "modules": {
       "home":    { "enabled": true,  "name": "首页",     "icon": "home",     "route": "" },
       "posts":   { "enabled": true,  "name": "文章",     "icon": "book",     "route": "posts" },
-      "moments": { "enabled": true,  "name": "碎碎念",   "icon": "message",  "route": "moments" },
+      "moments": { "enabled": true,  "name": "瞬间",   "icon": "message",  "route": "moment" },
       "tools":   { "enabled": true,  "name": "工具",     "icon": "wrench",   "route": "tools" },
       "probe":   { "enabled": true,  "name": "探针",     "icon": "activity", "route": "probe" },
       "status":  { "enabled": true,  "name": "状态",     "icon": "heart",    "route": "status" },
@@ -268,13 +268,13 @@ POST /api/admin/site
 | `GET /api/admin/indexnow` | 读取 IndexNow 配置：`{key, keyLocation, valid, enabled, source:'file'\|'env'\|'none', fileName}` |
 | `POST /api/admin/indexnow` | `{key, keyLocation?}` 保存密钥（`key` 为空即关闭推送）；密钥需 8–64 位字母数字或短横线 |
 | `POST /api/admin/indexnow/verify` | 抓取 `keyLocation` 校验文件内容；未部署时返回「这个地址返回的是网页…」或「文件内容与密钥不一致」 |
-| `GET /api/admin/telegram` | 读取碎碎念同步配置：`{enabled, chatId, siteUrl, silent, hasToken, botTokenMasked, updatedAt}`，附带 `synced`（已同步条数） |
+| `GET /api/admin/telegram` | 读取瞬间同步配置：`{enabled, chatId, siteUrl, silent, hasToken, botTokenMasked, updatedAt}`，附带 `synced`（已同步条数） |
 | `POST /api/admin/telegram` | `{enabled, botToken?, chatId, siteUrl?, silent?}`，`botToken` 省略表示不修改；`botToken` 只返回掩码 |
 | `POST /api/admin/telegram/test` | 校验 Bot 并往频道发一条测试消息：`{ok, botUsername, messageId}`；错误会翻成中文原因 |
 
 IndexNow 配置优先读取 `data/indexnow.json`（后台写入），没有再回落到环境变量 `INDEXNOW_KEY` / `INDEXNOW_KEY_LOCATION`；配置变化后不需要重启，下一次发布 / 删除文章即生效。
 
-碎碎念同步：开启后 `POST /api/save`（`module=moments`）写盘成功会在后台异步发送到 Telegram 频道，`POST /api/delete`（`module=moments`）会撤回对应消息。发送失败只写日志、不影响保存结果。配置存 `data/telegram.json`（0600），消息映射存 `data/telegram-map.json`；编辑碎碎念采用「先撤回旧消息再发新的」策略，保证图片变化也能同步。
+瞬间同步：开启后 `POST /api/save`（`module=moments`）写盘成功会在后台异步发送到 Telegram 频道，`POST /api/delete`（`module=moments`）会撤回对应消息。发送失败只写日志、不影响保存结果。配置存 `data/telegram.json`（0600），消息映射存 `data/telegram-map.json`；编辑瞬间采用「先撤回旧消息再发新的」策略，保证图片变化也能同步。
 
 会话状态判定：最近 3 分钟内有请求的记为 `online`，否则 `offline`；被踢下线、主动退出、过期归档的进入 `history`（保留最近 80 条）。黑名单命中后，登录接口返回 403「该设备或 IP 已被禁止登录」。
 

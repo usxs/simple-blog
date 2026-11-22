@@ -8,7 +8,7 @@ const API_BASE = 'https://api.example.com';
 const DEFAULT_MODULES = {
   posts:   { name: '文章',   route: 'posts',   desc: '全部文章列表：网络基础设施、容器化部署、系统架构与日常折腾记录。' },
   links: { name: '友链', route: 'links', desc: '友链：期待与你相遇，这里收藏了一些认真维护的小站。' },
-  moments: { name: '碎碎念', route: 'moments', desc: '动态与随想：日常记录、即时想法与生活片段。' },
+  moments: { name: '瞬间', route: 'moment', desc: '动态与随想：日常记录、即时想法与生活片段。' },
   tools:   { name: '工具',   route: 'tools',   desc: '实用工具集：开发与运维中常用的在线小工具。' },
   probe:   { name: '探针',   route: 'probe',   desc: '服务器探针：实时查看各节点在线状态、负载与网络延迟。' },
   status:  { name: '状态',   route: 'status',  desc: '站点状态：各服务可用性与运行状况一览。' },

@@ -49,7 +49,7 @@ var ICON_SVGS = {
 var ICON_FALLBACK = {
   home: { name: '首页', icon: 'home' },
   posts: { name: '文章', icon: 'book' },
-  moments: { name: '碎碎念', icon: 'message' },
+  moments: { name: '瞬间', icon: 'message' },
   tools: { name: '工具', icon: 'wrench' },
   probe: { name: '探针', icon: 'activity' },
   status: { name: '状态', icon: 'heart' },
@@ -113,11 +113,13 @@ function setNavIcon(el, icon, fallbackId) {
   old.parentNode.replaceChild(node, old);
 }
 
-// 栏目访问路径（可在后台「管理 → 前台栏目」自定义，如把 /moments 改成 /diary）
+// 栏目访问路径（可在后台「管理 → 前台栏目」自定义，如把 /moment 改成 /diary）
+// 默认路径：瞬间是 moment，其余与栏目 key 一致
+var DEFAULT_ROUTES = { moments: 'moment' };
 function moduleRoute(key) {
   var cfg = SITE_CONFIG.modules;
   var r = cfg && cfg[key] && cfg[key].route;
-  r = String(r || (key === 'home' ? '' : key));
+  r = String(r || (key === 'home' ? '' : (DEFAULT_ROUTES[key] || key)));
   return r.replace(/^\/+|\/+$/g, '');
 }
 
@@ -1186,7 +1188,7 @@ var router = {
   animateContent: function () { /* 已停用：保留调用点，避免报错 */ },
 
   skeletonHtml: function (tab) {
-    var label = { posts: '文章', moments: '碎碎念', tools: '工具', status: '状态', quirky: '奇奇怪怪' }[tab] || '内容';
+    var label = { posts: '文章', moments: '瞬间', tools: '工具', status: '状态', quirky: '奇奇怪怪' }[tab] || '内容';
     var cards = '';
     for (var i = 0; i < 3; i++) cards += '<div class="sk-card"><div class="sk-line sk-line--title"></div><div class="sk-line sk-line--body"></div><div class="sk-line sk-line--short"></div></div>';
     return '<div class="page-skeleton" aria-busy="true" aria-label="正在加载' + label + '">' +
@@ -1726,9 +1728,9 @@ renderLinksApplyView: function (container) {
       }
       listHtml += '</div>';
     } else {
-      listHtml = '<div class="empty-box">暂无碎碎念动态</div>';
+      listHtml = '<div class="empty-box">暂无瞬间动态</div>';
     }
-    container.innerHTML = '<div class="module-header"><h1 class="module-title">碎碎念</h1></div>' + listHtml;
+    container.innerHTML = '<div class="module-header"><h1 class="module-title">瞬间</h1></div>' + listHtml;
   },
 
   renderToolsView: function (container, tools) {

@@ -467,7 +467,7 @@ const server = http.createServer((req, res) => {
     });
   }
 
-  // 3.8.4 碎碎念 → Telegram 同步（需登录）
+  // 3.8.4 瞬间 → Telegram 同步（需登录）
   if (req.method === 'GET' && pathname === '/api/admin/telegram') {
     if (!guardAuth(req, res)) return;
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -1048,9 +1048,9 @@ const server = http.createServer((req, res) => {
           item.date = item.date || cnNowStamp();
           if (isNew || !item.mtime) item.mtime = Date.now();
           fs.writeFileSync(path.join(MUSINGS_DIR, item.id + '.md'), buildMdContent(item, 'moments'), 'utf8');
-          // 碎碎念同步到 Telegram（后台异步，失败不影响保存）
+          // 瞬间同步到 Telegram（后台异步，失败不影响保存）
           telegram.syncMoment(item).then(function (r) {
-            if (r && r.ok) console.log('[telegram] 已同步碎碎念 ' + item.id);
+            if (r && r.ok) console.log('[telegram] 已同步瞬间 ' + item.id);
             else if (r && r.error) console.warn('[telegram] 同步失败：' + r.error);
           }).catch(function (e) { console.warn('[telegram] 同步异常：' + (e.message || e)); });
           const list = readMusings();
