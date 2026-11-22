@@ -13,6 +13,7 @@
 [![Docker pulls](https://img.shields.io/docker/pulls/starspacec/simple-blog-backend?logo=docker&logoColor=white)](https://hub.docker.com/r/starspacec/simple-blog-backend)
 [![Image size](https://img.shields.io/docker/image-size/starspacec/simple-blog-backend?logo=docker&logoColor=white)](https://hub.docker.com/r/starspacec/simple-blog-backend)
 [![Build](https://img.shields.io/github/actions/workflow/status/usxs/simple-blog/docker.yml?branch=main&label=build&logo=githubactions&logoColor=white)](https://github.com/usxs/simple-blog/actions/workflows/docker.yml)
+[![Version](https://img.shields.io/github/v/tag/usxs/simple-blog?logo=git&logoColor=white)](https://github.com/usxs/simple-blog/releases)
 [![Stars](https://img.shields.io/github/stars/usxs/simple-blog?logo=github&logoColor=white)](https://github.com/usxs/simple-blog/stargazers)
 [![Last commit](https://img.shields.io/github/last-commit/usxs/simple-blog?logo=git&logoColor=white)](https://github.com/usxs/simple-blog/commits/main)
 
