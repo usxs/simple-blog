@@ -12,7 +12,7 @@ The frontend is a build-free static SPA (HTML/CSS/vanilla JS). Pages Functions r
 
 ## Screenshots
 
-> Taken from a locally running instance with demo data, dark theme.
+> Taken from a locally running instance with demo data. The site ships light and dark themes that follow your device / system setting.
 
 | Frontend | Admin |
 | --- | --- |

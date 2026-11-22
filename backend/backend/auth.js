@@ -272,7 +272,7 @@ function registerFailure(ip, rec, now) {
  *  - 已开启 2FA 且未带验证码：返回 needTotp，密码正确但还差一步
  *  - 验证码可以是 6 位动态码，也可以是一次性备用码（命中后立即作废）
  */
-function attemptLogin(ip, username, password, totpCode) {
+function attemptLogin(ip, username, password, totpCode, ua) {
   if (!DATA_WRITABLE) {
     return {
       ok: false,
@@ -306,6 +306,11 @@ function attemptLogin(ip, username, password, totpCode) {
   if (!success) {
     registerFailure(ip, rec, now);
     return { ok: false, status: 401, error: '用户名或密码错误' };
+  }
+
+  // 密码正确之后再看黑名单：避免用报错差异去探测哪些 IP / 设备被封
+  if (isBlocked(ip, ua || '')) {
+    return { ok: false, status: 403, error: '该设备或 IP 已被禁止登录，请在「管理 · 登录会话」中解除' };
   }
 
   const mfa = creds.totp;
@@ -357,25 +362,204 @@ function parseCookies(req) {
   return out;
 }
 
-function loadSessions() {
-  const data = readJsonSafe(SESSIONS_FILE, { sessions: [] });
-  return Array.isArray(data.sessions) ? data.sessions : [];
+// ---------------- 会话存储（在线会话 + 历史会话 + 登录黑名单） ----------------
+
+const SESSION_HISTORY_MAX = 80;          // 历史会话最多保留条数
+const ONLINE_WINDOW_MS = 3 * 60 * 1000;  // 最近 3 分钟有请求视为「在线」
+const BLOCK_MAX = 200;                   // 黑名单条数上限
+
+// 每次请求都会刷新这里的最后活跃时间；持久化仍按 SESSION_RENEW_GAP_MS 节流
+const lastSeenMem = new Map();
+
+function loadStore() {
+  const data = readJsonSafe(SESSIONS_FILE, {});
+  return {
+    sessions: Array.isArray(data.sessions) ? data.sessions : [],
+    history: Array.isArray(data.history) ? data.history : [],
+    blocked: Array.isArray(data.blocked) ? data.blocked : []
+  };
 }
 
-function saveSessions(list) {
+function saveStore(store) {
   const now = Date.now();
-  const alive = list.filter(s => s.expiresAt > now);
+  const alive = (store.sessions || []).filter(s => s.expiresAt > now);
   if (alive.length > MAX_SESSIONS) {
     alive.sort((a, b) => (a.lastSeenAt || 0) - (b.lastSeenAt || 0));
     alive.splice(0, alive.length - MAX_SESSIONS);
   }
+  const history = (store.history || []).slice(-SESSION_HISTORY_MAX);
+  const blocked = (store.blocked || []).slice(-BLOCK_MAX);
   try {
-    writeJsonAtomic(SESSIONS_FILE, { sessions: alive });
+    writeJsonAtomic(SESSIONS_FILE, { sessions: alive, history, blocked });
     return true;
   } catch (e) {
     // 写盘失败（如目录只读）：内存态继续生效，权限恢复后自动恢复持久化
     return false;
   }
+}
+
+// 兼容旧调用点：只读写「在线会话」部分
+function loadSessions() {
+  return loadStore().sessions;
+}
+
+function saveSessions(list) {
+  const store = loadStore();
+  store.sessions = list;
+  return saveStore(store);
+}
+
+/** 把一条会话移入历史记录（保留踢下线 / 退出 / 过期原因） */
+function archiveSession(store, rec, reason) {
+  if (!rec) return;
+  store.history = store.history || [];
+  if (store.history.some(h => h.id === rec.id)) return;
+  const seen = Math.max(rec.lastSeenAt || 0, lastSeenMem.get(rec.id) || 0);
+  store.history.push({
+    id: rec.id,
+    username: rec.username || '',
+    ip: rec.ip || '',
+    ua: rec.ua || '',
+    label: rec.label || '',
+    createdAt: rec.createdAt || 0,
+    lastSeenAt: seen,
+    endedAt: Date.now(),
+    reason: reason || 'expired'
+  });
+  lastSeenMem.delete(rec.id);
+}
+
+// ---------------- 设备识别 ----------------
+
+function parseDevice(uaRaw) {
+  const ua = String(uaRaw || '');
+  let type = 'desktop';
+  let typeLabel = '桌面设备';
+  if (/iPad|Tablet|PlayBook|Silk/i.test(ua)) { type = 'tablet'; typeLabel = '平板'; }
+  else if (/Mobi|Android|iPhone|iPod|Windows Phone/i.test(ua)) { type = 'mobile'; typeLabel = '手机'; }
+
+  let os = '未知系统';
+  const android = /Android\s([0-9.]+)/.exec(ua);
+  if (/Windows NT 10\.0/.test(ua)) os = 'Windows 10/11';
+  else if (/Windows NT 6\.3/.test(ua)) os = 'Windows 8.1';
+  else if (/Windows NT 6\.1/.test(ua)) os = 'Windows 7';
+  else if (/Windows/.test(ua)) os = 'Windows';
+  else if (/iPhone|iPad|iPod/.test(ua)) os = 'iOS ' + ((/OS (\d+)[_.](\d+)/.exec(ua) || []).slice(1).join('.') || '').replace(/\.$/, '');
+  else if (android) os = 'Android ' + android[1];
+  else if (/Android/.test(ua)) os = 'Android';
+  else if (/Mac OS X/.test(ua)) os = 'macOS';
+  else if (/CrOS/.test(ua)) os = 'ChromeOS';
+  else if (/Linux/.test(ua)) os = 'Linux';
+
+  let browser = '未知客户端';
+  if (/Edg\//.test(ua)) browser = 'Edge';
+  else if (/OPR\//.test(ua) || /Opera/.test(ua)) browser = 'Opera';
+  else if (/Firefox\//.test(ua)) browser = 'Firefox';
+  else if (/MicroMessenger/.test(ua)) browser = '微信';
+  else if (/Chrome\//.test(ua)) browser = 'Chrome';
+  else if (/Safari\//.test(ua)) browser = 'Safari';
+  else if (/curl\//.test(ua)) browser = 'curl';
+  else if (/Wget|python-requests|Go-http-client|okhttp/i.test(ua)) browser = '脚本客户端';
+
+  let model = '';
+  const iphone = /iPhone/.test(ua) ? 'iPhone' : '';
+  if (iphone) model = iphone;
+  else if (/iPad/.test(ua)) model = 'iPad';
+  else {
+    const m = /Android[^;]*;\s*([^;)]+)\s*(?:Build|\))/.exec(ua);
+    if (m) model = m[1].replace(/\s*Build.*/i, '').trim().slice(0, 40);
+  }
+  return { type, typeLabel, os, browser, model, label: browser + ' · ' + os };
+}
+
+function deviceKey(uaRaw) {
+  return sha256hex('ua:' + String(uaRaw || '').slice(0, 200));
+}
+
+// ---------------- IP 归属地（带内存缓存，失败静默） ----------------
+
+const geoCache = new Map();
+
+function isPrivateIp(ip) {
+  const v = String(ip || '');
+  if (!v) return true;
+  if (v === '::1' || /^127\./.test(v) || /^10\./.test(v) || /^192\.168\./.test(v)) return true;
+  if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(v)) return true;
+  if (/^169\.254\./.test(v) || /^fc|^fd/i.test(v)) return true;
+  return false;
+}
+
+function lookupGeo(ip) {
+  return new Promise((resolve) => {
+    const key = String(ip || '');
+    if (!key) return resolve({ ok: false, error: '缺少 IP' });
+    if (isPrivateIp(key)) return resolve({ ok: true, local: true, label: '内网 / 本机地址' });
+    if (geoCache.has(key)) return resolve(geoCache.get(key));
+    const target = 'http://ip-api.com/json/' + encodeURIComponent(key) + '?lang=zh-CN&fields=status,country,regionName,city,isp,org,as';
+    let timer = null;
+    const req = require('http').get(target, { timeout: 4000 }, (res) => {
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => { body += chunk; if (body.length > 8192) req.destroy(); });
+      res.on('end', () => {
+        if (timer) clearTimeout(timer);
+        let out = { ok: false, error: '归属地查询失败' };
+        try {
+          const data = JSON.parse(body);
+          if (data && data.status === 'success') {
+            const parts = [data.country, data.regionName, data.city].filter(Boolean);
+            out = { ok: true, country: data.country || '', region: data.regionName || '', city: data.city || '', isp: data.isp || '', org: data.org || '', label: parts.join(' ') || '未知' };
+            geoCache.set(key, out);
+          } else if (data && data.message) {
+            out = { ok: false, error: String(data.message) };
+          }
+        } catch (e) { /* 解析失败保持默认 */ }
+        resolve(out);
+      });
+    });
+    req.on('error', () => { if (timer) clearTimeout(timer); resolve({ ok: false, error: '归属地服务不可达' }); });
+    req.on('timeout', () => { req.destroy(); resolve({ ok: false, error: '归属地查询超时' }); });
+  });
+}
+
+// ---------------- 黑名单 ----------------
+
+function listBlocked() {
+  return loadStore().blocked.map(b => ({
+    type: b.type,
+    value: b.type === 'ip' ? b.value : String(b.value).slice(0, 16),
+    note: b.note || '',
+    createdAt: b.createdAt || 0
+  }));
+}
+
+function isBlocked(ip, ua) {
+  const list = loadStore().blocked;
+  if (!list.length) return false;
+  const uaKey = deviceKey(ua);
+  return list.some(b => (b.type === 'ip' && b.value === ip) || (b.type === 'device' && b.value === uaKey));
+}
+
+function addBlock(type, value, note) {
+  if (type !== 'ip' && type !== 'device') return { ok: false, error: '类型不合法' };
+  const v = String(value || '').trim();
+  if (!v) return { ok: false, error: '缺少要封禁的目标' };
+  const store = loadStore();
+  if (!store.blocked.some(b => b.type === type && b.value === v)) {
+    store.blocked.push({ type, value: v, note: String(note || '').slice(0, 60), createdAt: Date.now() });
+  }
+  const ok = saveStore(store);
+  if (!ok) return { ok: false, status: 503, error: '写入失败，请检查 data 目录权限' };
+  return { ok: true, blocked: listBlocked() };
+}
+
+function removeBlock(type, value) {
+  const store = loadStore();
+  const before = store.blocked.length;
+  store.blocked = store.blocked.filter(b => !(b.type === type && String(b.value).startsWith(String(value))));
+  if (store.blocked.length === before) return { ok: false, error: '没有找到对应记录' };
+  saveStore(store);
+  return { ok: true, blocked: listBlocked() };
 }
 
 function isSecureRequest(req) {
@@ -405,7 +589,8 @@ function createSession(req, username) {
     lastSeenAt: now,
     expiresAt: now + SESSION_TTL_MS,
     ip: String(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim(),
-    ua: String(req.headers['user-agent'] || '').slice(0, 200)
+    ua: String(req.headers['user-agent'] || '').slice(0, 200),
+    label: ''
   });
   if (!saveSessions(list)) {
     // 会话无法持久化（数据目录只读等）：按不可用处理，避免"看似登录成功、重启即失效"
@@ -420,15 +605,21 @@ function getSession(req) {
   if (!token || token.length !== 64) return null;
 
   const id = sha256hex(token);
-  const list = loadSessions();
-  const rec = list.find(s => s.id === id);
+  const store = loadStore();
+  const rec = store.sessions.find(s => s.id === id);
   if (!rec) return null;
 
   const now = Date.now();
   if (now > rec.expiresAt) {
-    saveSessions(list.filter(s => s.id !== id));
+    archiveSession(store, rec, 'expired');
+    store.sessions = store.sessions.filter(item => item.id !== id);
+    saveStore(store);
     return null;
   }
+
+  // 内存里记下最新活跃时间，用于「在线 / 离线」判断（落盘仍按节流间隔）
+  lastSeenMem.set(id, now);
+  const list = store.sessions;
 
   if (now - rec.lastSeenAt > SESSION_RENEW_GAP_MS) {
     rec.lastSeenAt = now;
@@ -438,19 +629,84 @@ function getSession(req) {
   return rec;
 }
 
-function revokeSessionByToken(token) {
+function revokeSessionByToken(token, reason) {
   if (!token) return;
   const id = sha256hex(token);
-  const list = loadSessions();
-  saveSessions(list.filter(s => s.id !== id));
+  const store = loadStore();
+  const rec = store.sessions.find(s => s.id === id);
+  if (rec) archiveSession(store, rec, reason || 'logout');
+  store.sessions = store.sessions.filter(s => s.id !== id);
+  saveStore(store);
 }
 
-function revokeOtherSessions(keepToken) {
+function revokeOtherSessions(keepToken, reason) {
   const keepId = keepToken ? sha256hex(keepToken) : '';
-  const list = loadSessions();
-  const filtered = list.filter(s => s.id === keepId);
-  saveSessions(filtered);
-  return list.length - filtered.length;
+  const store = loadStore();
+  store.sessions.forEach(s => { if (s.id !== keepId) archiveSession(store, s, reason || 'kicked'); });
+  const filtered = store.sessions.filter(s => s.id === keepId);
+  const removed = store.sessions.length - filtered.length;
+  store.sessions = filtered;
+  saveStore(store);
+  return removed;
+}
+
+/** 按会话 id 踢下线（不能踢当前会话，避免把自己锁在外面） */
+function revokeSessionById(req, id) {
+  const token = parseCookies(req)[SESSION_COOKIE];
+  const currentId = token ? sha256hex(token) : '';
+  const target = String(id || '');
+  if (!target) return { ok: false, error: '缺少会话 id' };
+  const store = loadStore();
+  const rec = store.sessions.find(s => s.id === target || s.id.indexOf(target) === 0);
+  if (!rec) return { ok: false, error: '会话不存在或已失效' };
+  if (rec.id === currentId) return { ok: false, error: '不能下线当前正在使用的会话' };
+  archiveSession(store, rec, 'kicked');
+  store.sessions = store.sessions.filter(s => s.id !== rec.id);
+  if (!saveStore(store)) return { ok: false, status: 503, error: '写入失败，请检查 data 目录权限' };
+  return { ok: true };
+}
+
+/** 给在线会话或历史会话改备注名 */
+function renameSession(id, label, includeHistory) {
+  const target = String(id || '');
+  const name = String(label || '').trim().slice(0, 24);
+  if (!target) return { ok: false, error: '缺少会话 id' };
+  const store = loadStore();
+  const hit = store.sessions.find(s => s.id === target || s.id.indexOf(target) === 0);
+  if (hit) {
+    hit.label = name;
+  } else if (includeHistory) {
+    const past = store.history.find(h => h.id === target || h.id.indexOf(target) === 0);
+    if (!past) return { ok: false, error: '会话不存在' };
+    past.label = name;
+  } else {
+    return { ok: false, error: '会话不存在' };
+  }
+  if (!saveStore(store)) return { ok: false, status: 503, error: '写入失败，请检查 data 目录权限' };
+  return { ok: true, label: name };
+}
+
+/** 把某条会话的 IP / 设备加入黑名单 */
+function blockSession(id, scope, note) {
+  const target = String(id || '');
+  const store = loadStore();
+  const rec = store.sessions.find(s => s.id === target || s.id.indexOf(target) === 0)
+    || store.history.find(h => h.id === target || h.id.indexOf(target) === 0);
+  if (!rec) return { ok: false, error: '会话不存在' };
+  const full = loadStore();
+  let added = 0;
+  const push = (type, value) => {
+    if (!value) return;
+    if (!full.blocked.some(b => b.type === type && b.value === value)) {
+      full.blocked.push({ type, value, note: String(note || '').slice(0, 60), createdAt: Date.now() });
+      added += 1;
+    }
+  };
+  if (scope === 'ip' || scope === 'both') push('ip', rec.ip);
+  if (scope === 'device' || scope === 'both') push('device', deviceKey(rec.ua));
+  if (!added) return { ok: false, error: '该 IP / 设备已在黑名单中' };
+  if (!saveStore(full)) return { ok: false, status: 503, error: '写入失败，请检查 data 目录权限' };
+  return { ok: true, added };
 }
 
 // ---------------------------------------------------------------------------
@@ -509,7 +765,7 @@ function changePassword(req, currentPassword, newPassword) {
     totp: creds.totp,
     passkeys: creds.passkeys
   });
-  const revoked = revokeOtherSessions(token);
+  const revoked = revokeOtherSessions(token, '密码已修改');
 
   // 会话轮换：签发新 Token，旧 Token 立即作废
   const newToken = createSession(req, creds.username);
@@ -603,7 +859,7 @@ function handleLogin(req, res) {
   if (!assertSameOrigin(req)) return respond(res, 403, { ok: false, error: '拒绝跨站请求' });
   return readJsonBody(req, res, (data) => {
     const ip = getClientIp(req);
-    const result = attemptLogin(ip, data.username, data.password, data.totpCode || data.code);
+    const result = attemptLogin(ip, data.username, data.password, data.totpCode || data.code, String(req.headers['user-agent'] || ''));
     if (!result.ok) {
       if (result.retryAfter) res.setHeader('Retry-After', String(result.retryAfter));
       const payload = { ok: false, error: result.error };
@@ -981,26 +1237,72 @@ function finishPasskeyLogin(req, body, ip) {
 
 // ---------------- 会话列表 ----------------
 
+function sessionView(rec, currentId, now, ended) {
+  const seenRaw = Math.max(rec.lastSeenAt || 0, ended ? 0 : (lastSeenMem.get(rec.id) || 0));
+  const device = parseDevice(rec.ua);
+  const expired = !ended && rec.expiresAt <= now;
+  const online = !ended && !expired && (now - seenRaw) < ONLINE_WINDOW_MS;
+  return {
+    id: String(rec.id || ''),
+    short: String(rec.id || '').slice(0, 8),
+    current: rec.id === currentId,
+    status: ended ? 'ended' : (online ? 'online' : (expired ? 'expired' : 'offline')),
+    label: rec.label || '',
+    ip: rec.ip || '',
+    ua: rec.ua || '',
+    device,
+    createdAt: rec.createdAt || 0,
+    lastSeenAt: seenRaw,
+    endedAt: rec.endedAt || 0,
+    reason: rec.reason || '',
+    expiresAt: rec.expiresAt || 0,
+    durationMs: Math.max(0, (ended ? (rec.endedAt || seenRaw) : now) - (rec.createdAt || 0))
+  };
+}
+
+/** 在线会话（按最近活跃倒序） */
 function listSessions(req) {
   const token = parseCookies(req)[SESSION_COOKIE];
   const currentId = token ? sha256hex(token) : '';
   const now = Date.now();
-  return loadSessions()
+  return loadStore().sessions
     .filter(s => s.expiresAt > now)
-    .sort((a, b) => (b.lastSeenAt || 0) - (a.lastSeenAt || 0))
-    .map(s => ({
-      id: String(s.id || '').slice(0, 8),
-      current: s.id === currentId,
-      ip: s.ip || '',
-      ua: s.ua || '',
-      createdAt: s.createdAt || 0,
-      lastSeenAt: s.lastSeenAt || 0,
-      expiresAt: s.expiresAt || 0
-    }));
+    .sort((a, b) => (Math.max(b.lastSeenAt || 0, lastSeenMem.get(b.id) || 0)) - (Math.max(a.lastSeenAt || 0, lastSeenMem.get(a.id) || 0)))
+    .map(s => sessionView(s, currentId, now, false));
 }
+
+// 会话管理页要用的完整数据：在线 / 历史 / 黑名单
+function sessionOverview(req) {
+  const token = parseCookies(req)[SESSION_COOKIE];
+  const currentId = token ? sha256hex(token) : '';
+  const now = Date.now();
+  const store = loadStore();
+  const active = store.sessions
+    .filter(s => s.expiresAt > now)
+    .sort((a, b) => (Math.max(b.lastSeenAt || 0, lastSeenMem.get(b.id) || 0)) - (Math.max(a.lastSeenAt || 0, lastSeenMem.get(a.id) || 0)))
+    .map(s => sessionView(s, currentId, now, false));
+  const history = store.history
+    .slice()
+    .sort((a, b) => (b.endedAt || 0) - (a.endedAt || 0))
+    .slice(0, 40)
+    .map(h => sessionView(h, currentId, now, true));
+  return { sessions: active, history, blocked: listBlocked() };
+}
+
+/** 清理过期会话并归档（每 30 分钟） */
+setInterval(() => {
+  const now = Date.now();
+  const store = loadStore();
+  const expired = store.sessions.filter(s => s.expiresAt <= now);
+  if (!expired.length) return;
+  expired.forEach(s => archiveSession(store, s, 'expired'));
+  store.sessions = store.sessions.filter(s => s.expiresAt > now);
+  saveStore(store);
+}, 30 * 60 * 1000).unref();
 
 function adminOverview(req) {
   const creds = getCreds();
+  const sessionData = sessionOverview(req);
   return {
     username: creds ? creds.username : '',
     site: site.getSite(),
@@ -1010,7 +1312,9 @@ function adminOverview(req) {
       backupCodesLeft: creds && creds.totp.enabled ? creds.totp.backup.length : 0
     },
     passkeys: listPasskeys(),
-    sessions: listSessions(req),
+    sessions: sessionData.sessions,
+    history: sessionData.history,
+    blocked: sessionData.blocked,
     dataWritable: DATA_WRITABLE,
     version: (() => {
       try { return require('../package.json').version || '1.0.0'; } catch (e) { return '1.0.0'; }
@@ -1177,19 +1481,62 @@ function handlePasskeyLogin(req, res) {
 }
 
 function handleSessionsList(req, res) {
-  return respond(res, 200, { ok: true, sessions: listSessions(req) });
+  return respond(res, 200, Object.assign({ ok: true }, sessionOverview(req)));
 }
 
 function handleSessionsRevokeOthers(req, res) {
   return readJsonBody(req, res, () => {
     let revoked = 0;
     try {
-      revoked = revokeOtherSessions(parseCookies(req)[SESSION_COOKIE]);
+      revoked = revokeOtherSessions(parseCookies(req)[SESSION_COOKIE], '批量下线');
     } catch (e) {
       return respond(res, 503, { ok: false, error: '数据写入失败，请检查 data 目录权限后重试' });
     }
     return respond(res, 200, { ok: true, revoked });
   });
+}
+
+// POST /api/auth/sessions/revoke  { id }
+function handleSessionRevoke(req, res) {
+  return readJsonBody(req, res, (data) => {
+    const result = revokeSessionById(req, data.id);
+    if (!result.ok) return respond(res, result.status || 400, { ok: false, error: result.error });
+    return respond(res, 200, Object.assign({ ok: true }, sessionOverview(req)));
+  }, 8 * 1024);
+}
+
+// POST /api/auth/sessions/rename  { id, label, history }
+function handleSessionRename(req, res) {
+  return readJsonBody(req, res, (data) => {
+    const result = renameSession(data.id, data.label, Boolean(data.history));
+    if (!result.ok) return respond(res, result.status || 400, { ok: false, error: result.error });
+    return respond(res, 200, Object.assign({ ok: true }, sessionOverview(req)));
+  }, 8 * 1024);
+}
+
+// POST /api/auth/sessions/block  { id, scope: 'ip'|'device'|'both', note }
+function handleSessionBlock(req, res) {
+  return readJsonBody(req, res, (data) => {
+    const result = blockSession(data.id, String(data.scope || 'both'), data.note);
+    if (!result.ok) return respond(res, result.status || 400, { ok: false, error: result.error });
+    return respond(res, 200, Object.assign({ ok: true }, sessionOverview(req)));
+  }, 8 * 1024);
+}
+
+// POST /api/auth/blocklist/remove  { type, value }
+function handleBlocklistRemove(req, res) {
+  return readJsonBody(req, res, (data) => {
+    const result = removeBlock(String(data.type || ''), String(data.value || ''));
+    if (!result.ok) return respond(res, 400, { ok: false, error: result.error });
+    return respond(res, 200, Object.assign({ ok: true }, sessionOverview(req)));
+  }, 8 * 1024);
+}
+
+// GET /api/auth/sessions/geo?ip=...
+function handleSessionGeo(req, res, url) {
+  const ip = String((url && url.searchParams.get('ip')) || '').trim();
+  lookupGeo(ip).then((geo) => respond(res, 200, Object.assign({ ok: true, ip }, geo)))
+    .catch(() => respond(res, 200, { ok: false, ip, error: '归属地查询失败' }));
 }
 
 // 定期清理过期会话文件
@@ -1232,5 +1579,10 @@ module.exports = {
   handlePasskeyLoginOptions,
   handlePasskeyLogin,
   handleSessionsList,
-  handleSessionsRevokeOthers
+  handleSessionsRevokeOthers,
+  handleSessionRevoke,
+  handleSessionRename,
+  handleSessionBlock,
+  handleBlocklistRemove,
+  handleSessionGeo,
 };

@@ -234,7 +234,18 @@
                 <h3>登录会话</h3>
                 <span class="settings-tip" id="session-count"></span>
               </div>
-              <ul class="session-list" id="session-list"></ul>
+              <div class="session-group">
+                <div class="session-group-head">会话 <span class="session-group-count" id="session-online-count"></span></div>
+                <ul class="session-list" id="session-list"></ul>
+              </div>
+              <div class="session-group">
+                <div class="session-group-head">历史会话（已离线） <span class="session-group-count" id="session-history-count"></span></div>
+                <ul class="session-list session-list--history" id="session-history"></ul>
+              </div>
+              <div class="session-group">
+                <div class="session-group-head">黑名单 <span class="session-group-count" id="blocked-count"></span></div>
+                <ul class="session-list" id="blocked-list"></ul>
+              </div>
               <div class="settings-actions">
                 <button class="btn" type="button" id="revoke-others-btn">下线其它设备</button>
               </div>

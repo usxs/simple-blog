@@ -1270,3 +1270,101 @@ body.md-lightbox-locked {
 
 /* 两步验证：未启用时的「启用两步验证」按钮与上方说明留出距离 */
 #totp-off-box { margin-top: 14px; }
+
+/* ---------------- 登录会话：在线 / 历史 / 黑名单 ---------------- */
+.session-group { margin-top: 14px; }
+.session-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  letter-spacing: .03em;
+  color: var(--text-muted);
+  margin-bottom: 7px;
+}
+.session-group-count { font-family: var(--font-mono); font-size: 11px; }
+.session-list--history .session-item { opacity: .82; }
+
+.session-item {
+  display: block;
+  padding: 0;
+  overflow: hidden;
+}
+.session-item .ss-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  cursor: pointer;
+  border-radius: 7px;
+}
+.session-item .ss-row:hover { background: color-mix(in srgb, var(--text-primary) 4%, transparent); }
+.session-item .ss-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.ss-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--text-muted);
+  flex: none;
+}
+.ss-dot[data-status="online"] { background: var(--status-ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-ok) 18%, transparent); }
+.ss-dot[data-status="offline"] { background: var(--status-warn, #d6a02a); }
+.ss-dot[data-status="ended"] { background: var(--border); }
+
+.ss-chevron {
+  flex: none;
+  color: var(--text-muted);
+  font-size: 15px;
+  line-height: 1;
+  transition: transform .16s ease;
+}
+.session-item.is-open .ss-chevron { transform: rotate(90deg); }
+
+.ss-detail {
+  border-top: 1px dashed var(--border);
+  padding: 10px 11px 11px;
+  background: color-mix(in srgb, var(--text-primary) 2%, transparent);
+}
+.ss-fields {
+  margin: 0 0 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 16px;
+}
+.ss-field { min-width: 0; }
+.ss-field dt {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  margin-bottom: 1px;
+}
+.ss-field dd {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+.ss-field--ua { grid-column: 1 / -1; }
+.ss-field--ua dd { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+
+.ss-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+.ss-label-input {
+  flex: 1 1 160px;
+  min-width: 120px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.session-item--blocked {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+}
+
+@media (max-width: 720px) {
+  .ss-fields { grid-template-columns: 1fr; }
+}

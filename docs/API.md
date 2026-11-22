@@ -224,8 +224,15 @@ POST /api/admin/site
 | `POST /api/auth/passkey/register-options` | `{password}` → WebAuthn `PublicKeyCredentialCreationOptions` |
 | `POST /api/auth/passkey/register` | `{credential, name}`，注册成功后立即可用 |
 | `POST /api/auth/passkey/delete` | `{password, id}` |
-| `GET /api/auth/sessions` | `{sessions:[{id,current,ip,ua,createdAt,lastSeenAt}], count}` |
+| `GET /api/auth/sessions` | `{sessions:[…], history:[…], blocked:[…]}`，每条会话含 `id/short/current/status(online/offline/expired)/label/ip/ua/device{type,os,browser,label}/createdAt/lastSeenAt/endedAt/reason/durationMs` |
 | `POST /api/auth/sessions/revoke-others` | 吊销除当前会话外的所有会话 |
+| `POST /api/auth/sessions/revoke` | `{id}` — 踢某个设备下线，会话进入历史记录 |
+| `POST /api/auth/sessions/rename` | `{id, label, history?}` — 给会话改备注名（24 字以内） |
+| `POST /api/auth/sessions/block` | `{id, scope:'ip'\|'device'\|'both', note?}` — 按 IP 或设备指纹加入登录黑名单 |
+| `POST /api/auth/blocklist/remove` | `{type:'ip'\|'device', value}` — 解除封禁 |
+| `GET /api/auth/sessions/geo?ip=` | `{ok, label, country, region, city, isp}` — IP 归属地（内网地址直接返回本机提示） |
+
+会话状态判定：最近 3 分钟内有请求的记为 `online`，否则 `offline`；被踢下线、主动退出、过期归档的进入 `history`（保留最近 80 条）。黑名单命中后，登录接口返回 403「该设备或 IP 已被禁止登录」。
 
 所有接口都需要有效的会话 Cookie；写操作还要通过同源校验（`Origin` / `Sec-Fetch-Site`）。
 

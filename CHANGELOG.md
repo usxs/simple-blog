@@ -3,6 +3,24 @@
 本项目的所有重要变更记录在此文件中，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.8.0] - 2026-11-22
+
+### 新增
+
+- 后台「管理 · 登录会话」改版：区分**在线会话**与**历史会话（已离线）**，并新增**黑名单**分组
+  - 每条会话显示设备型号 / 系统 / 浏览器、IP、在线状态、最近活动时间
+  - 点击展开详情：IP 地址、IP 归属地（内网自动识别）、设备类型、在线时长、首次登录、结束原因、完整 User-Agent
+  - 支持为会话**设置备注名**（如「公司电脑」）、**踢下线**、**按 IP 或设备封禁**
+  - 黑名单可在同一处解除；被封禁的 IP / 设备再次登录会返回 403
+- 新增接口：`POST /api/auth/sessions/revoke`、`POST /api/auth/sessions/rename`、`POST /api/auth/sessions/block`、`POST /api/auth/blocklist/remove`、`GET /api/auth/sessions/geo`
+- `GET /api/auth/sessions` 现在返回 `{ sessions, history, blocked }` 三段数据（原为会话数组）
+
+### 变更
+
+- 会话被踢下线 / 主动退出 / 自然过期后进入历史记录（保留最近 80 条），不再直接消失
+- 在线判定改为「3 分钟内有请求」，后台刷新即可看到实时状态
+- README 中「默认深色主题」更正为「黑白两套主题，跟随设备 / 系统设置自动切换」（与实现一致）
+
 ## [1.7.2] - 2026-11-22
 
 ### 修复

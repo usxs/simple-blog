@@ -1115,7 +1115,7 @@ var cms = {
       pkeys = data.passkeys || [];
       this.renderPasskeys(pkeys);
 
-      this.renderSessions(data.sessions || []);
+      this.renderSessions(data.sessions || [], data.history || [], data.blocked || []);
     } catch (e) {
       if (String(e && e.message) === 'unauthorized') return;
       this.notify('管理信息加载失败：' + (e && e.message ? e.message : '未知错误'));
@@ -1719,24 +1719,322 @@ var cms = {
     });
   },
 
-  renderSessions: function (sessions) {
-    var ul = document.getElementById('session-list');
+  fmtDuration: function (ms) {
+    var total = Math.max(0, Math.floor(Number(ms || 0) / 1000));
+    if (total < 60) return total + ' 秒';
+    var mins = Math.floor(total / 60);
+    if (mins < 60) return mins + ' 分钟';
+    var hours = Math.floor(mins / 60);
+    var restMin = mins % 60;
+    if (hours < 24) return hours + ' 小时' + (restMin ? ' ' + restMin + ' 分钟' : '');
+    var days = Math.floor(hours / 24);
+    var restHour = hours % 24;
+    return days + ' 天' + (restHour ? ' ' + restHour + ' 小时' : '');
+  },
+
+  fmtWhen: function (ts) {
+    if (!ts) return '—';
+    var d = new Date(Number(ts));
+    if (isNaN(d.getTime())) return '—';
+    var pad = function (n) { return n < 10 ? '0' + n : String(n); };
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  },
+
+  describeDevice: function (device) {
+    var dev = device || {};
+    var typeMap = { mobile: '手机', tablet: '平板', desktop: '电脑', bot: '程序' };
+    var parts = [];
+    if (dev.os) parts.push(dev.os);
+    if (dev.browser) parts.push(dev.browser);
+    var head = parts.join(' · ') || '未知设备';
+    var type = typeMap[dev.type] || '设备';
+    return { name: head, type: type };
+  },
+
+  sessionRow: function (s, ended) {
+    var li = document.createElement('li');
+    li.className = 'session-item';
+    li.setAttribute('data-id', s.id || '');
+    li.setAttribute('data-ip', s.ip || '');
+    li.setAttribute('data-ended', ended ? '1' : '0');
+    if (s.current) li.setAttribute('data-current', 'true');
+
+    var dev = cms.describeDevice(s.device);
+    var statusKey = s.status === 'online' ? 'online' : (s.status === 'ended' ? 'ended' : 'offline');
+    var statusText = s.status === 'online' ? '在线' : (s.status === 'ended' ? '已离线' : '离线');
+
+    var row = document.createElement('div');
+    row.className = 'ss-row';
+    row.setAttribute('role', 'button');
+    row.setAttribute('tabindex', '0');
+
+    var dot = document.createElement('span');
+    dot.className = 'ss-dot';
+    dot.setAttribute('data-status', statusKey);
+
+    var main = document.createElement('div');
+    main.className = 'ss-main';
+    var name = document.createElement('div');
+    name.className = 'ss-name';
+    name.textContent = (s.label ? s.label + ' · ' : '') + dev.name + '（' + dev.type + '）';
+    if (s.current) {
+      var badge = document.createElement('span');
+      badge.className = 'session-badge';
+      badge.textContent = '当前设备';
+      name.appendChild(badge);
+    }
+    var meta = document.createElement('div');
+    meta.className = 'ss-meta';
+    meta.textContent = [statusText, s.ip || '未知 IP', ended ? ('结束于 ' + cms.fmtWhen(s.endedAt)) : ('最近活动 ' + cms.fmtWhen(s.lastSeenAt))].join(' · ');
+    main.appendChild(name);
+    main.appendChild(meta);
+
+    var chev = document.createElement('span');
+    chev.className = 'ss-chevron';
+    chev.textContent = '›';
+
+    row.appendChild(dot);
+    row.appendChild(main);
+    row.appendChild(chev);
+
+    var detail = document.createElement('div');
+    detail.className = 'ss-detail';
+    detail.hidden = true;
+
+    var dl = document.createElement('dl');
+    dl.className = 'ss-fields';
+    var fields = [
+      ['IP 地址', s.ip || '—'],
+      ['IP 归属地', null],
+      ['设备', dev.name + '（' + dev.type + '）'],
+      [ended ? '持续时长' : '在线时长', cms.fmtDuration(s.durationMs)],
+      ['首次登录', cms.fmtWhen(s.createdAt)],
+      [ended ? '结束时间' : '最近活动', cms.fmtWhen(ended ? s.endedAt : s.lastSeenAt)]
+    ];
+    if (ended && s.reason) fields.push(['结束原因', s.reason]);
+    fields.forEach(function (pair) {
+      var wrap = document.createElement('div');
+      wrap.className = 'ss-field';
+      var dt = document.createElement('dt');
+      dt.textContent = pair[0];
+      var dd = document.createElement('dd');
+      if (pair[1] === null) {
+        dd.className = 'ss-geo';
+        dd.textContent = '点击展开后查询…';
+      } else {
+        dd.textContent = pair[1];
+      }
+      wrap.appendChild(dt);
+      wrap.appendChild(dd);
+      dl.appendChild(wrap);
+    });
+    var uaWrap = document.createElement('div');
+    uaWrap.className = 'ss-field ss-field--ua';
+    var uaDt = document.createElement('dt');
+    uaDt.textContent = 'User-Agent';
+    var uaDd = document.createElement('dd');
+    uaDd.textContent = s.ua || '（空）';
+    uaWrap.appendChild(uaDt);
+    uaWrap.appendChild(uaDd);
+    dl.appendChild(uaWrap);
+
+    var actions = document.createElement('div');
+    actions.className = 'ss-actions';
+
+    var labelInput = document.createElement('input');
+    labelInput.className = 'field-input ss-label-input';
+    labelInput.setAttribute('type', 'text');
+    labelInput.setAttribute('maxlength', '24');
+    labelInput.setAttribute('placeholder', '备注名，如：公司电脑');
+    labelInput.value = s.label || '';
+    var labelBtn = document.createElement('button');
+    labelBtn.className = 'btn btn-sm';
+    labelBtn.type = 'button';
+    labelBtn.textContent = '保存备注';
+    labelBtn.addEventListener('click', function () { cms.saveSessionLabel(li, ended); });
+
+    actions.appendChild(labelInput);
+    actions.appendChild(labelBtn);
+
+    if (!ended && !s.current) {
+      var kickBtn = document.createElement('button');
+      kickBtn.className = 'btn btn-sm btn-danger';
+      kickBtn.type = 'button';
+      kickBtn.textContent = '踢下线';
+      kickBtn.addEventListener('click', function () { cms.kickSession(li, s.id); });
+      actions.appendChild(kickBtn);
+    }
+
+    var ipBtn = document.createElement('button');
+    ipBtn.className = 'btn btn-sm';
+    ipBtn.type = 'button';
+    ipBtn.textContent = '封禁 IP';
+    ipBtn.addEventListener('click', function () { cms.blockSession(li, s.id, 'ip'); });
+
+    var devBtn = document.createElement('button');
+    devBtn.className = 'btn btn-sm';
+    devBtn.type = 'button';
+    devBtn.textContent = '封禁设备';
+    devBtn.addEventListener('click', function () { cms.blockSession(li, s.id, 'device'); });
+
+    actions.appendChild(ipBtn);
+    actions.appendChild(devBtn);
+
+    detail.appendChild(dl);
+    detail.appendChild(actions);
+
+    row.addEventListener('click', function () { cms.toggleSession(li, s.ip); });
+    row.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter' || ev.key === ' ') {
+        ev.preventDefault();
+        cms.toggleSession(li, s.ip);
+      }
+    });
+
+    li.appendChild(row);
+    li.appendChild(detail);
+    return li;
+  },
+
+  toggleSession: function (li, ip) {
+    var detail = li.querySelector('.ss-detail');
+    if (!detail) return;
+    var open = !detail.hidden;
+    detail.hidden = open;
+    li.classList.toggle('is-open', !open);
+    if (open) return;
+    var geoEl = detail.querySelector('.ss-geo');
+    if (!geoEl || geoEl.getAttribute('data-loaded') === '1') return;
+    geoEl.setAttribute('data-loaded', '1');
+    geoEl.textContent = '查询中…';
+    if (!ip) { geoEl.textContent = '未知 IP'; return; }
+    this.api('/api/auth/sessions/geo?ip=' + encodeURIComponent(ip)).then(function (res) {
+      if (res && res.ok && res.label) {
+        geoEl.textContent = res.label + (res.isp ? ' · ' + res.isp : '');
+      } else {
+        geoEl.textContent = (res && res.error) ? res.error : '归属地未知';
+      }
+    }).catch(function () { geoEl.textContent = '归属地查询失败'; });
+  },
+
+  applySessionOverview: function (data) {
+    if (!data) return;
+    this.renderSessions(data.sessions || [], data.history || [], data.blocked || []);
+  },
+
+  saveSessionLabel: function (li, ended) {
+    var err = document.getElementById('session-error');
+    err.textContent = '';
+    var input = li.querySelector('.ss-label-input');
+    var label = input ? String(input.value || '').trim() : '';
+    this.api('/api/auth/sessions/rename', {
+      method: 'POST',
+      body: { id: li.getAttribute('data-id'), label: label, history: Boolean(ended) }
+    }).then(function (res) {
+      cms.applySessionOverview(res);
+      cms.toast('备注已保存');
+    }).catch(function (e) {
+      err.textContent = e.message || '保存失败';
+    });
+  },
+
+  kickSession: function (li, id) {
+    var err = document.getElementById('session-error');
+    err.textContent = '';
+    if (!window.confirm('确定要让这个设备下线吗？')) return;
+    this.api('/api/auth/sessions/revoke', { method: 'POST', body: { id: id } }).then(function (res) {
+      cms.applySessionOverview(res);
+      cms.toast('该设备已下线');
+    }).catch(function (e) {
+      err.textContent = e.message || '操作失败';
+    });
+  },
+
+  blockSession: function (li, id, scope) {
+    var err = document.getElementById('session-error');
+    err.textContent = '';
+    var what = scope === 'ip' ? '这个 IP 地址' : '这台设备';
+    if (!window.confirm('把' + what + '加入黑名单？加入后它不能再登录后台。')) return;
+    this.api('/api/auth/sessions/block', { method: 'POST', body: { id: id, scope: scope } }).then(function (res) {
+      cms.applySessionOverview(res);
+      cms.toast(scope === 'ip' ? 'IP 已加入黑名单' : '设备已加入黑名单');
+    }).catch(function (e) {
+      err.textContent = e.message || '操作失败';
+    });
+  },
+
+  unblock: function (type, value) {
+    var err = document.getElementById('session-error');
+    err.textContent = '';
+    this.api('/api/auth/blocklist/remove', { method: 'POST', body: { type: type, value: value } }).then(function (res) {
+      cms.applySessionOverview(res);
+      cms.toast('已解除封禁');
+    }).catch(function (e) {
+      err.textContent = e.message || '操作失败';
+    });
+  },
+
+  renderBlocked: function (blocked) {
+    var ul = document.getElementById('blocked-list');
+    var countEl = document.getElementById('blocked-count');
+    if (!ul) return;
     ul.innerHTML = '';
-    document.getElementById('session-count').textContent = '共 ' + sessions.length + ' 个在线会话';
-    if (!sessions.length) {
-      ul.innerHTML = '<li class="empty-tip">没有其它在线会话。</li>';
+    if (countEl) countEl.textContent = blocked.length ? '共 ' + blocked.length + ' 条' : '';
+    if (!blocked.length) {
+      ul.innerHTML = '<li class="empty-tip">黑名单为空。可在会话详情里封禁可疑 IP 或设备。</li>';
       return;
     }
-    sessions.forEach(function (s) {
+    blocked.forEach(function (b) {
       var li = document.createElement('li');
-      li.className = 'session-item';
-      li.setAttribute('data-current', s.current ? 'true' : 'false');
-      var seen = s.lastSeenAt ? new Date(s.lastSeenAt).toLocaleString('zh-CN') : '—';
-      li.innerHTML = '<div class="ss-main"><div class="ss-name">' + cms.escape(s.ua || '未知设备') +
-        '</div><div class="ss-meta">' + cms.escape(s.ip || '未知 IP') + ' · 最近活动 ' + cms.escape(seen) + '</div></div>' +
-        (s.current ? '<span class="session-badge">当前设备</span>' : '');
+      li.className = 'session-item session-item--blocked';
+      var main = document.createElement('div');
+      main.className = 'ss-main';
+      var name = document.createElement('div');
+      name.className = 'ss-name';
+      name.textContent = (b.type === 'ip' ? 'IP：' : '设备：') + (b.value || '');
+      var meta = document.createElement('div');
+      meta.className = 'ss-meta';
+      meta.textContent = (b.note ? b.note + ' · ' : '') + '封禁于 ' + cms.fmtWhen(b.createdAt);
+      main.appendChild(name);
+      main.appendChild(meta);
+      var btn = document.createElement('button');
+      btn.className = 'btn btn-sm';
+      btn.type = 'button';
+      btn.textContent = '解除封禁';
+      btn.addEventListener('click', function () { cms.unblock(b.type, b.value); });
+      li.appendChild(main);
+      li.appendChild(btn);
       ul.appendChild(li);
     });
+  },
+
+  renderSessions: function (sessions, history, blocked) {
+    var ul = document.getElementById('session-list');
+    var historyUl = document.getElementById('session-history');
+    var countEl = document.getElementById('session-count');
+    var onlineCount = document.getElementById('session-online-count');
+    var historyCount = document.getElementById('session-history-count');
+    var list = sessions || [];
+    var hist = history || [];
+    var online = list.filter(function (s) { return s.status === 'online'; }).length;
+    if (countEl) countEl.textContent = '共 ' + list.length + ' 个有效会话 · ' + online + ' 个在线';
+    if (onlineCount) onlineCount.textContent = String(list.length);
+    if (historyCount) historyCount.textContent = hist.length ? String(hist.length) : '';
+    ul.innerHTML = '';
+    if (!list.length) {
+      ul.innerHTML = '<li class="empty-tip">没有其它在线会话。</li>';
+    } else {
+      list.forEach(function (s) { ul.appendChild(cms.sessionRow(s, false)); });
+    }
+    if (historyUl) {
+      historyUl.innerHTML = '';
+      if (!hist.length) {
+        historyUl.innerHTML = '<li class="empty-tip">还没有历史会话记录。</li>';
+      } else {
+        hist.forEach(function (s) { historyUl.appendChild(cms.sessionRow(s, true)); });
+      }
+    }
+    this.renderBlocked(blocked || []);
   },
 
   addPasskey: async function () {

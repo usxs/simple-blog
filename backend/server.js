@@ -381,6 +381,26 @@ const server = http.createServer((req, res) => {
     if (!guardAuth(req, res)) return;
     return auth.handleSessionsRevokeOthers(req, res);
   }
+  if (req.method === 'POST' && pathname === '/api/auth/sessions/revoke') {
+    if (!guardAuth(req, res)) return;
+    return auth.handleSessionRevoke(req, res);
+  }
+  if (req.method === 'POST' && pathname === '/api/auth/sessions/rename') {
+    if (!guardAuth(req, res)) return;
+    return auth.handleSessionRename(req, res);
+  }
+  if (req.method === 'POST' && pathname === '/api/auth/sessions/block') {
+    if (!guardAuth(req, res)) return;
+    return auth.handleSessionBlock(req, res);
+  }
+  if (req.method === 'POST' && pathname === '/api/auth/blocklist/remove') {
+    if (!guardAuth(req, res)) return;
+    return auth.handleBlocklistRemove(req, res);
+  }
+  if (req.method === 'GET' && pathname === '/api/auth/sessions/geo') {
+    if (!guardAuth(req, res)) return;
+    return auth.handleSessionGeo(req, res, reqUrl);
+  }
 
   // 4. 前端获取某篇文章已审核通过的评论（支持层中层 parentId 及站长回复）
   if (req.method === 'GET' && pathname === '/api/comments') {

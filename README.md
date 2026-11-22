@@ -12,7 +12,7 @@
 
 ## 界面预览
 
-> 截图来自本地实际运行的实例（示例数据），默认深色主题。
+> 截图来自本地实际运行的实例（示例数据）。站点提供黑白两套主题，可跟随设备 / 系统设置自动切换。
 
 | 前台 | 后台 |
 | --- | --- |
@@ -43,6 +43,7 @@
 | --- | --- |
 | 账号登录 | 账密登录 + `scrypt` 加盐哈希 + 服务端会话 Cookie（HttpOnly / SameSite=Strict），带登录失败限流与 CSRF 防护 |
 | 管理页 | 后台「管理」页集中放站点信息（名称 / 头像文字 / 浏览器标题 / 副标题）、改用户名改密码、两步验证、通行密钥、登录会话管理；改完前台立即生效，无需重新部署 |
+| 登录会话 | 区分在线 / 离线 / 历史会话，显示设备与浏览器；点开可看 IP、归属地、设备详情、在线时长和完整 UA，并支持改备注、踢下线、封禁 IP 或设备（黑名单可解除） |
 | 两步验证（2FA） | 标准 TOTP（RFC 6238），用 Google Authenticator / 1Password 等扫码绑定；登录需再输 6 位动态码；提供 10 个一次性备用码，用掉即作废 |
 | 通行密钥（Passkey） | WebAuthn 指纹 / 面容 / 安全密钥登录，服务端只存公钥，支持多设备注册与逐个删除；也可作为免密码登录入口 |
 | 文章管理 | Markdown 写作、前台实时预览、日期归档、按日期排序 |
@@ -377,8 +378,11 @@ POST /api/auth/change-username         # 改管理员用户名
 POST /api/auth/totp/setup | enable | disable | backup-codes
 GET  /api/auth/passkeys                # 通行密钥列表
 POST /api/auth/passkey/register-options | register | delete
-GET  /api/auth/sessions                # 登录会话列表
+GET  /api/auth/sessions                # 会话总览（在线 / 历史 / 黑名单）
 POST /api/auth/sessions/revoke-others  # 下线其它设备
+POST /api/auth/sessions/revoke | rename | block   # 踢下线 / 改备注 / 封禁 IP 或设备
+POST /api/auth/blocklist/remove        # 解除封禁
+GET  /api/auth/sessions/geo?ip=        # IP 归属地
 ```
 
 完整参数见 [docs/API.md](docs/API.md)。
