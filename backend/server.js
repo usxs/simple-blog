@@ -14,51 +14,16 @@ const {
 
 const auth = require('./backend/auth');
 const { buildSitemap, PUBLIC_SITE_URL } = require('./backend/sitemap');
-const { notifyIndexNow, getIndexNowConfig, saveIndexNowConfig, verifyKeyFile } = require('./backend/indexnow');
 const site = require('./backend/site');
 const { fetchProbeServers } = require('./backend/probe-source');
-const image = require('./backend/image');
-const telegram = require('./backend/telegram');
-
-const {
-  ROOT_DIR,
-  ARTICLE_DIR,
-  MUSINGS_DIR,
-  IMG_DIR,
-  FILE_DIR,
-  getDateFolder,
-  sanitizeFileName,
-  sanitizeId,
-  buildMdContent,
-  readArticles,
-  readPostComments,
-  savePostComments,
-  mutatePostComments,
-  summarizeItem,
-  searchArticles,
-  collectCascadeIds,
-  readAllCommentsAcrossArticles,
-  readMusings,
-  getConfig,
-  saveConfig,
-  getHash,
-  getModuleData
-} = require('./backend/storage');
-
-const {
-  runAllProbes,
-  startProbeScheduler
-} = require('./backend/probe');
-
-const PORT = Number(process.env.PORT) || 33001;
-
-// 可选的服务器探针数据源（兼容 CF-Server-Monitor 的 /api/servers 接口）。
-// 不配置时 /api/probe-servers 返回 501，前端探针页只显示自身配置的站点监控。
-const PROBE_SERVERS_URL = String(process.env.PROBE_SERVERS_URL || '').trim();
 
 // 评论提交的全局并发闸门：同一时刻最多处理 20 条，超出的直接快速失败，避免写队列堆到超时
 let pendingSubmits = 0;
 const MAX_PENDING_SUBMITS = 20;
+
+// 后台登录失败计数：同一 IP 连续失败到阈值时给站长推送一次提醒
+const loginFailures = new Map();
+const LOGIN_ALERT_THRESHOLD = 5;
 
 // 前端部署版本：抓取站点根域的 /version（Cloudflare Pages Function），缓存 60 秒
 let deployVersionCache = { at: 0, info: null };
@@ -91,6 +56,43 @@ function fetchDeployVersion(callback) {
       callback(err);
     });
 }
+const { notifyIndexNow, getIndexNowConfig, saveIndexNowConfig, verifyKeyFile } = require('./backend/indexnow');
+const image = require('./backend/image');
+const telegram = require('./backend/telegram');
+const links = require('./backend/links');
+const notify = require('./backend/notify');
+
+const {
+  ROOT_DIR,
+  ARTICLE_DIR,
+  MUSINGS_DIR,
+  IMG_DIR,
+  FILE_DIR,
+  getDateFolder,
+  sanitizeFileName,
+  sanitizeId,
+  buildMdContent,
+  readArticles,
+  readPostComments,
+  savePostComments,
+  mutatePostComments,
+  summarizeItem,
+  searchArticles,
+  collectCascadeIds,
+  readAllCommentsAcrossArticles,
+  readMusings,
+  getConfig,
+  saveConfig,
+  getHash,
+  getModuleData
+} = require('./backend/storage');
+
+const {
+  runAllProbes,
+  startProbeScheduler
+} = require('./backend/probe');
+
+const PORT = Number(process.env.PORT) || 33001;
 
 // 中国大陆时区（Asia/Shanghai, UTC+8）：评论时间、文章日期等统一按北京时间生成，
 // 不依赖容器/宿主机的系统时区设置（toISOString 恒为 UTC，会导致北京时间 0~8 点
@@ -137,16 +139,20 @@ const MIME_MAP = {
 
 startProbeScheduler();
 
-// 鉴权守卫：先判 CSRF（跨站写请求 → 403），再判登录态（→ 401）
+/**
+ * 新管理接口统一鉴权：先校验跨站（403），再校验会话（401）。
+ * 返回 true 表示已放行，false 表示响应已发出。
+ */
 function guardAuth(req, res) {
-  if (req.method !== 'GET' && req.method !== 'HEAD' && !auth.assertSameOrigin(req)) {
+  const method = String(req.method || 'GET').toUpperCase();
+  if (method !== 'GET' && method !== 'HEAD' && !auth.assertSameOrigin(req)) {
     res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ ok: false, error: '拒绝跨站请求' }));
     return false;
   }
   if (!auth.isAuthenticated(req)) {
     res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ error: 'Unauthorized' }));
+    res.end(JSON.stringify({ ok: false, error: 'Unauthorized' }));
     return false;
   }
   return true;
@@ -192,6 +198,7 @@ const server = http.createServer((req, res) => {
     pathname.startsWith('/api/comments') ||
     pathname.startsWith('/api/sync') ||
     pathname.startsWith('/api/search') ||
+    pathname.startsWith('/api/links') ||
     pathname.startsWith('/api/public/') ||
     pathname.startsWith('/api/probe-servers') ||
     pathname.startsWith('/img/') ||
@@ -219,8 +226,15 @@ const server = http.createServer((req, res) => {
   res.setHeader('X-Accel-Expires', '0');
 
   // 1. 后台页面与分离后的静态资源 (/admin, /admin.css, /admin.js)
-  if (req.method === 'GET' && (pathname === '/admin' || pathname === '/admin.html')) {
+  // 后台入口路径可配置：默认 /admin，改了之后旧地址会 302 过去
+  var adminEntry = '/' + String(site.getSite().adminPath || 'admin').replace(/^\/+|\/+$/g, '');
+  if (req.method === 'GET' && (pathname === adminEntry || pathname === adminEntry + '/')) {
     return serveSingleFile(res, path.join(ROOT_DIR, 'admin.html'), MIME_MAP['.html']);
+  }
+  // 后台入口不是公开地址：旧路径直接当作「未授权」，不暴露新入口、也不跳转
+  if (pathname === '/admin' || pathname === '/admin.html' || pathname.indexOf('/admin/') === 0) {
+    res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+    return res.end(JSON.stringify({ ok: false, error: '未授权访问' }));
   }
   if (req.method === 'GET' && pathname === '/admin.css') {
     return serveSingleFile(res, path.join(ROOT_DIR, 'admin.css'), MIME_MAP['.css']);
@@ -259,10 +273,11 @@ const server = http.createServer((req, res) => {
     );
   }
 
-  // 3. 获取算术验证码: GET /api/captcha
+  // 3. 获取算术验证码: GET /api/captcha（按 IP 限流，防止无限刷新题目）
   if (req.method === 'GET' && pathname === '/api/captcha') {
     const budget = hitCaptchaBudget(getClientIp(req));
     if (!budget.ok) {
+      notify.onSecurity('验证码被大量请求', '来自 ' + getClientIp(req) + ' 的验证码请求超过 10 分钟内的上限，可能有人在刷接口。').catch(function () {});
       res.writeHead(429, { 'Content-Type': 'application/json; charset=utf-8', 'Retry-After': String(budget.retryAfter || 60) });
       return res.end(JSON.stringify({ ok: false, error: '验证码请求过于频繁，请稍后再试', retryAfter: budget.retryAfter || 60 }));
     }
@@ -283,6 +298,23 @@ const server = http.createServer((req, res) => {
 
   // 3.3 账密登录: POST /api/auth/login
   if (req.method === 'POST' && pathname === '/api/auth/login') {
+    const loginIp = getClientIp(req);
+    const originalEnd = res.end.bind(res);
+    res.end = function (chunk, encoding, callback) {
+      try {
+        const code = res.statusCode;
+        if (code === 200) {
+          loginFailures.delete(loginIp);
+        } else if (code === 401 || code === 429 || code === 403) {
+          const times = (loginFailures.get(loginIp) || 0) + 1;
+          loginFailures.set(loginIp, times);
+          if (times === LOGIN_ALERT_THRESHOLD) {
+            notify.onSecurity('后台登录被反复尝试', '来自 ' + loginIp + ' 的连续 ' + times + ' 次登录失败（含密码错误或被限流），已触发提醒。');
+          }
+        }
+      } catch (e) { /* 通知失败不影响登录响应 */ }
+      return originalEnd(chunk, encoding, callback);
+    };
     return auth.handleLogin(req, res);
   }
 
@@ -296,7 +328,7 @@ const server = http.createServer((req, res) => {
     return auth.handleChangePassword(req, res);
   }
 
-  // 3.6 站点展示信息（公开）: GET /api/site —— 前端启动时读取名称/标题/副标题
+  // 3.6 站点展示信息（公开）：GET /api/site —— 前端启动时读取名称/标题/副标题
   if (req.method === 'GET' && pathname === '/api/site') {
     res.writeHead(200, {
       'Content-Type': 'application/json; charset=utf-8',
@@ -305,26 +337,119 @@ const server = http.createServer((req, res) => {
     return res.end(JSON.stringify({ ok: true, site: auth.getSiteInfo() }));
   }
 
-  // 3.7 后台总览: GET /api/admin/overview
+  // 3.6 友链列表（公开，只返回已通过的）: GET /api/links
+  if (req.method === 'GET' && pathname === '/api/links') {
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'public, max-age=60'
+    });
+    return res.end(JSON.stringify({ ok: true, links: links.listApproved() }));
+  }
+
+  // 3.6.1 申请友链（公开，进后台审核）: POST /api/links/apply
+  if (req.method === 'POST' && pathname === '/api/links/apply') {
+    return auth.readJsonBody(req, res, function (data) {
+      const result = links.apply(data || {}, getClientIp(req));
+      if (!result.ok) {
+        const status = result.retryAfter ? 429 : 400;
+        if (result.retryAfter) res.setHeader('Retry-After', String(result.retryAfter));
+        res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ ok: false, error: result.error, retryAfter: result.retryAfter }));
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: true, item: result.item }));
+      notify.onLinkApply(result.item).catch(function () {});
+      console.warn('[links] 新的友链申请：' + result.item.name + ' · ' + result.item.url);
+    });
+  }
+
+  // 3.7 后台总览（需登录）: GET /api/admin/overview
   if (req.method === 'GET' && pathname === '/api/admin/overview') {
     if (!guardAuth(req, res)) return;
     return auth.handleAdminOverview(req, res);
   }
 
-  // 3.8 保存站点信息: POST /api/admin/site
+  // 3.8 保存站点信息（需登录）: POST /api/admin/site
   if (req.method === 'POST' && pathname === '/api/admin/site') {
     if (!guardAuth(req, res)) return;
     return auth.handleSiteSave(req, res);
   }
 
-  // 3.8.1 IndexNow 密钥: GET /api/admin/indexnow
+  // 3.8.3 友链管理（需登录）: GET /api/admin/links
+  if (req.method === 'GET' && pathname === '/api/admin/links') {
+    if (!guardAuth(req, res)) return;
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+    return res.end(JSON.stringify({ ok: true, items: links.listForAdmin(), overview: links.overview() }));
+  }
+
+  // 3.8.4 更新 / 审核 / 删除友链（需登录）: POST /api/admin/links/:action
+  if (req.method === 'POST' && pathname.indexOf('/api/admin/links/') === 0) {
+    if (!guardAuth(req, res)) return;
+    const action = pathname.slice('/api/admin/links/'.length);
+    return auth.readJsonBody(req, res, function (data) {
+      const payload = data || {};
+      const id = String(payload.id || '').trim();
+      let result;
+      if (action === 'create') result = links.create(payload);
+      else if (action === 'update') result = links.update(id, payload.patch || payload);
+      else if (action === 'approve') result = links.update(id, { status: 'approved' });
+      else if (action === 'reject') result = links.update(id, { status: 'rejected', rejectReason: payload.rejectReason });
+      else if (action === 'delete') result = links.remove(id);
+      else result = { ok: false, error: '未知操作' };
+
+      if (!result.ok) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ ok: false, error: result.error }));
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: true, items: links.listForAdmin(), overview: links.overview() }));
+
+      if (action === 'approve' || action === 'reject') {
+        const target = links.get(id) || payload.item || { name: '', url: '' };
+        notify.onLinkReview(target, action === 'approve' ? 'approved' : 'rejected')
+          .catch(function () {});
+      }
+    });
+  }
+
+  // 3.8.5 通知设置（邮件 / Bark 模板，需登录）: GET|POST /api/admin/notify
+  if ((req.method === 'GET' || req.method === 'POST') && pathname === '/api/admin/notify') {
+    if (!guardAuth(req, res)) return;
+    if (req.method === 'GET') {
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+      return res.end(JSON.stringify({ ok: true, config: notify.publicConfig() }));
+    }
+    return auth.readJsonBody(req, res, function (data) {
+      try {
+        const saved = notify.saveConfig(data || {});
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: true, config: saved.config }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: false, error: e.message || '保存失败' }));
+      }
+    });
+  }
+
+  // 3.8.6 发送测试邮件 / 测试推送（需登录）: POST /api/admin/notify/test
+  if (req.method === 'POST' && pathname === '/api/admin/notify/test') {
+    if (!guardAuth(req, res)) return;
+    return auth.readJsonBody(req, res, async function (data) {
+      const kind = (data && data.kind) === 'bark' ? 'bark' : 'mail';
+      const result = kind === 'bark' ? await notify.testBark() : await notify.testMail((data && data.to) || '');
+      res.writeHead(result.ok ? 200 : 400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    });
+  }
+
+  // 3.8.1 IndexNow 密钥（需登录）: GET /api/admin/indexnow
   if (req.method === 'GET' && pathname === '/api/admin/indexnow') {
     if (!guardAuth(req, res)) return;
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
     return res.end(JSON.stringify({ ok: true, config: getIndexNowConfig() }));
   }
 
-  // 3.8.2 保存 IndexNow 密钥: POST /api/admin/indexnow
+  // 3.8.2 保存 IndexNow 密钥（需登录）: POST /api/admin/indexnow
   if (req.method === 'POST' && pathname === '/api/admin/indexnow') {
     if (!guardAuth(req, res)) return;
     return auth.readJsonBody(req, res, function (data) {
@@ -334,7 +459,7 @@ const server = http.createServer((req, res) => {
     });
   }
 
-  // 3.8.3 检查密钥文件: POST /api/admin/indexnow/verify
+  // 3.8.3 检查密钥文件是否已部署（需登录）: POST /api/admin/indexnow/verify
   if (req.method === 'POST' && pathname === '/api/admin/indexnow/verify') {
     if (!guardAuth(req, res)) return;
     return verifyKeyFile().then(function (result) {
@@ -342,7 +467,7 @@ const server = http.createServer((req, res) => {
     });
   }
 
-  // 3.8.4 碎碎念 → Telegram 同步
+  // 3.8.4 碎碎念 → Telegram 同步（需登录）
   if (req.method === 'GET' && pathname === '/api/admin/telegram') {
     if (!guardAuth(req, res)) return;
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -370,7 +495,7 @@ const server = http.createServer((req, res) => {
     });
   }
 
-  // 3.9 修改管理员用户名: POST /api/auth/change-username
+  // 3.9 修改管理员用户名（需登录 + 当前密码）: POST /api/auth/change-username
   if (req.method === 'POST' && pathname === '/api/auth/change-username') {
     if (!guardAuth(req, res)) return;
     return auth.handleChangeUsername(req, res);
@@ -394,7 +519,7 @@ const server = http.createServer((req, res) => {
     return auth.handleBackupCodes(req, res);
   }
 
-  // 3.11 通行密钥（Passkey / WebAuthn）
+  // 3.11 通行密钥（Passkey）
   if (req.method === 'GET' && pathname === '/api/auth/passkeys') {
     if (!guardAuth(req, res)) return;
     return auth.handlePasskeyList(req, res);
@@ -411,6 +536,8 @@ const server = http.createServer((req, res) => {
     if (!guardAuth(req, res)) return;
     return auth.handlePasskeyDelete(req, res);
   }
+
+  // 3.12 用通行密钥登录（免密码，公开但仅同源）
   if (req.method === 'POST' && pathname === '/api/auth/passkey/login-options') {
     if (!auth.assertSameOrigin(req)) {
       res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -426,7 +553,7 @@ const server = http.createServer((req, res) => {
     return auth.handlePasskeyLogin(req, res);
   }
 
-  // 3.12 登录会话管理
+  // 3.13 会话管理（需登录）
   if (req.method === 'GET' && pathname === '/api/auth/sessions') {
     if (!guardAuth(req, res)) return;
     return auth.handleSessionsList(req, res);
@@ -509,8 +636,8 @@ const server = http.createServer((req, res) => {
 
     // 同一 IP 至少间隔 30 秒，且每小时 8 条、每天 30 条
     if (now - rec.lastSubmit < 30 * 1000) {
-      const waitSec = Math.ceil((30 * 1000 - (now - rec.lastSubmit)) / 1000);
-      return tooMany('发送太快啦，请等待 ' + waitSec + ' 秒后再发送下一条评论', waitSec);
+      return tooMany('发送太快啦，请等待 ' + Math.ceil((30 * 1000 - (now - rec.lastSubmit)) / 1000) + ' 秒后再发送下一条评论',
+        Math.ceil((30 * 1000 - (now - rec.lastSubmit)) / 1000));
     }
 
     if (now - rec.lastActive > 3600 * 1000) {
@@ -623,6 +750,11 @@ const server = http.createServer((req, res) => {
           res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
           return res.end(JSON.stringify({ ok: false, error: parentError }));
         }
+
+        try {
+          const postTitle = (readArticles().find(p => String(p.id) === String(postId)) || {}).title || '';
+          notify.onComment(newComment, { id: postId, title: postTitle }).catch(function () {});
+        } catch (e) { /* 通知失败不影响评论提交 */ }
 
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ ok: true }));
@@ -949,8 +1081,17 @@ const server = http.createServer((req, res) => {
               : '';
           }
 
+          const previousReply = String(target.replyContent || '');
           postComments[idx] = target;
           savePostComments(postId, postComments);
+
+          // 站长回复了评论：给留言者发邮件（仅当其留的是邮箱）
+          if (target.replyContent && target.replyContent !== previousReply) {
+            try {
+              const postTitle = (readArticles().find(p => String(p.id) === String(postId)) || {}).title || '';
+              notify.onAdminReply(target, { id: postId, title: postTitle }, target.replyContent).catch(function () {});
+            } catch (e) { /* 通知失败不影响保存 */ }
+          }
 
           const all = readAllCommentsAcrossArticles();
           const updatedTarget = all.find(c => String(c.id) === String(item.id)) || target;

@@ -57,7 +57,7 @@ var ICON_FALLBACK = {
 };
 
 // 前台栏目：后端「管理」页可开关 / 改名 / 换图标，GET /api/site 返回 modules
-var MODULE_KEYS = ['home', 'posts', 'moments', 'tools', 'probe', 'status', 'quirky'];
+var MODULE_KEYS = ['home', 'posts', 'moments', 'links', 'tools', 'probe', 'status', 'quirky'];
 
 function normalizeModuleConfig(raw) {
   var out = {};
@@ -1049,6 +1049,7 @@ var commentBox = {
 
 var router = {
   current: 'home',
+  signatures: {},
   searchQuery: '',
   cachedPosts: [],
   probeRefreshTimer: null,
@@ -1057,7 +1058,7 @@ var router = {
   // ---------- 真实路径路由：每个页面 / 每篇文章拥有独立、可抓取、可分享的地址 ----------
   // 支持：/  /posts  /moments  /tools  /probe  /status  /quirky  /post/<id>
   // 服务端（CF Pages Functions）会对这些路径返回预渲染 HTML，本文件负责接管交互（水合）。
-  KNOWN_TABS: ['home', 'posts', 'moments', 'tools', 'probe', 'status', 'quirky'],
+  KNOWN_TABS: ['home', 'posts', 'moments', 'links', 'links-apply', 'tools', 'probe', 'status', 'quirky'],
 
   parseRoute: function () {
     var p = '/';
@@ -1069,6 +1070,9 @@ var router = {
     var seg = p.replace(/^\/+|\/+$/g, '').split('/');
     if (seg[0] === 'post' && seg[1]) {
       return { tab: 'post', postId: seg.slice(1).join('/') };
+    }
+    if (seg[0] === 'links' && seg[1] === 'apply') {
+      return { tab: 'links-apply' };
     }
     var tab = routeToTab(seg[0]);
     if (tab) return { tab: tab };
@@ -1121,6 +1125,7 @@ var router = {
         navEls[i].removeAttribute('aria-current');
       }
     }
+    if (typeof window.__refreshDock === 'function') window.__refreshDock();
   },
 
   renderPostRoute: async function (id) {
@@ -1152,27 +1157,10 @@ var router = {
       '</section>';
     this.syncDock(tab);
     window.scrollTo(0, 0);
-    this.progressEnd();
   },
 
   handlePopState: function () {
     this.applyRoute();
-  },
-
-  progressStart: function () {
-    var p = document.getElementById('nav-progress');
-    var b = document.getElementById('nav-progress-bar');
-    p.setAttribute('data-active', 'true');
-    b.style.width = '65%';
-  },
-  progressEnd: function () {
-    var p = document.getElementById('nav-progress');
-    var b = document.getElementById('nav-progress-bar');
-    b.style.width = '100%';
-    setTimeout(function () {
-      p.setAttribute('data-active', 'false');
-      b.style.width = '0%';
-    }, 220);
   },
 
   // 站点配置没到齐时最多等 1.2 秒：有缓存则立即返回，避免首页被网络阻塞
@@ -1181,6 +1169,34 @@ var router = {
     var ready = SITE_CONFIG.siteReadyPromise || Promise.resolve();
     var timeout = new Promise(function (resolve) { setTimeout(resolve, 1200); });
     return Promise.race([ready, timeout]);
+  },
+
+  // 页面切换：直接替换内容。此前的 View Transitions / 入场动画会让一次点击出现
+  // 「旧内容 → 骨架 → 新内容」两三次画面变化，看起来就是闪一下；现在一律瞬时替换。
+  pageSwap: function (mutate) {
+    mutate();
+  },
+
+  // 数据到达后替换内容：直接换，不做骨架叠层与淡入淡出
+  fillContent: function (container, mutate) {
+    mutate();
+    window.scrollTo(0, 0);
+  },
+
+  animateContent: function () { /* 已停用：保留调用点，避免报错 */ },
+
+  skeletonHtml: function (tab) {
+    var label = { posts: '文章', moments: '碎碎念', tools: '工具', status: '状态', quirky: '奇奇怪怪' }[tab] || '内容';
+    var cards = '';
+    for (var i = 0; i < 3; i++) cards += '<div class="sk-card"><div class="sk-line sk-line--title"></div><div class="sk-line sk-line--body"></div><div class="sk-line sk-line--short"></div></div>';
+    return '<div class="page-skeleton" aria-busy="true" aria-label="正在加载' + label + '">' +
+      '<div class="sk-line sk-line--head"></div>' +
+      cards +
+    '</div>';
+  },
+
+  signatureOf: function (list) {
+    return (list || []).map(function (it) { return String(it.id) + '@' + String(it.date || it.mtime || ''); }).join('|');
   },
 
   go: async function (tab, skipUrl) {
@@ -1197,10 +1213,14 @@ var router = {
       this.probeRequestId += 1;
     }
     this.current = tab;
-    if (!skipUrl) this.syncUrl(tab === 'home' ? '/' : '/' + moduleRoute(tab));
+    if (!skipUrl) {
+      if (tab === 'links-apply') this.syncUrl('/links/apply');
+      else this.syncUrl(tab === 'home' ? '/' : '/' + moduleRoute(tab));
+    }
+    var navKey = tab === 'links-apply' ? 'links' : tab;
     var navEls = document.querySelectorAll('[data-nav]');
     for (var i = 0; i < navEls.length; i++) {
-      if (navEls[i].getAttribute('data-nav') === tab) {
+      if (navEls[i].getAttribute('data-nav') === navKey) {
         navEls[i].setAttribute('aria-current', 'page');
       } else {
         navEls[i].removeAttribute('aria-current');
@@ -1209,72 +1229,145 @@ var router = {
 
     var container = document.getElementById('page-content');
     container.classList.remove('is-reading');
-    this.progressStart();
 
     if (tab === 'home') {
-      container.innerHTML =
-        '<section class="home-minimal">' +
-          '<h1 class="home-title">' + escapeHtml(SITE_CONFIG.homeTitle) + '</h1>' +
-          '<p class="home-bio">' + escapeHtml(SITE_CONFIG.homeBio) + '</p>' +
-          renderHomeSocials() +
-        '</section>';
-      this.progressEnd();
+      this.pageSwap(function () {
+        window.scrollTo(0, 0);
+        container.innerHTML =
+          '<section class="home-minimal">' +
+            '<h1 class="home-title">' + escapeHtml(SITE_CONFIG.homeTitle) + '</h1>' +
+            '<p class="home-bio">' + escapeHtml(SITE_CONFIG.homeBio) + '</p>' +
+            renderHomeSocials() +
+          '</section>';
+      });
       syncClient.pingBackend();
       return;
     }
 
     if (tab === 'posts') {
+      var self = this;
       var cached = sortNewestFirst(syncClient.getCache('posts').data);
+      this.pageSwap(function () {
+        window.scrollTo(0, 0);
       if (cached.length) {
-        this.cachedPosts = cached;
-        this.renderPostsView(container, cached);
-      }
+        window.scrollTo(0, 0);
+        self.cachedPosts = cached;
+        self.renderPostsView(container, cached);
+      } else {
+        }
+      });
       var fresh = sortNewestFirst(await syncClient.fetchModule('posts'));
       this.cachedPosts = fresh;
-      if (this.current === 'posts') this.renderPostsView(container, fresh);
-      this.progressEnd();
+      var sig = this.signatureOf(fresh);
+      if (this.current === 'posts' && (!cached.length || sig !== this.signatures.posts)) {
+        this.signatures.posts = sig;
+        this.fillContent(container, function () { self.renderPostsView(container, fresh); });
+      }
       return;
     }
 
     if (tab === 'moments') {
       var cachedM = sortNewestFirst(syncClient.getCache('moments').data);
-      if (cachedM.length) this.renderMomentsView(container, cachedM);
+      var selfM = this;
+      this.pageSwap(function () {
+        window.scrollTo(0, 0);
+        if (cachedM.length) selfM.renderMomentsView(container, cachedM);
+      });
       var freshM = sortNewestFirst(await syncClient.fetchModule('moments'));
-      if (this.current === 'moments') this.renderMomentsView(container, freshM);
-      this.progressEnd();
+      var sigM = this.signatureOf(freshM);
+      if (this.current === 'moments' && (!cachedM.length || sigM !== this.signatures.moments)) {
+        this.signatures.moments = sigM;
+        this.fillContent(container, function () { selfM.renderMomentsView(container, freshM); });
+      }
+      return;
+    }
+
+    if (tab === 'links-apply') {
+      var selfLA = this;
+      this.pageSwap(function () {
+        window.scrollTo(0, 0);
+        selfLA.renderLinksApplyView(container);
+        selfLA.animateContent(container);
+      });
+      return;
+    }
+
+    if (tab === 'links') {
+      var selfL = this;
+      this.pageSwap(function () {
+        window.scrollTo(0, 0);
+      });
+      try {
+        var resL = await fetch(SITE_CONFIG.apiBaseUrl + '/api/links?_t=' + Date.now(), { cache: 'no-store' });
+        var jsonL = await resL.json();
+        if (this.current !== 'links') return;
+        var listL = (jsonL && jsonL.links) || [];
+        this.fillContent(container, function () {
+          selfL.renderLinksView(container, listL);
+        });
+      } catch (e) {
+        if (this.current !== 'links') return;
+        this.fillContent(container, function () {
+          selfL.renderLinksView(container, []);
+        });
+      }
       return;
     }
 
     if (tab === 'tools') {
       var cachedT = syncClient.getCache('tools').data;
-      if (cachedT.length) this.renderToolsView(container, cachedT);
+      var selfT = this;
+      this.pageSwap(function () {
+        window.scrollTo(0, 0);
+        if (cachedT.length) selfT.renderToolsView(container, cachedT);
+      });
       var freshT = await syncClient.fetchModule('tools');
-      if (this.current === 'tools') this.renderToolsView(container, freshT);
-      this.progressEnd();
+      var sigT = this.signatureOf(freshT);
+      if (this.current === 'tools' && sigT !== this.signatures.tools) {
+        this.signatures.tools = sigT;
+        this.fillContent(container, function () { selfT.renderToolsView(container, freshT); });
+      }
       return;
     }
 
     if (tab === 'probe') {
-      this.renderProbeView(container);
-      this.progressEnd();
+      var selfP = this;
+      this.pageSwap(function () {
+        window.scrollTo(0, 0);
+        selfP.renderProbeView(container);
+      });
       return;
     }
 
     if (tab === 'status') {
       var cachedS = syncClient.getCache('status').data;
-      this.renderStatusView(container, cachedS);
+      var selfS = this;
+      this.pageSwap(function () {
+        window.scrollTo(0, 0);
+        selfS.renderStatusView(container, cachedS);
+      });
       var freshS = await syncClient.fetchModule('status');
-      if (this.current === 'status') this.renderStatusView(container, freshS);
-      this.progressEnd();
+      var sigS = this.signatureOf(freshS);
+      if (this.current === 'status' && sigS !== this.signatures.status) {
+        this.signatures.status = sigS;
+        this.fillContent(container, function () { selfS.renderStatusView(container, freshS); });
+      }
       return;
     }
 
     if (tab === 'quirky') {
       var cachedQ = syncClient.getCache('quirky').data;
-      this.renderQuirkyView(container, cachedQ);
+      var selfQ = this;
+      this.pageSwap(function () {
+        window.scrollTo(0, 0);
+        selfQ.renderQuirkyView(container, cachedQ);
+      });
       var freshQ = await syncClient.fetchModule('quirky');
-      if (this.current === 'quirky') this.renderQuirkyView(container, freshQ);
-      this.progressEnd();
+      var sigQ = this.signatureOf(freshQ);
+      if (this.current === 'quirky' && sigQ !== this.signatures.quirky) {
+        this.signatures.quirky = sigQ;
+        this.fillContent(container, function () { selfQ.renderQuirkyView(container, freshQ); });
+      }
       return;
     }
   },
@@ -1440,7 +1533,8 @@ var router = {
     }
     this.current = 'post';
     this.syncDock('post');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // 先瞬间归零再换内容：用平滑滚动会让新文章从底部“滑上来”，观感上就是闪一下
+    window.scrollTo(0, 0);
     var container = document.getElementById('page-content');
     container.classList.add('is-reading');
     container.innerHTML =
@@ -1483,6 +1577,135 @@ var router = {
       '</article>';
 
     commentBox.loadSection(post.id);
+  },
+
+renderLinksView: function (container, links) {
+    var list = Array.isArray(links) ? links.slice() : [];
+    var cards = list.map(function (item) {
+      var icon = item.icon
+        ? '<img class="friend-icon" src="' + escapeHtml(item.icon) + '" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'),{className:\'friend-initial\',textContent:this.dataset.initial||\'?\'}))" data-initial="' + escapeHtml(item.initial || (item.name || '?').charAt(0)) + '">'
+        : '<span class="friend-initial">' + escapeHtml(item.initial || (item.name || '?').charAt(0)) + '</span>';
+      var host = '';
+      try { host = new URL(item.url).hostname.replace(/^www\./, ''); } catch (e) { host = item.url || ''; }
+      return (
+        '<li class="friend-card">' +
+          '<a class="friend-link" href="' + escapeHtml(item.url) + '" target="_blank" rel="noopener noreferrer">' +
+            icon +
+            '<span class="friend-body">' +
+              '<span class="friend-name">' + escapeHtml(item.name || host) + '</span>' +
+              '<span class="friend-host">' + escapeHtml(host) + '</span>' +
+              (item.note ? '<span class="friend-note">' + escapeHtml(item.note) + '</span>' : '') +
+            '</span>' +
+          '</a>' +
+        '</li>'
+      );
+    }).join('');
+
+    container.innerHTML =
+      '<section class="links-view">' +
+        '<header class="links-head">' +
+          '<div class="links-head-text">' +
+            '<h1 class="links-title">期待与你相遇</h1>' +
+            '<p class="links-sub">这里收藏了一些我在写作路上遇到的朋友。如果你也有一个认真维护的小站，欢迎交换友链，让彼此被更多人看见。</p>' +
+          '</div>' +
+          '<button class="btn links-apply-btn" type="button" onclick="router.go(\'links-apply\')">加入友链</button>' +
+        '</header>' +
+        (cards
+          ? '<ul class="friend-grid">' + cards + '</ul>'
+          : '<div class="links-empty">' +
+              '<p>还没有友链，等你来做第一个。</p>' +
+            '</div>') +
+      '</section>';
+  },
+
+renderLinksApplyView: function (container) {
+    container.innerHTML =
+      '<section class="links-view">' +
+        '<button class="back-btn" type="button" onclick="router.go(\'links\')">← 返回友链</button>' +
+        '<header class="links-head links-head--form">' +
+          '<div class="links-head-text">' +
+            '<h1 class="links-title">加入友链</h1>' +
+            '<p class="links-sub">欢迎你的加入！填写一些基本信息，管理员会尽快审核，通过后就会出现在友链页。</p>' +
+          '</div>' +
+        '</header>' +
+        '<form class="links-form" id="links-apply-form" novalidate>' +
+          '<label class="links-field">' +
+            '<span class="links-label">网站 URL</span>' +
+            '<input class="links-input" id="friend-url" type="url" name="url" placeholder="https://example.com" maxlength="200" required />' +
+            '<span class="links-hint">完整地址，例如 https://example.com</span>' +
+          '</label>' +
+          '<label class="links-field">' +
+            '<span class="links-label">网站名</span>' +
+            '<input class="links-input" id="friend-name" type="text" name="name" placeholder="我的小站" maxlength="30" required />' +
+          '</label>' +
+          '<label class="links-field">' +
+            '<span class="links-label">图标 URL<span class="links-optional">选填</span></span>' +
+            '<input class="links-input" id="friend-icon" type="url" name="icon" placeholder="https://example.com/icon.png" maxlength="200" />' +
+            '<span class="links-hint">方形图片更好看；不填就用网站名首字代替</span>' +
+          '</label>' +
+          '<label class="links-field">' +
+            '<span class="links-label">邮箱<span class="links-optional">选填</span></span>' +
+            '<input class="links-input" id="friend-email" type="email" name="email" placeholder="you@example.com" maxlength="120" />' +
+            '<span class="links-hint">填写后可通过邮件收到审核结果</span>' +
+          '</label>' +
+          '<label class="links-field links-field--note">' +
+            '<span class="links-label">一句话介绍<span class="links-optional">选填</span></span>' +
+            '<input class="links-input" id="friend-note" type="text" name="note" placeholder="写点关于这个站的说明" maxlength="80" />' +
+          '</label>' +
+          '<input class="links-hp" id="friend-website" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />' +
+          '<div class="links-actions">' +
+            '<button class="btn btn-primary" id="links-submit" type="submit">提交申请</button>' +
+            '<span class="links-feedback" id="links-feedback" role="status"></span>' +
+          '</div>' +
+        '</form>' +
+      '</section>';
+
+    var form = document.getElementById('links-apply-form');
+    if (!form) return;
+    var feedback = document.getElementById('links-feedback');
+    var submitBtn = document.getElementById('links-submit');
+
+    function setFeedback(text, ok) {
+      if (!feedback) return;
+      feedback.textContent = text || '';
+      feedback.setAttribute('data-ok', ok ? 'true' : 'false');
+    }
+
+    form.addEventListener('submit', async function (ev) {
+      ev.preventDefault();
+      var url = (document.getElementById('friend-url') || {}).value || '';
+      var name = (document.getElementById('friend-name') || {}).value || '';
+      var icon = (document.getElementById('friend-icon') || {}).value || '';
+      var note = (document.getElementById('friend-note') || {}).value || '';
+      var email = (document.getElementById('friend-email') || {}).value || '';
+      var hp = (document.getElementById('friend-website') || {}).value || '';
+
+      if (!url.trim()) return setFeedback('请填写网站地址', false);
+      if (!name.trim()) return setFeedback('请填写网站名', false);
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = '提交中…';
+      setFeedback('', true);
+      try {
+        var res = await fetch(SITE_CONFIG.apiBaseUrl + '/api/links/apply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: url.trim(), name: name.trim(), icon: icon.trim(), note: note.trim(), email: email.trim(), website: hp })
+        });
+        var data = await res.json().catch(function () { return {}; });
+        if (res.ok && data.ok) {
+          setFeedback('已提交，等站长审核通过后就会出现在友链页。', true);
+          form.reset();
+        } else {
+          setFeedback((data && data.error) || '提交失败，请稍后再试', false);
+        }
+      } catch (e) {
+        setFeedback('网络不太顺畅，请稍后再试', false);
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '提交申请';
+      }
+    });
   },
 
   renderMomentsView: function (container, moments) {
@@ -1934,6 +2157,88 @@ var router = {
 
 // 浏览器前进/后退：跟随地址变化重渲染
 window.addEventListener('popstate', function () { router.handlePopState(); });
+
+// 移动端底栏「液态玻璃」：只负责把选中胶囊摆到当前栏目下，并做滚动隐藏
+(function () {
+  var dock = document.getElementById('mobile-dock');
+  var glider = document.getElementById('dock-glider');
+  if (!dock || !glider) return;
+
+  function buttons() {
+    return Array.prototype.filter.call(dock.querySelectorAll('.mobile-dock-btn'), function (b) {
+      return !b.hidden && b.offsetWidth > 0;
+    });
+  }
+
+  function activeButton() {
+    var list = buttons();
+    if (!list.length) return null;
+    var cur = dock.querySelector('.mobile-dock-btn[aria-current="page"]');
+    if (!cur || cur.hidden || !cur.offsetWidth) cur = list[0];
+    return cur;
+  }
+
+  function sync(animate) {
+    var btn = activeButton();
+    if (!btn) return;
+    var dr = dock.getBoundingClientRect();
+    var br = btn.getBoundingClientRect();
+    var border = parseFloat(getComputedStyle(dock).borderLeftWidth) || 0;
+    if (animate === false) glider.style.transition = 'none';
+    else glider.style.transition = '';
+    glider.style.width = br.width + 'px';
+    glider.style.transform = 'translate3d(' + (br.left - dr.left - border) + 'px,0,0)';
+    if (!glider.classList.contains('is-ready')) glider.classList.add('is-ready');
+  }
+
+  var mo = new MutationObserver(function () { sync(true); });
+  mo.observe(dock, { attributes: true, subtree: true, attributeFilter: ['aria-current', 'hidden', 'style'] });
+  window.addEventListener('resize', function () { sync(false); });
+  window.addEventListener('orientationchange', function () { window.setTimeout(function () { sync(false); }, 260); });
+
+  // 除首页外，向下滚隐藏、向上滚出现；回到首页总是显示
+  var lastY = window.pageYOffset || 0;
+  var dockHidden = false;
+  var ticking = false;
+
+  function setHidden(next) {
+    if (next === dockHidden) return;
+    dockHidden = next;
+    dock.classList.toggle('is-hidden', next);
+    // 隐藏时让底栏不再挡住页面，但不影响布局
+    dock.setAttribute('aria-hidden', next ? 'true' : 'false');
+  }
+
+  function onScroll() {
+    if (ticking) return;
+    ticking = true;
+    window.requestAnimationFrame(function () {
+      ticking = false;
+      var y = window.pageYOffset || 0;
+      var onHome = (typeof router !== 'undefined' && router && router.current === 'home');
+      if (onHome || y < 72) {
+        setHidden(false);
+      } else if (y > lastY + 8 && y > 160) {
+        setHidden(true);
+      } else if (y < lastY - 8) {
+        setHidden(false);
+      }
+      lastY = y;
+    });
+  }
+
+  window.addEventListener('scroll', onScroll, { passive: true });
+  window.__refreshDock = function () { lastY = window.pageYOffset || 0; setHidden(false); sync(true); };
+
+  function boot() {
+    sync(false);
+    window.requestAnimationFrame(function () { sync(false); });
+    window.setTimeout(function () { sync(true); }, 220);
+  }
+  if (document.readyState === 'complete') boot();
+  else window.addEventListener('load', boot);
+  boot();
+})();
 
 // 首次进入：立刻按地址渲染（页面完整性优先）。
 // 站点配置已在上面同步套用过缓存，网络慢/后端挂了也不会卡住首屏；

@@ -35,6 +35,8 @@
         <li class="nav-item-row" data-nav-row="posts"><button class="nav-btn active" data-mod="posts" onclick="cms.switchMod('posts')"><span class="nav-label" data-label="posts">文章</span><span class="nav-count" id="count-posts">0</span></button></li>
         <li class="nav-item-row" data-nav-row="moments"><button class="nav-btn" data-mod="moments" onclick="cms.switchMod('moments')"><span class="nav-label" data-label="moments">碎碎念</span><span class="nav-count" id="count-moments">0</span></button></li>
         <li class="nav-item-row" data-nav-row="comments"><button class="nav-btn" data-mod="comments" onclick="cms.switchMod('comments')"><span class="nav-label">评论审核</span><span class="nav-count" id="count-comments">0</span></button></li>
+        <li class="nav-item-row" data-nav-row="links"><button class="nav-btn" data-mod="links" onclick="cms.switchMod('links')"><span class="nav-label">友链</span><span class="nav-count" id="count-links">0</span></button></li>
+        <li class="nav-item-row" data-nav-row="notify"><button class="nav-btn" data-mod="notify" onclick="cms.switchMod('notify')"><span class="nav-label">推送</span></button></li>
         <li class="nav-item-row" data-nav-row="tools"><button class="nav-btn" data-mod="tools" onclick="cms.switchMod('tools')"><span class="nav-label" data-label="tools">工具</span><span class="nav-count" id="count-tools">0</span></button></li>
         <li class="nav-item-row" data-nav-row="probe-config"><button class="nav-btn" data-mod="probe" onclick="cms.switchMod('probe')"><span class="nav-label">探针</span></button></li>
         <li class="nav-item-row" data-nav-row="status"><button class="nav-btn" data-mod="status" onclick="cms.switchMod('status')"><span class="nav-label" data-label="status">状态</span><span class="nav-count" id="count-status">0</span></button></li>
@@ -153,6 +155,11 @@
                 <div class="field">
                   <label class="field-label" for="site-subtitle">副标题 / 简介</label>
                   <input class="field-input" id="site-subtitle" maxlength="200" placeholder="首页显示的一句话介绍" />
+                </div>
+                <div class="field field--wide">
+                  <label class="field-label" for="site-admin-path">后台入口路径</label>
+                  <input class="field-input" id="site-admin-path" maxlength="24" placeholder="admin" />
+                  <span class="settings-tip settings-tip--inline">默认 <code>admin</code>，可改成 2–24 位小写字母 / 数字 / 短横线；改完用新地址访问后台，旧的 /admin 会 302 跳过去。</span>
                 </div>
                 </div>
                 <div class="settings-actions">
@@ -461,6 +468,240 @@
         </section>
       </div>
     </section>
+
+  <!-- 友链：审核 / 编辑 / 删除 -->
+  <section class="admin-settings" id="admin-links" hidden>
+    <header class="settings-head">
+      <h2 class="settings-title">友链</h2>
+      <p class="settings-desc">前台「友链」页的站点列表。新申请先进入待审核，通过后立即出现在前台。</p>
+    </header>
+    <div class="settings-grid">
+      <section class="settings-card settings-card--wide">
+        <div class="settings-card-head">
+          <h3>申请与收录</h3>
+          <span class="settings-tip" id="links-summary">—</span>
+        </div>
+        <div class="links-tabs" id="links-tabs">
+          <button type="button" class="links-tab is-active" data-status="pending">待审核 <span id="links-count-pending">0</span></button>
+          <button type="button" class="links-tab" data-status="approved">已通过 <span id="links-count-approved">0</span></button>
+          <button type="button" class="links-tab" data-status="rejected">已驳回 <span id="links-count-rejected">0</span></button>
+        </div>
+        <div class="settings-actions">
+          <button class="btn" type="button" id="links-add-btn">新增友链</button>
+        </div>
+        <ul class="admin-link-list" id="admin-link-list"></ul>
+        <div class="auth-error" id="links-error"></div>
+      </section>
+
+      <section class="settings-card settings-card--wide" id="card-link-new" hidden>
+        <div class="settings-card-head">
+          <h3>新增友链</h3>
+          <span class="settings-tip">后台直接添加，保存后立即出现在前台；图标可上传图片（自动转 WebP）</span>
+        </div>
+        <form id="link-new-form">
+          <div class="field-grid">
+            <div class="field">
+              <label class="field-label" for="link-new-url">网站 URL</label>
+              <input class="field-input" id="link-new-url" maxlength="200" placeholder="https://example.com" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="link-new-name">网站名</label>
+              <input class="field-input" id="link-new-name" maxlength="30" placeholder="我的小站" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="link-new-icon">图标 URL</label>
+              <div class="icon-url-row">
+                <input class="field-input" id="link-new-icon" maxlength="200" placeholder="https://example.com/icon.png" />
+                <button class="btn" type="button" id="link-new-icon-upload">上传图片</button>
+              </div>
+              <input type="file" id="link-new-icon-file" accept="image/*" hidden />
+            </div>
+            <div class="field">
+              <label class="field-label" for="link-new-email">申请人邮箱（选填）</label>
+              <input class="field-input" id="link-new-email" maxlength="120" placeholder="you@example.com" />
+            </div>
+          </div>
+          <div class="field">
+            <label class="field-label" for="link-new-note">一句话介绍（选填）</label>
+            <input class="field-input" id="link-new-note" maxlength="80" />
+          </div>
+          <div class="settings-actions">
+            <button class="btn btn-primary" type="submit">保存并上线</button>
+            <button class="btn" type="button" id="link-new-cancel">取消</button>
+          </div>
+          <div class="auth-error" id="link-new-error"></div>
+        </form>
+      </section>
+    </div>
+  </section>
+
+  <!-- 推送：邮件 + Bark + 模板 -->
+  <section class="admin-settings" id="admin-notify" hidden>
+    <header class="settings-head">
+      <h2 class="settings-title">推送</h2>
+      <p class="settings-desc">发给访客的通知（评论回复、友链审核结果）固定走邮件；发给你的通知可以自己选邮件、Bark 或两者都要。</p>
+    </header>
+    <div class="settings-grid">
+      <section class="settings-card settings-card--wide" id="card-channels">
+        <div class="settings-card-head">
+          <h3>发给我的通知渠道</h3>
+          <span class="settings-tip">访客通知固定走邮件，这里只管发给你的那一份</span>
+        </div>
+        <form id="channel-form">
+          <div class="check-row">
+            <label class="check-label"><input type="checkbox" id="channel-admin-mail" /> 邮件通知我（新评论、友链申请、安全提醒）</label>
+          </div>
+          <div class="check-row">
+            <label class="check-label"><input type="checkbox" id="channel-admin-bark" /> Bark 推送到手机</label>
+          </div>
+          <div class="settings-actions">
+            <button class="btn btn-primary" type="submit">保存渠道</button>
+          </div>
+          <div class="auth-error" id="channel-error"></div>
+        </form>
+      </section>
+
+      <section class="settings-card" id="card-mail">
+        <div class="settings-card-head">
+          <h3>邮件</h3>
+          <span class="settings-badge" id="mail-badge" data-on="false">未启用</span>
+        </div>
+        <form id="mail-form">
+          <div class="check-row">
+            <label class="check-label"><input type="checkbox" id="mail-enabled" /> 启用邮件通知</label>
+          </div>
+          <div class="field-grid">
+            <div class="field">
+              <label class="field-label" for="mail-host">SMTP 服务器</label>
+              <input class="field-input" id="mail-host" placeholder="smtp.example.com" maxlength="120" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="mail-port">端口</label>
+              <input class="field-input" id="mail-port" inputmode="numeric" placeholder="465" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="mail-user">账号</label>
+              <input class="field-input" id="mail-user" placeholder="no-reply@example.com" maxlength="120" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="mail-pass">密码 / 授权码</label>
+              <input class="field-input" id="mail-pass" type="password" autocomplete="new-password" placeholder="留空表示不修改" maxlength="200" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="mail-from">发件人地址</label>
+              <input class="field-input" id="mail-from" placeholder="no-reply@example.com" maxlength="160" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="mail-from-name">发件人名称</label>
+              <input class="field-input" id="mail-from-name" placeholder="简单博客" maxlength="40" />
+            </div>
+          </div>
+          <div class="check-row">
+            <label class="check-label"><input type="checkbox" id="mail-secure" /> 使用 SSL/TLS（465 端口通常要勾选）</label>
+          </div>
+          <div class="settings-actions">
+            <button class="btn btn-primary" type="submit">保存邮件设置</button>
+            <button class="btn" type="button" id="mail-test-btn">发送测试邮件</button>
+          </div>
+          <div class="settings-tip" id="mail-status"></div>
+          <div class="auth-error" id="mail-error"></div>
+        </form>
+      </section>
+
+      <section class="settings-card" id="card-bark">
+        <div class="settings-card-head">
+          <h3>Bark 推送</h3>
+          <span class="settings-badge" id="bark-badge" data-on="false">未启用</span>
+        </div>
+        <form id="bark-form">
+          <div class="check-row">
+            <label class="check-label"><input type="checkbox" id="bark-enabled" /> 启用手机推送</label>
+          </div>
+          <div class="field">
+            <label class="field-label" for="bark-server">服务器地址</label>
+            <input class="field-input" id="bark-server" placeholder="https://api.day.app" maxlength="200" />
+          </div>
+          <div class="field">
+            <label class="field-label" for="bark-key">设备 Key</label>
+            <input class="field-input" id="bark-key" placeholder="Bark App 首页显示的 Key" maxlength="200" />
+          </div>
+          <div class="field">
+            <label class="field-label" for="bark-group">分组名称</label>
+            <input class="field-input" id="bark-group" placeholder="简单博客" maxlength="60" />
+          </div>
+          <div class="field">
+            <label class="field-label" for="bark-level">通知级别</label>
+            <select class="field-input" id="bark-level">
+              <option value="active">active · 正常提示音</option>
+              <option value="passive">passive · 静默，只在列表里出现</option>
+              <option value="timeSensitive">timeSensitive · 专注模式也提醒</option>
+              <option value="critical">critical · 强提醒（需系统允许）</option>
+            </select>
+            <div class="settings-tip">怕半夜被吵就选 passive；安全提醒可以选 timeSensitive。</div>
+          </div>
+          <div class="field">
+            <label class="field-label" for="bark-sound">提示音</label>
+            <input class="field-input" id="bark-sound" placeholder="留空用系统默认，比如 bell / multiwayinvitation" maxlength="40" />
+          </div>
+          <div class="settings-actions">
+            <button class="btn btn-primary" type="submit">保存推送设置</button>
+            <button class="btn" type="button" id="bark-test-btn">发送测试推送</button>
+          </div>
+          <div class="settings-tip" id="bark-status"></div>
+          <div class="auth-error" id="bark-error"></div>
+        </form>
+      </section>
+
+      <section class="settings-card settings-card--wide" id="card-templates">
+        <div class="settings-card-head">
+          <h3>通知模板</h3>
+          <span class="settings-tip">变量：site / name / title / url / content / time / status</span>
+        </div>
+        <div class="tpl-group">
+          <span class="tpl-group-label">发给访客 · 邮件</span>
+          <div class="tpl-tabs" id="tpl-tabs-user">
+            <button type="button" class="tpl-tab is-active" data-tpl="comment_reply">评论回复</button>
+            <button type="button" class="tpl-tab" data-tpl="link_result">友链结果</button>
+          </div>
+        </div>
+        <div class="tpl-group">
+          <span class="tpl-group-label">发给我 · 邮件</span>
+          <div class="tpl-tabs" id="tpl-tabs-admin">
+            <button type="button" class="tpl-tab" data-tpl="comment_received">新评论</button>
+            <button type="button" class="tpl-tab" data-tpl="link_received">友链申请</button>
+            <button type="button" class="tpl-tab" data-tpl="security_alert">安全提醒</button>
+          </div>
+        </div>
+        <div class="tpl-group">
+          <span class="tpl-group-label">发给我 · Bark</span>
+          <div class="tpl-tabs" id="tpl-tabs-bark">
+            <button type="button" class="tpl-tab" data-tpl="bark_comment">评论推送</button>
+            <button type="button" class="tpl-tab" data-tpl="bark_link">友链推送</button>
+            <button type="button" class="tpl-tab" data-tpl="bark_security">安全推送</button>
+          </div>
+        </div>
+        <form id="tpl-form">
+          <div class="field" id="tpl-subject-field">
+            <label class="field-label" for="tpl-subject">邮件主题</label>
+            <input class="field-input" id="tpl-subject" maxlength="160" />
+          </div>
+          <div class="field" id="tpl-title-field" hidden>
+            <label class="field-label" for="tpl-title">推送标题</label>
+            <input class="field-input" id="tpl-title" maxlength="80" />
+          </div>
+          <div class="field">
+            <label class="field-label" for="tpl-text">正文</label>
+            <textarea class="field-textarea" id="tpl-text" rows="10" maxlength="4000"></textarea>
+          </div>
+          <div class="settings-actions">
+            <button class="btn btn-primary" type="submit">保存模板</button>
+            <button class="btn" type="button" id="tpl-reset-btn">恢复默认</button>
+          </div>
+          <div class="auth-error" id="tpl-error"></div>
+        </form>
+      </section>
+    </div>
+  </section>
 
       </main>
     </div>

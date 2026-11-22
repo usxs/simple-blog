@@ -385,3 +385,106 @@ GET /                       # 管理后台（admin.html）
 ```
 
 前端未部署 Functions 或读取失败时返回 `{"ok":false,"error":"暂时无法读取前端版本"}`，HTTP 状态仍为 200。
+
+## 友链（公开）
+
+### `GET /api/links`
+
+返回已通过审核的友链（按更新时间倒序），前台「友链」页使用。
+
+```json
+{
+  "ok": true,
+  "links": [
+    {
+      "id": "5c5b637bb820",
+      "name": "星星的站",
+      "url": "https://stars.example.com",
+      "icon": "",
+      "note": "写代码的",
+      "initial": "星",
+      "createdAt": 1732266000000
+    }
+  ]
+}
+```
+
+- `icon` 为空时用 `initial`（站名首个字符）作为文字图标；前台图片加载失败也会回退到它。
+- 响应带 `Cache-Control: public, max-age=60`。
+
+### `POST /api/links/apply`
+
+访客提交友链申请，进入待审核状态。
+
+```json
+{ "name": "星星的站", "url": "stars.example.com", "icon": "https://stars.example.com/icon.png", "note": "写代码的", "email": "me@example.com" }
+```
+
+- `email` 可选：填了之后审核结果会发一封邮件给申请人（不填就不发，前台也不会显示这个字段的值）。
+
+- `url` 省略协议时自动补 `https://`；只接受 `http(s)`，域名必须带点。
+- 同一地址重复提交：已通过 → `这个网站已经在友链里了`；待审核 → `已经提交过申请，正在等待审核`；被驳回可以重新提交。
+- 限流：每 IP 每小时最多 5 次、10 分钟内最多 2 次，超限返回 `429` 与 `retryAfter`（秒）。
+- 成功：`200 {"ok":true,"item":{…}}`，同时会按配置给站长发 Bark / 邮件通知。
+
+## 友链管理（需登录）
+
+| 接口 | 说明 |
+| --- | --- |
+| `GET /api/admin/links` | `{ok, items, overview}`，`items` 含待审核 / 已通过 / 已驳回，`overview` 是 `{total, count:{pending,approved,rejected}}` |
+| `POST /api/admin/links/approve` | `{id}` → 通过后前台立即可见 |
+| `POST /api/admin/links/reject` | `{id, rejectReason}` → 驳回（已通过的会下架）；`rejectReason` 必填，会写进通知邮件 |
+| `POST /api/admin/links/create` | `{name,url,icon,note,email}` → 后台直接新增，保存即为「已通过」，前台立即可见 |
+| `POST /api/admin/links/update` | `{id, patch:{name,url,icon,note,email}}` → 编辑 |
+| `POST /api/admin/links/delete` | `{id}` → 永久删除 |
+
+审核类接口都返回最新的 `{ok, items, overview}`，前端据此整体重绘列表。审核结果会邮件通知申请人（仅当申请时填了邮箱）。
+
+`icon` 除 `http(s)` 地址外，也接受本站上传后的绝对地址（如 `https://api.example.com/img/2026-11-22/xxx.webp`）；后台「新增 / 编辑」里的「上传图片」会走 `POST /api/upload`（`kind:"image"`），图片统一转成 WebP。
+
+## 推送设置（需登录）
+
+| 接口 | 说明 |
+| --- | --- |
+| `GET /api/admin/notify` | `{ok, config}`，密码只返回 `hasPass` / `passMasked` |
+| `POST /api/admin/notify` | 局部合并保存：可只传 `mail`、`bark`、`channels` 或某个 `templates.<id>`；`pass` 留空表示不修改 |
+| `POST /api/admin/notify/test` | `{kind:"mail"\|"bark", to?}` → 发送测试通知，失败返回中文原因 |
+
+`config` 结构：
+
+```json
+{
+  "mail": { "enabled": true, "host": "smtp.example.com", "port": 465, "secure": true, "user": "no-reply@example.com", "from": "no-reply@example.com", "fromName": "简单博客", "hasPass": true, "passMasked": "se****23" },
+  "bark": { "enabled": true, "server": "https://api.day.app", "key": "xxxxxxxx", "group": "简单博客", "level": "active", "sound": "" },
+  "channels": { "adminMail": true, "adminBark": false },
+  "templates": {
+    "comment_reply": { "subject": "{{site}} · {{replier}} 回复了你在《{{title}}》下的留言", "text": "…" },
+    "comment_received": { "subject": "{{site}} · 新评论：{{name}} 在《{{title}}》留言", "text": "…" },
+    "link_received": { "subject": "…", "text": "…" },
+    "link_result": { "subject": "…", "text": "…" },
+    "security_alert": { "subject": "…", "text": "…" },
+    "bark_comment": { "title": "…", "text": "…" },
+    "bark_link": { "title": "…", "text": "…" },
+    "bark_security": { "title": "…", "text": "…" }
+  },
+  "templateMeta": {
+    "comment_reply": { "audience": "user", "channel": "mail", "label": "评论回复（发给访客）" },
+    "link_result": { "audience": "user", "channel": "mail", "label": "友链结果（发给申请人）" },
+    "comment_received": { "audience": "admin", "channel": "mail", "label": "新评论（发给站长）" }
+  }
+}
+```
+
+- `channels.adminMail` / `channels.adminBark` 决定**发给站长**的通知走哪些渠道；发给访客的通知（评论回复、友链结果）固定走邮件，不受这两个开关影响。
+- `templateMeta` 给出每个模板的受众与渠道，后台据此把模板分成「发给访客 · 邮件 / 发给我 · 邮件 / 发给我 · Bark」三组展示。
+
+模板变量：`{{site}}`、`{{name}}`、`{{replier}}`、`{{title}}`、`{{url}}`、`{{content}}`、`{{time}}`、`{{status}}`、`{{reason}}`、`{{reasonLine}}`；Bark 模板额外支持 `{{link}}`（点开通知会跳到这个地址）。邮件正文会套进黑白极简的 HTML 外壳（白底、细边框卡片、灰阶脚注）。
+
+## 后台入口
+
+`GET /api/site` 返回 `adminPath`；`POST /api/admin/site {"adminPath":"console"}` 修改后：
+
+- `/console` 直接返回管理台页面；
+- `/admin`、`/admin.html` 自动 302 到新入口；
+- 可选值 2–24 位小写字母 / 数字 / 短横线，`api`、`login`、`post` 等保留字会被拒绝并回退 `admin`；
+- 环境变量 `ADMIN_PATH` 只决定首次初始化时的默认值。

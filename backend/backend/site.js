@@ -25,10 +25,10 @@ const { ROOT_DIR } = require('./storage');
 const DATA_DIR = process.env.AUTH_DATA_DIR || path.join(ROOT_DIR, 'data');
 const SITE_FILE = path.join(DATA_DIR, 'site.json');
 
-const LIMITS = { name: 40, avatarText: 2, title: 80, subtitle: 200, moduleName: 12, icon: 300, route: 24, probeUrl: 300, footerText: 60, footerNote: 120, socialUrl: 200 };
+const LIMITS = { name: 40, avatarText: 2, title: 80, subtitle: 200, moduleName: 12, icon: 300, route: 24, probeUrl: 300, footerText: 60, footerNote: 120, socialUrl: 200, adminPath: 24 };
 
 // 前台导航栏目（顺序即前台顺序）
-const MODULE_KEYS = ['home', 'posts', 'moments', 'tools', 'probe', 'status', 'quirky'];
+const MODULE_KEYS = ['home', 'posts', 'moments', 'links', 'tools', 'probe', 'status', 'quirky'];
 
 const PRESET_ICONS = [
   'home', 'book', 'message', 'wrench', 'activity', 'heart', 'star', 'code',
@@ -39,6 +39,7 @@ const MODULE_DEFAULTS = {
   home: { name: '首页', icon: 'home', route: '' },
   posts: { name: '文章', icon: 'book', route: 'posts' },
   moments: { name: '碎碎念', icon: 'message', route: 'moments' },
+  links: { name: '友链', icon: 'link', route: 'links' },
   tools: { name: '工具', icon: 'wrench', route: 'tools' },
   probe: { name: '探针', icon: 'activity', route: 'probe' },
   status: { name: '状态', icon: 'heart', route: 'status' },
@@ -47,6 +48,7 @@ const MODULE_DEFAULTS = {
 
 // 这些一级路径被既有功能占用，不允许给栏目当自定义路由
 const RESERVED_ROUTES = [
+  'links',
   'post', 'posts', 'admin', 'api', 'img', 'file', 'assets', 'static', 'data',
   'sitemap', 'robots', 'sitemap.xml', 'robots.txt', 'version', 'favicon',
   'index', 'index.html', 'markdown', 'style', 'app', 'functions',
@@ -149,7 +151,9 @@ const DEFAULTS = {
   name: process.env.SITE_NAME || '简单博客',
   avatarText: process.env.SITE_AVATAR || '',
   title: process.env.SITE_TITLE || '',
-  subtitle: process.env.SITE_SUBTITLE || '这里是我的个人博客，记录技术、折腾与生活。'
+  subtitle: process.env.SITE_SUBTITLE || '这里是我的个人博客，记录技术、折腾与生活。',
+  // 后台入口路径（不带斜杠）。改成别的字符串就能藏起来，例如 ADMIN_PATH=dashboard
+  adminPath: process.env.ADMIN_PATH || 'admin'
 };
 
 function readStored() {
@@ -191,6 +195,22 @@ function normalizeOrder(input) {
 }
 
 /** 合并存储中的栏目配置与默认值，保证每个 key 都存在 */
+// 后台入口路径：小写字母/数字/连字符，2–24 位；不能和前台栏目或保留字撞车
+const ADMIN_RESERVED = ['', 'api', 'admin', 'login', 'logout', 'setup', 'post', 'posts',
+  'moments', 'links', 'tools', 'probe', 'status', 'quirky', 'img', 'file', 'assets',
+  'static', 'data', 'sitemap', 'sitemap.xml', 'robots', 'robots.txt', 'version',
+  'favicon', 'favicon.ico', 'index', 'index.html', 'style', 'style.css', 'app', 'app.js',
+  'markdown', 'markdown.js', 'functions', 'comments', 'admin.html', 'admin.js', 'admin.css'];
+
+function normalizeAdminPath(value) {
+  const fallback = DEFAULTS.adminPath || 'admin';
+  const raw = String(value == null ? '' : value).trim().toLowerCase().replace(/^\/+|\/+$/g, '');
+  if (!raw) return fallback;
+  if (!/^[a-z0-9][a-z0-9-]{1,23}$/.test(raw)) return fallback;
+  if (ADMIN_RESERVED.indexOf(raw) !== -1) return fallback;
+  return raw;
+}
+
 function normalizeModules(stored) {
   const src = stored && typeof stored === 'object' ? stored : {};
   const out = {};
@@ -230,6 +250,7 @@ function getSite() {
     probe: normalizeProbe(source.probe),
     footer: normalizeFooter(source.footer),
     socials: normalizeSocials(source.socials),
+    adminPath: normalizeAdminPath(source.adminPath),
     updatedAt: Number(source.updatedAt) || 0
   };
 }
@@ -303,6 +324,7 @@ function saveSite(patch) {
     probe,
     footer,
     socials,
+    adminPath: p.adminPath === undefined ? current.adminPath : normalizeAdminPath(p.adminPath),
     updatedAt: Date.now()
   };
   ensureDataDir();
@@ -325,5 +347,6 @@ module.exports = {
   normalizeRoute,
   PROBE_PROVIDERS,
   PROBE_LABELS,
-  normalizeProbe
+  normalizeProbe,
+  normalizeAdminPath
 };

@@ -35,6 +35,7 @@ function esc(s) {
 const PAGE_META = {
   posts:   { changefreq: 'daily', priority: '0.9' },
   moments: { changefreq: 'daily', priority: '0.7' },
+  links:   { changefreq: 'weekly', priority: '0.6' },
   tools:   { changefreq: 'weekly', priority: '0.6' },
   probe:   { changefreq: 'hourly', priority: '0.4' },
   status:  { changefreq: 'hourly', priority: '0.4' },

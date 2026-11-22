@@ -157,13 +157,14 @@ var MODULE_FALLBACK = {
   home: { name: '首页', icon: 'home' },
   posts: { name: '文章', icon: 'book' },
   moments: { name: '碎碎念', icon: 'message' },
+  links: { name: '友链', icon: 'link' },
   tools: { name: '工具', icon: 'wrench' },
   probe: { name: '探针', icon: 'activity' },
   status: { name: '状态', icon: 'heart' },
   quirky: { name: '奇奇怪怪', icon: 'star' }
 };
 
-var MODULE_ORDER = ['home', 'posts', 'moments', 'tools', 'probe', 'status', 'quirky'];
+var MODULE_ORDER = ['home', 'posts', 'moments', 'links', 'tools', 'probe', 'status', 'quirky'];
 
 // 栏目顺序：只保留已知 key、去重，缺的按默认顺序补在末尾
 function normalizeModuleOrder(raw) {
@@ -179,6 +180,11 @@ function normalizeModuleOrder(raw) {
 }
 
 // 图标值可能是预设名，也可能是 /img/... 或 http(s) 地址
+function escapeHtml(value) {
+  return String(value === undefined || value === null ? '' : value)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 function escAttr(value) {
   return String(value === undefined || value === null ? '' : value)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -690,11 +696,11 @@ var cms = {
     // 「管理」「探针」都是独立页面，不参与列表 / 编辑器布局
     this.closeSettingsMenu();
 
-    var PAGES = { settings: 'admin-settings', probe: 'admin-probe' };
+    var PAGES = { settings: 'admin-settings', probe: 'admin-probe', links: 'admin-links', notify: 'admin-notify' };
     var pageId = PAGES[m] || '';
     var grid = document.querySelector('.cms-grid');
     if (grid) grid.style.display = pageId ? 'none' : '';
-    ['admin-settings', 'admin-probe'].forEach(function (id) {
+    ['admin-settings', 'admin-probe', 'admin-links', 'admin-notify'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.hidden = (id !== pageId);
     });
@@ -711,7 +717,9 @@ var cms = {
     var hintEl = document.getElementById('storage-hint');
     if (pageId) {
       if (hintEl) hintEl.style.display = 'none';
-      this.loadSettings();
+      if (m === 'links') this.loadLinks();
+      else if (m === 'notify') this.loadNotify();
+      else this.loadSettings();
       return;
     }
     if (hintEl) hintEl.style.display = '';
@@ -1106,6 +1114,229 @@ var cms = {
     return data;
   },
 
+  // ---------- 友链管理 ----------
+  linkStatusFilter: 'pending',
+
+  loadLinks: async function () {
+    var self = this;
+    var err = document.getElementById('links-error');
+    if (err) err.textContent = '';
+    try {
+      var out = await this.api('/api/admin/links?_t=' + Date.now());
+      this.linksData = out;
+      this.renderLinks();
+    } catch (e) {
+      if (err) err.textContent = e.message === 'unauthorized' ? '' : ('加载失败：' + e.message);
+    }
+  },
+
+  renderLinks: function () {
+    var data = this.linksData || {};
+    var overview = data.overview || { count: {}, total: 0 };
+    var counts = overview.count || {};
+    var list = Array.isArray(data.items) ? data.items.slice() : [];
+    var status = this.linkStatusFilter || 'pending';
+    list = list.filter(function (it) { return (it.status || 'pending') === status; });
+    list.sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
+
+    ['pending', 'approved', 'rejected'].forEach(function (k) {
+      var el = document.getElementById('links-count-' + k);
+      if (el) el.textContent = String(counts[k] || 0);
+    });
+    var tabs = document.querySelectorAll('#links-tabs .links-tab');
+    for (var i = 0; i < tabs.length; i++) {
+      tabs[i].classList.toggle('is-active', tabs[i].getAttribute('data-status') === status);
+    }
+    var summary = document.getElementById('links-summary');
+    if (summary) summary.textContent = '共 ' + (overview.total || list.length) + ' 个站点';
+
+    var badge = document.getElementById('count-links');
+    if (badge) {
+      var pending = counts.pending || 0;
+      badge.textContent = pending > 0 ? ('待审 ' + pending) : String(overview.total || '');
+      badge.style.color = pending > 0 ? 'var(--status-warn)' : 'var(--text-muted)';
+    }
+
+    var host = document.getElementById('admin-link-list');
+    if (!host) return;
+    if (!list.length) {
+      host.innerHTML = '<li class="admin-link-empty">' + (status === 'pending' ? '没有待审核的申请' : status === 'approved' ? '还没有通过的友链' : '没有驳回记录') + '</li>';
+      return;
+    }
+
+    host.innerHTML = list.map(function (it) {
+      var icon = it.icon
+        ? '<img class="admin-link-icon" src="' + escAttr(it.icon) + '" alt="" onerror="this.style.visibility=\'hidden\'" />'
+        : '<span class="admin-link-icon admin-link-initial">' + escapeHtml(it.initial || (it.name || '?').charAt(0)) + '</span>';
+      var actions = '';
+      if (status === 'pending') {
+        actions = '<button class="btn btn-primary" type="button" onclick="cms.reviewLink(\'' + it.id + '\',\'approve\')">通过</button>'
+          + '<button class="btn" type="button" onclick="cms.reviewLink(\'' + it.id + '\',\'reject\')">驳回</button>';
+      } else if (status === 'approved') {
+        actions = '<button class="btn" type="button" onclick="cms.reviewLink(\'' + it.id + '\',\'reject\')">下架</button>';
+      } else {
+        actions = '<button class="btn btn-primary" type="button" onclick="cms.reviewLink(\'' + it.id + '\',\'approve\')">通过</button>';
+      }
+      actions += '<button class="btn" type="button" onclick="cms.editLink(\'' + it.id + '\')">编辑</button>'
+        + '<button class="btn btn-danger" type="button" onclick="cms.deleteLink(\'' + it.id + '\')">删除</button>';
+
+      return '<li class="admin-link-row" data-link-id="' + it.id + '">'
+        + icon
+        + '<div class="admin-link-main">'
+        +   '<div class="admin-link-title"><a href="' + escAttr(it.url) + '" target="_blank" rel="noopener">' + escapeHtml(it.name) + '</a>'
+        +   '<span class="admin-link-status" data-status="' + (it.status || 'pending') + '">' + ({ pending: '待审核', approved: '已通过', rejected: '已驳回' }[it.status] || it.status) + '</span></div>'
+        +   '<div class="admin-link-meta">' + escapeHtml(it.url) + (it.note ? ' · ' + escapeHtml(it.note) : '') + '</div>'
+        +   (it.rejectReason ? '<div class="admin-link-meta admin-link-meta--dim">未通过原因：' + escapeHtml(it.rejectReason) + '</div>' : '')
+        +   '<div class="admin-link-meta admin-link-meta--dim">' + escAttr(it.ip || '') + ' · ' + cms.fmtWhen(it.createdAt) + (it.email ? ' · ' + escapeHtml(it.email) : '') + '</div>'
+        + '</div>'
+        + '<div class="admin-link-actions">' + actions + '</div>'
+        + '</li>';
+    }).join('');
+  },
+
+  reviewLink: async function (id, action) {
+    var err = document.getElementById('links-error');
+    if (err) err.textContent = '';
+    var body = { id: id };
+    if (action === 'reject') {
+      var reason = window.prompt('未通过的原因（会写进邮件发给申请人）：', '');
+      if (reason === null) return;
+      if (!String(reason).trim()) { if (err) err.textContent = '请填写未通过的原因，申请人会在邮件里看到'; return; }
+      body.rejectReason = reason;
+    }
+    try {
+      var out = await this.api('/api/admin/links/' + action, { method: 'POST', body: body });
+      this.linksData = { items: out.items, overview: out.overview };
+      this.renderLinks();
+      this.notify(action === 'approve' ? '已通过，前台立即出现' : '已驳回');
+    } catch (e) {
+      if (err) err.textContent = e.message === 'unauthorized' ? '' : ('操作失败：' + e.message);
+    }
+  },
+
+  editLink: function (id) {
+    var list = (this.linksData && this.linksData.items) || [];
+    var item = null;
+    for (var i = 0; i < list.length; i++) if (String(list[i].id) === String(id)) item = list[i];
+    if (!item) return;
+    var name = prompt('网站名', item.name || '');
+    if (name === null) return;
+    var url = prompt('网站地址', item.url || '');
+    if (url === null) return;
+    var icon = prompt('图标地址（留空用首字）', item.icon || '');
+    if (icon === null) return;
+    var note = prompt('一句话介绍（可留空）', item.note || '');
+    if (note === null) return;
+    var email = prompt('申请人邮箱（可留空，用于接收审核结果）', item.email || '');
+    if (email === null) return;
+    var self = this;
+    this.api('/api/admin/links/update', { method: 'POST', body: { id: id, patch: { name: name, url: url, icon: icon, note: note, email: email } } })
+      .then(function (out) {
+        self.linksData = { items: out.items, overview: out.overview };
+        self.renderLinks();
+        self.notify('已更新');
+      })
+      .catch(function (e) {
+        var err = document.getElementById('links-error');
+        if (err) err.textContent = '保存失败：' + e.message;
+      });
+  },
+
+  deleteLink: async function (id) {
+    if (!confirm('删除这条友链？删除后无法恢复。')) return;
+    try {
+      var out = await this.api('/api/admin/links/delete', { method: 'POST', body: { id: id } });
+      this.linksData = { items: out.items, overview: out.overview };
+      this.renderLinks();
+      this.notify('已删除');
+    } catch (e) {
+      var err = document.getElementById('links-error');
+      if (err) err.textContent = '删除失败：' + e.message;
+    }
+  },
+
+  // ---------- 推送设置 ----------
+  notifyData: null,
+  tplCurrent: 'comment_reply',
+
+  loadNotify: async function () {
+    var self = this;
+    try {
+      var out = await this.api('/api/admin/notify?_t=' + Date.now());
+      this.notifyData = out.config || {};
+      this.renderNotify();
+    } catch (e) {
+      var err = document.getElementById('mail-error');
+      if (err) err.textContent = e.message === 'unauthorized' ? '' : ('加载失败：' + e.message);
+    }
+  },
+
+  renderNotify: function () {
+    var cfg = this.notifyData || {};
+    var mail = cfg.mail || {};
+    var bark = cfg.bark || {};
+    var channels = cfg.channels || { adminMail: true, adminBark: true };
+
+    var set = function (id, value) { var el = document.getElementById(id); if (el) el.value = value; };
+    var check = function (id, on) { var el = document.getElementById(id); if (el) el.checked = !!on; };
+
+    check('channel-admin-mail', channels.adminMail !== false);
+    check('channel-admin-bark', channels.adminBark !== false);
+    check('mail-enabled', mail.enabled);
+    set('mail-host', mail.host || '');
+    set('mail-port', mail.port || 465);
+    set('mail-user', mail.user || '');
+    set('mail-pass', '');
+    set('mail-from', mail.from || '');
+    set('mail-from-name', mail.fromName || '');
+    check('mail-secure', mail.secure);
+    if (document.getElementById('mail-pass')) {
+      document.getElementById('mail-pass').placeholder = mail.hasPass ? ('已保存 ' + mail.passMasked + '（留空不修改）') : '留空表示不修改';
+    }
+    var mailBadge = document.getElementById('mail-badge');
+    if (mailBadge) {
+      var mailOn = mail.enabled && mail.host;
+      mailBadge.textContent = mail.enabled ? (mail.host ? '已启用' : '待补全') : '未启用';
+      mailBadge.setAttribute('data-on', mailOn ? 'true' : 'false');
+    }
+
+    check('bark-enabled', bark.enabled);
+    set('bark-server', bark.server || 'https://api.day.app');
+    set('bark-key', bark.key || '');
+    set('bark-group', bark.group || '');
+    var barkBadge = document.getElementById('bark-badge');
+    if (barkBadge) {
+      barkBadge.textContent = bark.enabled ? (bark.key ? '已启用' : '待补全') : '未启用';
+      barkBadge.setAttribute('data-on', bark.enabled && bark.key ? 'true' : 'false');
+    }
+
+    this.renderTemplate();
+  },
+
+  renderTemplate: function () {
+    var cfg = this.notifyData || {};
+    var tpl = (cfg.templates || {})[this.tplCurrent] || {};
+    var isBark = this.tplCurrent.indexOf('bark_') === 0;
+    var subjectField = document.getElementById('tpl-subject-field');
+    var titleField = document.getElementById('tpl-title-field');
+    if (subjectField) subjectField.hidden = isBark;
+    if (titleField) titleField.hidden = !isBark;
+    if (document.getElementById('tpl-subject')) document.getElementById('tpl-subject').value = tpl.subject || '';
+    if (document.getElementById('tpl-title')) document.getElementById('tpl-title').value = tpl.title || '';
+    if (document.getElementById('tpl-text')) document.getElementById('tpl-text').value = tpl.text || '';
+    var tabs = document.querySelectorAll('.tpl-tab');
+    for (var i = 0; i < tabs.length; i++) {
+      tabs[i].classList.toggle('is-active', tabs[i].getAttribute('data-tpl') === this.tplCurrent);
+    }
+  },
+
+  saveNotifyConfig: async function (patch, okText) {
+    var out = await this.api('/api/admin/notify', { method: 'POST', body: patch });
+    this.notifyData = out.config || this.notifyData;
+    this.renderNotify();
+    if (okText) this.notify(okText);
+  },
+
   loadSettings: async function () {
     var pkeys = [];
     try {
@@ -1116,6 +1347,9 @@ var cms = {
       setSidebarAvatar(site.avatarText || site.name || '');
       document.getElementById('site-title').value = site.title || '';
       document.getElementById('site-subtitle').value = site.subtitle || '';
+      if (document.getElementById('site-admin-path')) {
+        document.getElementById('site-admin-path').value = site.adminPath || 'admin';
+      }
       this.applyModuleConfig(site.modules, site.order);
       this.renderModules();
       this.renderFooterSettings(site.footer);
@@ -1901,7 +2135,8 @@ var cms = {
         name: document.getElementById('site-name').value.trim(),
         avatarText: document.getElementById('site-avatar').value.trim(),
         title: document.getElementById('site-title').value.trim(),
-        subtitle: document.getElementById('site-subtitle').value.trim()
+        subtitle: document.getElementById('site-subtitle').value.trim(),
+        adminPath: (document.getElementById('site-admin-path') || {}).value ? document.getElementById('site-admin-path').value.trim() : ''
       };
       if (!payload.name) { err.textContent = '站点名称不能为空'; return; }
       try {
@@ -1912,7 +2147,12 @@ var cms = {
         setSidebarAvatar(site.avatarText || site.name);
         document.getElementById('site-title').value = site.title;
         document.getElementById('site-subtitle').value = site.subtitle;
-        self.notify('站点信息已保存，前台刷新后生效');
+        if (document.getElementById('site-admin-path')) {
+          document.getElementById('site-admin-path').value = site.adminPath || 'admin';
+        }
+        self.notify(site.adminPath && site.adminPath !== 'admin'
+          ? '已保存。后台新入口：/' + site.adminPath
+          : '站点信息已保存，前台刷新后生效');
       } catch (e2) {
         err.textContent = e2.message === 'unauthorized' ? '' : ('保存失败：' + e2.message);
       }
@@ -2138,6 +2378,256 @@ var cms = {
     if (iconModal) {
       iconModal.addEventListener('click', function (evt) {
         if (evt.target === iconModal) self.closeIconPicker();
+      });
+    }
+
+    // 友链：状态切换与行内操作
+    var linkTabs = document.getElementById('links-tabs');
+    if (linkTabs) {
+      linkTabs.addEventListener('click', function (ev) {
+        var tab = ev.target.closest ? ev.target.closest('.links-tab') : null;
+        if (!tab) return;
+        self.linkStatusFilter = tab.getAttribute('data-status') || 'pending';
+        self.renderLinks();
+      });
+    }
+
+    // 通知渠道（发给站长的邮件 / Bark 开关）
+    var channelForm = document.getElementById('channel-form');
+    if (channelForm) {
+      channelForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var err = document.getElementById('channel-error');
+        if (err) err.textContent = '';
+        var payload = {
+          channels: {
+            adminMail: document.getElementById('channel-admin-mail').checked,
+            adminBark: document.getElementById('channel-admin-bark').checked
+          }
+        };
+        self.saveNotifyConfig(payload, '通知渠道已保存')
+          .catch(function (e2) { if (err) err.textContent = e2.message === 'unauthorized' ? '' : ('保存失败：' + e2.message); });
+      });
+    }
+
+    // 新增友链：展开 / 上传图标 / 提交
+    var addLinkBtn = document.getElementById('links-add-btn');
+    var newLinkCard = document.getElementById('card-link-new');
+    if (addLinkBtn && newLinkCard) {
+      addLinkBtn.addEventListener('click', function () {
+        newLinkCard.hidden = !newLinkCard.hidden;
+        if (!newLinkCard.hidden) {
+          newLinkCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          var urlEl = document.getElementById('link-new-url');
+          if (urlEl) urlEl.focus();
+        }
+      });
+    }
+    var cancelLink = document.getElementById('link-new-cancel');
+    if (cancelLink && newLinkCard) {
+      cancelLink.addEventListener('click', function () {
+        newLinkCard.hidden = true;
+        var f = document.getElementById('link-new-form');
+        if (f) f.reset();
+      });
+    }
+    var linkIconFile = document.getElementById('link-new-icon-file');
+    var linkIconUpload = document.getElementById('link-new-icon-upload');
+    if (linkIconUpload && linkIconFile) {
+      linkIconUpload.addEventListener('click', function () { linkIconFile.click(); });
+      linkIconFile.addEventListener('change', async function () {
+        var file = linkIconFile.files && linkIconFile.files[0];
+        linkIconFile.value = '';
+        if (!file) return;
+        var err = document.getElementById('link-new-error');
+        if (err) err.textContent = '';
+        linkIconUpload.disabled = true;
+        linkIconUpload.textContent = '上传中…';
+        try {
+          var dataUrl = await new Promise(function (resolve, reject) {
+            var reader = new FileReader();
+            reader.onload = function () { resolve(String(reader.result || '')); };
+            reader.onerror = function () { reject(new Error('读取图片失败')); };
+            reader.readAsDataURL(file);
+          });
+          var base64 = dataUrl.indexOf(',') >= 0 ? dataUrl.split(',')[1] : '';
+          var out = await self.api('/api/upload', { method: 'POST', body: { kind: 'image', filename: file.name || 'icon.png', data: base64 } });
+          var iconEl = document.getElementById('link-new-icon');
+          if (iconEl) iconEl.value = out.url || out.relativeUrl || '';
+          self.notify(out.converted ? '已上传并转为 WebP' : '图标已上传');
+        } catch (e2) {
+          if (err) err.textContent = e2.message === 'unauthorized' ? '' : ('上传失败：' + e2.message);
+        } finally {
+          linkIconUpload.disabled = false;
+          linkIconUpload.textContent = '上传图片';
+        }
+      });
+    }
+    var newLinkForm = document.getElementById('link-new-form');
+    if (newLinkForm) {
+      newLinkForm.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var err = document.getElementById('link-new-error');
+        if (err) err.textContent = '';
+        var payload = {
+          url: (document.getElementById('link-new-url') || {}).value || '',
+          name: (document.getElementById('link-new-name') || {}).value || '',
+          icon: (document.getElementById('link-new-icon') || {}).value || '',
+          email: (document.getElementById('link-new-email') || {}).value || '',
+          note: (document.getElementById('link-new-note') || {}).value || ''
+        };
+        try {
+          var out = await self.api('/api/admin/links/create', { method: 'POST', body: payload });
+          self.linkItems = out.items || [];
+          self.linkOverview = out.overview || {};
+          self.linkStatusFilter = 'approved';
+          self.renderLinks();
+          newLinkForm.reset();
+          if (newLinkCard) newLinkCard.hidden = true;
+          self.notify('友链已添加并上线');
+        } catch (e2) {
+          if (err) err.textContent = e2.message === 'unauthorized' ? '' : (e2.message || '保存失败');
+        }
+      });
+    }
+
+    // 邮件设置
+    var mailForm = document.getElementById('mail-form');
+    if (mailForm) {
+      mailForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var err = document.getElementById('mail-error');
+        var status = document.getElementById('mail-status');
+        if (err) err.textContent = '';
+        if (status) status.textContent = '';
+        var payload = {
+          mail: {
+            enabled: document.getElementById('mail-enabled').checked,
+            host: document.getElementById('mail-host').value.trim(),
+            port: Number(document.getElementById('mail-port').value) || 465,
+            secure: document.getElementById('mail-secure').checked,
+            user: document.getElementById('mail-user').value.trim(),
+            from: document.getElementById('mail-from').value.trim(),
+            fromName: document.getElementById('mail-from-name').value.trim()
+          }
+        };
+        var pass = document.getElementById('mail-pass').value;
+        if (pass) payload.mail.pass = pass;
+        self.saveNotifyConfig(payload, '邮件设置已保存')
+          .then(function () { if (status) status.textContent = '已保存。可以点「发送测试邮件」验证。'; })
+          .catch(function (e2) { if (err) err.textContent = e2.message === 'unauthorized' ? '' : ('保存失败：' + e2.message); });
+      });
+    }
+    var mailTest = document.getElementById('mail-test-btn');
+    if (mailTest) {
+      mailTest.addEventListener('click', async function () {
+        var err = document.getElementById('mail-error');
+        var status = document.getElementById('mail-status');
+        if (err) err.textContent = '';
+        if (status) status.textContent = '正在发送…';
+        mailTest.disabled = true;
+        try {
+          var out = await self.api('/api/admin/notify/test', { method: 'POST', body: { kind: 'mail' } });
+          if (status) status.textContent = out.message || '已发送';
+        } catch (e2) {
+          if (status) status.textContent = '';
+          if (err) err.textContent = e2.message === 'unauthorized' ? '' : ('测试失败：' + e2.message);
+        } finally {
+          mailTest.disabled = false;
+        }
+      });
+    }
+
+    // Bark 推送
+    var barkForm = document.getElementById('bark-form');
+    if (barkForm) {
+      barkForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var err = document.getElementById('bark-error');
+        var status = document.getElementById('bark-status');
+        if (err) err.textContent = '';
+        if (status) status.textContent = '';
+        var payload = {
+          bark: {
+            enabled: document.getElementById('bark-enabled').checked,
+            server: document.getElementById('bark-server').value.trim(),
+            key: document.getElementById('bark-key').value.trim(),
+            group: document.getElementById('bark-group').value.trim(),
+            level: (document.getElementById('bark-level') || {}).value || 'active',
+            sound: (document.getElementById('bark-sound') || {}).value ? document.getElementById('bark-sound').value.trim() : ''
+          }
+        };
+        self.saveNotifyConfig(payload, '推送设置已保存')
+          .then(function () { if (status) status.textContent = '已保存。可以点「发送测试推送」验证。'; })
+          .catch(function (e2) { if (err) err.textContent = e2.message === 'unauthorized' ? '' : ('保存失败：' + e2.message); });
+      });
+    }
+    var barkTest = document.getElementById('bark-test-btn');
+    if (barkTest) {
+      barkTest.addEventListener('click', async function () {
+        var err = document.getElementById('bark-error');
+        var status = document.getElementById('bark-status');
+        if (err) err.textContent = '';
+        if (status) status.textContent = '正在推送…';
+        barkTest.disabled = true;
+        try {
+          var out = await self.api('/api/admin/notify/test', { method: 'POST', body: { kind: 'bark' } });
+          if (status) status.textContent = out.message || '已推送';
+        } catch (e2) {
+          if (status) status.textContent = '';
+          if (err) err.textContent = e2.message === 'unauthorized' ? '' : ('推送失败：' + e2.message);
+        } finally {
+          barkTest.disabled = false;
+        }
+      });
+    }
+
+    // 模板切换 / 保存 / 恢复默认
+    var notifyPage = document.getElementById('admin-notify');
+    if (notifyPage) {
+      notifyPage.addEventListener('click', function (ev) {
+        var tab = ev.target && ev.target.closest ? ev.target.closest('.tpl-tab') : null;
+        if (!tab) return;
+        self.tplCurrent = tab.getAttribute('data-tpl') || 'comment_reply';
+        self.renderTemplate();
+      });
+    }
+    var tplForm = document.getElementById('tpl-form');
+    if (tplForm) {
+      tplForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var err = document.getElementById('tpl-error');
+        if (err) err.textContent = '';
+        var isBark = self.tplCurrent.indexOf('bark_') === 0;
+        var tpl = { text: document.getElementById('tpl-text').value };
+        if (isBark) tpl.title = document.getElementById('tpl-title').value;
+        else tpl.subject = document.getElementById('tpl-subject').value;
+        var patch = { templates: {} };
+        patch.templates[self.tplCurrent] = tpl;
+        self.saveNotifyConfig(patch, '模板已保存')
+          .catch(function (e2) { if (err) err.textContent = e2.message === 'unauthorized' ? '' : ('保存失败：' + e2.message); });
+      });
+    }
+    var tplReset = document.getElementById('tpl-reset-btn');
+    if (tplReset) {
+      tplReset.addEventListener('click', async function () {
+        var err = document.getElementById('tpl-error');
+        if (err) err.textContent = '';
+        try {
+          var out = await self.api('/api/admin/notify?_t=' + Date.now());
+          var defaults = (out.config && out.config.defaults) || (out.defaults || {});
+          var isBark = self.tplCurrent.indexOf('bark_') === 0;
+          var d = defaults[self.tplCurrent] || {};
+          if (isBark) {
+            document.getElementById('tpl-title').value = d.title || '';
+          } else {
+            document.getElementById('tpl-subject').value = d.subject || '';
+          }
+          document.getElementById('tpl-text').value = d.text || '';
+          self.notify('已填入默认模板，点「保存模板」生效');
+        } catch (e2) {
+          if (err) err.textContent = '读取默认模板失败：' + e2.message;
+        }
       });
     }
   },

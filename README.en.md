@@ -58,10 +58,13 @@ On phones the sidebar collapses into a **floating bottom navigation** and the cu
 | Section ordering | Drag the ⋮⋮ handle in "Settings → Sections"; desktop sidebar, mobile dock and admin sidebar all follow the new order (persisted in `data/site.json`) |
 | Custom paths | Sections can use custom paths such as `/diary`; old URLs keep working and redirect, and nav links, `sitemap.xml` and SSR metadata follow the new path |
 | Footer & filings | ICP / police / Moe-ICP filing numbers are editable in the admin (empty = hidden). The public site shows icon-only badges: hover to read the number, click to open the official lookup page. The `© year name · All Rights Reserved.` line has its own on/off switch. Everything sits at the bottom of the sidebar and is hidden below 860px; the monochrome icons follow the light/dark theme |
+| Friend links | A dedicated `/links` page where visitors submit their site (URL, name, icon URL — no file uploads); submissions wait for review. Without an icon the first character of the site name is used. The admin **Links** page groups them by pending / approved / rejected with approve, reject, edit and delete |
+| Notifications | Configure SMTP email and Bark push under **Push**. Notifications **to visitors** (comment replies, link review results) always go out by email; notifications **to the admin** (new comments, link applications, security alerts) can be routed to email, Bark, or both via checkboxes. Eight templates in three groups are editable with a one-click reset; emails use a dark outer frame with a light grey body card |
+| Configurable admin path | The dashboard lives at `/admin` by default; change it under **Manage → Site info** to any 2–24 character slug. The old path 302-redirects to the new one |
 | Telegram sync | Turn it on in **Manage → Moment sync**; every new or edited moment is posted to your Telegram channel (images included, up to 4) and deleting a moment removes the message. A **Send test message** button verifies the bot/channel pairing |
 | Deploy version | Hover the sidebar "Node ONLINE" badge to see the deployed short version, commit and branch |
 | Post search | The post-list search box matches title / excerpt / tags; Chinese by substring, English by subsequence; filters as soon as IME composition ends, supports Enter and Esc without rebuilding the input |
-| Mobile | Below 860px the layout switches to one column with a floating bottom nav; 375–430px gets dedicated spacing so all entries fit |
+| Mobile | Below 860px the layout collapses to one column and a floating dock appears; the dock is a frosted glass panel with specular highlights and a glass selection pill; it auto-hides when scrolling down and returns when scrolling up, fitting all 7 entries even at 320–430px |
 | Progressive loading | Site config (section toggles / names / paths / order) is cached in the browser: first paint already matches the last known config, no flash of hidden sections; the home page never waits for the network, node status and probe data refresh on their own; the frontend stays readable when the backend is down |
 
 ## Architecture
@@ -347,7 +350,8 @@ Backend (`backend/.env`):
 | `SITE_NAME` / `SITE_AVATAR` / `SITE_TITLE` / `SITE_SUBTITLE` | no | Initial site info; editable in "Settings" afterwards, applies immediately |
 | `WEBAUTHN_RP_ID` / `WEBAUTHN_ORIGIN` | no | Passkey RP ID and origin; derived from `X-Forwarded-Host` by default |
 | `HOST_PORT` | no | Host port, default `33001` |
-| `AUTH_DATA_DIR` | no | Overrides the session/credential directory (mainly for tests) |
+| `ADMIN_PATH` | no | Initial dashboard path, default `admin`; can be changed later in the dashboard |
+| `AUTH_DATA_DIR` | no | Overrides the directory holding sessions, credentials, links and notification config (mainly for tests) |
 
 ## API reference
 
@@ -402,6 +406,12 @@ Full parameters: [docs/API.md](docs/API.md).
 > Always serve over HTTPS. On plain HTTP the `Secure` cookie flag is dropped and passwords travel in clear text.
 
 ## Notes
+
+> **Bump the asset version when you change CSS/JS**: `frontend/index.html` references
+> `style.css`, `markdown.js` and `app.js` with a `?v=` query string. Cloudflare caches
+> static assets at the edge for up to 4 hours, so after editing those files change
+> `?v=20261122-1` to a new value, otherwise browsers may keep using the old copy.
+
 
 1. **Rebuild after code changes**: `docker compose up -d --build`. Data lives on the host, so rebuilding loses nothing.
 2. **Directory permissions**: the container runs as UID 1000, so `data/`, `article/`, `img/` … must be writable by `1000:1000`, otherwise the first setup fails with "data directory not writable".

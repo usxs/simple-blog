@@ -46,6 +46,9 @@
 | 登录会话 | 区分在线 / 离线 / 历史会话，显示设备与浏览器；点开可看 IP、归属地、设备详情、在线时长和完整 UA，并支持改备注、踢下线、封禁 IP 或设备（黑名单可解除） |
 | 页脚与备案 | ICP、公安网备案、萌 ICP 备案均可后台填写（留空即隐藏）；前台只显示图标徽章，悬停弹出备案号、点击跳到官方查询页。版权声明（`© 年份 站名 · All Rights Reserved.`）可在后台一键开关。整块显示在侧边栏底部，移动端不显示，单色图标跟随黑白主题 |
 | 社交链接 | 首页标题下方的 GitHub / X / Telegram / 邮箱由后台维护，留空即隐藏该项 |
+| 友链 | 前台独立「友链」页，访客自助提交（网站地址 / 名称 / 图标地址 / 可选邮箱），提交后进入后台审核；无图标时用站名首字当图标。后台「友链」可按待审核 / 已通过 / 已驳回分组，支持通过、驳回、编辑、删除，也可直接新增（图标支持上传图片，自动转 WebP） |
+| 通知推送 | 后台「推送」页可配 SMTP 邮件与 Bark 手机推送。**发给访客的**（评论回复、友链审核结果）固定走邮件；**发给站长的**（新评论、友链申请、安全提醒）可勾选邮件 / Bark / 两者都要。8 个模板分三组在线编辑并恢复默认，邮件为深色外框 + 浅灰正文卡片的黑白版式 |
+| 可改后台入口 | 后台入口默认 `/admin`，可在「管理 → 站点信息」改成任意 2–24 位短路径；旧地址会自动 302 到新地址 |
 | 碎碎念同步 | 「管理 → 碎碎念同步」开启后，新建或编辑碎碎念会自动发到 Telegram 频道（图片一起发，最多 4 张），删除时同步撤回；可以先「发送测试消息」验证 Bot 与频道是否配对 |
 | 两步验证（2FA） | 标准 TOTP（RFC 6238），用 Google Authenticator / 1Password 等扫码绑定；登录需再输 6 位动态码；提供 10 个一次性备用码，用掉即作废 |
 | 通行密钥（Passkey） | WebAuthn 指纹 / 面容 / 安全密钥登录，服务端只存公钥，支持多设备注册与逐个删除；也可作为免密码登录入口 |
@@ -63,7 +66,7 @@
 | 自定义路径 | 栏目路径可改，`/posts`、`/diary` 之类都行；改名后旧地址仍可访问并自动跳转，导航链接、`sitemap.xml`、SSR 元信息同步更新 |
 | 部署版本 | 鼠标悬停侧边栏「节点 ONLINE」弹出小气泡，显示当前线上部署的短版本号、提交与分支，排查「线上到底是哪一版」很方便 |
 | 文章搜索 | 文章列表页搜索框：标题 / 摘要 / 标签模糊匹配，中文按子串、英文支持子序列；输入法组合结束后立即过滤，支持回车与 Esc 清空，列表只更新容器不重建输入框 |
-| 移动端 | ≤860px 自动切单列布局并显示底部悬浮导航，375–430px 窄屏做了专门压缩，六个入口一屏放得下 |
+| 移动端 | ≤860px 自动切单列布局并显示底部悬浮导航；底栏是「液态玻璃」样式，除首页外向下滚动自动收起、向上滚动出现，320–430px 窄屏 7 个入口一屏放得下 |
 | 渐进加载 | 站点配置（栏目开关 / 名称 / 路径 / 顺序）缓存在浏览器本地：首屏直接按上次配置渲染，不闪未关闭的栏目；首页不等网络，节点状态与探针自己慢慢刷新；后端宕机时前台照常可读 |
 
 ## 架构
@@ -347,7 +350,8 @@ Pages 项目 → **Custom domains** → 添加 `www.example.com`，按提示在 
 | `SITE_NAME` / `SITE_AVATAR` / `SITE_TITLE` / `SITE_SUBTITLE` | 否 | 站点信息初始值；首次启动后可在后台「管理」页修改，改完立即生效 |
 | `WEBAUTHN_RP_ID` / `WEBAUTHN_ORIGIN` | 否 | 通行密钥的 RP ID 与来源；默认按请求的 `X-Forwarded-Host` 推导 |
 | `HOST_PORT` | 否 | 宿主机端口，默认 `33001` |
-| `AUTH_DATA_DIR` | 否 | 覆盖会话/凭据的存放目录（主要给测试用） |
+| `ADMIN_PATH` | 否 | 后台入口初始路径，默认 `admin`；首次启动后可在后台修改 |
+| `AUTH_DATA_DIR` | 否 | 覆盖会话/凭据/友链/推送配置的存放目录（主要给测试用） |
 
 ## 接口速查
 
@@ -362,6 +366,8 @@ GET  /api/site                         # 站点信息（名称/头像/标题/副
 GET  /version                          # （Pages 端）当前部署的短版本号
 GET  /api/deploy-version               # 后端代理读取上面的 /version（缓存 60s），后台侧边栏「状态」处显示
 GET  /api/probe-servers                # 探针节点列表（来源由后台侧边栏「探针」决定）
+GET  /api/links                        # 已通过审核的友链
+POST /api/links/apply                  # 提交友链申请（带蜜罐）
 GET  /api/captcha                      # 获取验证码题目与签名
 POST /api/comments/submit              # 提交评论（带验证码与蜜罐）
 GET  /sitemap.xml  GET /robots.txt     # SEO
@@ -387,6 +393,12 @@ POST /api/auth/sessions/revoke-others  # 下线其它设备
 POST /api/auth/sessions/revoke | rename | block   # 踢下线 / 改备注 / 封禁 IP 或设备
 POST /api/auth/blocklist/remove        # 解除封禁
 GET  /api/auth/sessions/geo?ip=        # IP 归属地
+GET  /api/admin/links                  # 友链全部数据（含待审核）
+POST /api/admin/links/create           # 后台直接新增友链（默认已通过）
+POST /api/admin/links/update | approve | reject | delete
+GET  /api/admin/notify  POST /api/admin/notify      # 邮件 / Bark / 模板配置
+POST /api/admin/notify/test            # 发送测试邮件或测试推送（channels.adminMail / channels.adminBark 决定发给站长的渠道）
+GET  /api/admin/indexnow  POST /api/admin/indexnow  # IndexNow 密钥
 ```
 
 完整参数见 [docs/API.md](docs/API.md)。
@@ -405,6 +417,11 @@ GET  /api/auth/sessions/geo?ip=        # IP 归属地
 > 务必通过 HTTPS 对外提供服务。明文 HTTP 下 Cookie 的 `Secure` 不会生效，密码也会以明文经过网络。
 
 ## 注意事项
+
+> **改了前端资源记得改版本号**：`frontend/index.html` 里 `style.css` / `markdown.js` / `app.js` 都带 `?v=` 查询串。
+> Cloudflare 对静态资源有 4 小时边缘缓存，改完样式或脚本请把 `?v=20261122-1` 改成新的值（比如日期加序号），
+> 否则用户浏览器可能继续拿旧文件。只改 HTML 内容时不需要动它。
+
 
 1. **改代码后要重建镜像**：`docker compose up -d --build`。数据在宿主机目录里，重建不会丢。
 2. **目录权限**：容器以 UID 1000 运行，`data/`、`article/`、`img/` 等宿主机目录必须是 `1000:1000` 可写，否则首次初始化会失败并提示「管理员数据目录不可写」。
