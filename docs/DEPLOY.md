@@ -98,6 +98,19 @@ server {
 
 ## 四、部署前端到 Cloudflare Pages
 
+### 先确认：需要 Fork 吗？
+
+| 目标 | 是否需要 Fork | 做法 |
+| --- | --- | --- |
+| 只部署（后端 Docker + 前端上传静态文件） | 否 | 直接 clone 官方仓库；前端用 `wrangler pages deploy` 上传，不依赖你的 GitHub 仓库 |
+| 想 push 即自动发布 | 是 | Fork 一份到你的账号，再用下面的「Connect to Git」连它 |
+| 想改代码长期维护 | 建议 | Fork 或新建仓库后改地址，之后从 `upstream` 同步更新 |
+
+Fork 后上游更新不会自动过来：GitHub 上点 **Sync fork**，或本地
+`git remote add upstream https://github.com/usxs/simple-blog.git && git fetch upstream && git merge upstream/main`。
+
+### 方式 A：连接 Git 仓库（需要你账号下的仓库）
+
 1. 把仓库推到 GitHub（`frontend/` 与 `backend/` 在一起即可，Pages 只取它需要的目录）。
 2. Cloudflare 控制台 → **Workers & Pages → Create → Pages → Connect to Git**，选中仓库。
 3. 构建配置：
@@ -125,6 +138,15 @@ curl -s https://www.example.com/robots.txt
 curl -s https://www.example.com/sitemap.xml | head  # 应看到 /post/<id> 真实路径
 curl -s https://www.example.com/posts | grep '<title>'   # 应为「文章 · 简单博客」
 ```
+
+### 方式 B：命令行上传（不需要 Fork）
+
+```bash
+npm i -g wrangler
+wrangler pages deploy frontend --project-name simple-blog
+```
+
+`functions/` 必须一起上传，wrangler 会自动编译成边缘函数；直接拖拽静态文件不走 Functions，文章页就没有 SSR。
 
 `sitemap.xml` 若返回的是首页 HTML，说明 Pages Functions 没生效：检查构建输出目录是否正确、`frontend/functions/` 目录是否被一起上传。
 

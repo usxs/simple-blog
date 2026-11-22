@@ -3,6 +3,13 @@
 本项目的所有重要变更记录在此文件中，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.7.1] - 2026-11-22
+
+### 文档
+
+- README 与 `docs/DEPLOY.md` 明确说明「是否需要 Fork」：只部署不需要 Fork（直接 clone + `wrangler` 上传），只有想让 Cloudflare Pages 连接 Git 仓库自动发布、或自己改代码长期维护时才需要 Fork；补充了 Fork 后同步上游的方法
+- README.en.md 同步以上说明
+
 ## [1.7.0] - 2026-11-22
 
 ### 新增

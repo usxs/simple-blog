@@ -133,12 +133,27 @@ Below is the full path from zero to a working site, in order. Each step has a ve
 | A Cloudflare account | The frontend is hosted on Pages for free |
 | Docker | Docker Engine + Compose plugin installed on the server (checked in step 2.1) |
 
-### 1. Clone
+### 1. Clone (do you need to fork?)
+
+**No fork is required to deploy everything.** Forking only matters if you want automatic deployments from Git, or you plan to modify the code.
+
+| Your situation | What to do |
+| --- | --- |
+| Just want it running, no code changes | `git clone` this repository (or download the ZIP). Upload the frontend with `wrangler` — no copy under your own account needed |
+| Want Cloudflare Pages connected to a repo so pushes auto-deploy | You need a repository **under your own account**: click **Fork**, or clone and push to a new empty repo |
+| Plan to maintain and modify the code | Same as above — fork (or create your own repo) and change the URLs |
 
 ```bash
+# case 1: deploy only, no fork
+git clone https://github.com/usxs/simple-blog.git
+cd simple-blog
+
+# case 2/3: already forked to your account
 git clone https://github.com/<your-name>/simple-blog.git
 cd simple-blog
 ```
+
+> A fork does not track upstream automatically. To sync later, click **Sync fork** on GitHub, or locally `git remote add upstream https://github.com/usxs/simple-blog.git && git fetch upstream && git merge upstream/main`.
 
 ### 2. Deploy the backend (on the server)
 

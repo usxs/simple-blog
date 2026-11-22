@@ -131,12 +131,27 @@ simple-blog/
 | Cloudflare 账号 | 前端用 Pages 免费托管，需要账号 |
 | Docker | 服务器上装 Docker Engine + Compose 插件（下面第 2 步会检查） |
 
-### 1. 拉代码
+### 1. 拉代码（需要先 Fork 吗？）
+
+**不需要 Fork 也能完整部署。** Fork 只是「让前端能自动部署」或「想自己改代码」时才需要。
+
+| 你的情况 | 怎么做 |
+| --- | --- |
+| 只想跑起来，不打算改代码 | 直接 `git clone` 本仓库（或下载 ZIP），前端用 `wrangler` 上传，不需要 GitHub 上有你自己的副本 |
+| 想让 Cloudflare Pages 连接仓库、以后 push 自动发布 | 需要一个**你自己账号下**的仓库：点右上角 **Fork**，或 clone 后 push 到你新建的空仓库 |
+| 想长期自己维护、改代码 | 同上，Fork（或新建仓库）后改成你的地址 |
 
 ```bash
+# 情况 1：只部署，不 Fork
+git clone https://github.com/usxs/simple-blog.git
+cd simple-blog
+
+# 情况 2/3：已经 Fork 到你自己账号下
 git clone https://github.com/<your-name>/simple-blog.git
 cd simple-blog
 ```
+
+> Fork 之后，本仓库的更新不会自动同步到你的副本；需要同步时在 GitHub 上点 **Sync fork**，或在本地 `git remote add upstream https://github.com/usxs/simple-blog.git && git fetch upstream && git merge upstream/main`。
 
 ### 2. 部署后端（服务器上）
 
