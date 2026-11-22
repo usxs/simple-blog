@@ -291,6 +291,8 @@ button, input, textarea {
   min-width: 0;
 }
 
+.sidebar-site-footer .footer-meta[hidden] { display: none !important; }
+
 .sidebar-site-footer .footer-meta {
   display: inline-flex;
   align-items: baseline;
@@ -306,49 +308,72 @@ button, input, textarea {
 
 .footer-badges {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
-  width: 100%;
 }
 
+/* 只显示图标；备案文字放浮窗里，鼠标悬停 / 键盘聚焦时出现 */
 .footer-badge {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  max-width: 100%;
-  padding: 2px 7px 2px 6px;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  line-height: 1.5;
   color: var(--text-muted);
   text-decoration: none;
   transition: color 0.15s ease, border-color 0.15s ease;
 }
 
-.footer-badge:hover {
+.footer-badge:hover,
+.footer-badge:focus-visible {
   color: var(--text-primary);
   border-color: var(--text-primary);
+  outline: none;
 }
 
 .footer-badge-icon {
   display: inline-flex;
   align-items: center;
-  flex: 0 0 auto;
+  justify-content: center;
 }
 
 .footer-badge-icon svg {
-  width: 11px;
-  height: 11px;
+  width: 13px;
+  height: 13px;
 }
 
-.footer-badge-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
+.footer-badge-tip {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.5;
   white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translate(-2px, -50%);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+  z-index: 80;
+}
+
+.footer-badge:hover .footer-badge-tip,
+.footer-badge:focus-visible .footer-badge-tip {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(0, -50%);
 }
 
 .footer-extra {

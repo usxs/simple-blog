@@ -96,6 +96,8 @@ function normalizeProbe(stored) {
 
 // 页脚：ICP / 公安 / 萌 ICP 备案（留空即不显示）+ 一行自定义说明
 const FOOTER_DEFAULTS = {
+  // 是否显示「© 年份 站名 · All Rights Reserved.」，可用 SITE_COPYRIGHT=0 默认关闭
+  copyright: String(process.env.SITE_COPYRIGHT || '1') !== '0',
   icpText: String(process.env.SITE_ICP || '').trim(),
   policeText: String(process.env.SITE_POLICE || '').trim(),
   moeText: String(process.env.SITE_MOE || '').trim(),
@@ -128,6 +130,7 @@ function pickSocial(value, fallback) {
 function normalizeFooter(stored) {
   const src = stored && typeof stored === 'object' ? stored : {};
   return {
+    copyright: src.copyright === undefined ? FOOTER_DEFAULTS.copyright : Boolean(src.copyright),
     icpText: pickOptional(src.icpText, FOOTER_DEFAULTS.icpText, LIMITS.footerText),
     policeText: pickOptional(src.policeText, FOOTER_DEFAULTS.policeText, LIMITS.footerText),
     moeText: pickOptional(src.moeText, FOOTER_DEFAULTS.moeText, LIMITS.footerText),
@@ -272,6 +275,7 @@ function saveSite(patch) {
   let footer = current.footer;
   if (p.footer && typeof p.footer === 'object') {
     footer = normalizeFooter({
+      copyright: p.footer.copyright === undefined ? current.footer.copyright !== false : !!p.footer.copyright,
       icpText: p.footer.icpText === undefined ? current.footer.icpText : p.footer.icpText,
       policeText: p.footer.policeText === undefined ? current.footer.policeText : p.footer.policeText,
       moeText: p.footer.moeText === undefined ? current.footer.moeText : p.footer.moeText,

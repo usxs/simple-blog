@@ -1369,28 +1369,48 @@ body.md-lightbox-locked {
   .ss-fields { grid-template-columns: 1fr; }
 }
 
-/* ---------------- 管理：侧边栏二级菜单 ---------------- */
+/* ---------------- 管理：侧边栏二级菜单（点击「管理」后从右侧弹出） ---------------- */
+.nav-item-row { position: relative; }
+.nav-btn[data-mod="settings"]::after {
+  content: '';
+  width: 0; height: 0;
+  margin-left: auto;
+  border-left: 4px solid currentColor;
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+  opacity: .45;
+  transition: transform .15s ease;
+}
+.nav-item-row.menu-open .nav-btn[data-mod="settings"]::after {
+  opacity: .9;
+}
 .nav-sub {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: -10px;
+  z-index: 70;
+  margin: 0;
+  padding: 6px;
   list-style: none;
-  margin: 2px 0 6px 0;
-  padding: 2px 0 2px 26px;
+  min-width: 150px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14);
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  border-left: 1px solid var(--border);
-  margin-left: 14px;
+  gap: 2px;
 }
+.nav-sub[hidden] { display: none; }
 .nav-sub-btn {
   width: 100%;
   text-align: left;
-  background: none;
-  border: 0;
-  padding: 5px 8px;
+  padding: 6px 9px;
   border-radius: 6px;
-  font-size: 12px;
-  color: var(--text-muted);
+  font-size: 12.5px;
+  color: var(--text-secondary);
   cursor: pointer;
-  font-family: inherit;
+  white-space: nowrap;
 }
 .nav-sub-btn:hover { background: var(--bg-subtle); color: var(--text-primary); }
 .nav-sub-btn.active { color: var(--text-primary); font-weight: 600; background: var(--bg-subtle); }
@@ -1418,19 +1438,42 @@ body.md-lightbox-locked {
   gap: 8px;
   text-align: center;
 }
-.fvp-meta { font-size: 12px; color: var(--text-muted); }
-.fvp-meta strong { color: var(--text-secondary); font-weight: 500; }
-.fvp-badges { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; }
+.fvp-label { font-size: 11.5px; color: var(--text-muted); }
+.fvp-badges { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .fvp-badge {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 9px 3px 7px;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  font-family: var(--font-mono);
-  font-size: 11px;
   color: var(--text-muted);
 }
 .fvp-badge svg { width: 13px; height: 13px; }
-.fvp-extra { font-size: 11.5px; color: var(--text-muted); }
+.fvp-badge:hover { color: var(--text-primary); border-color: var(--text-primary); }
+.fvp-badge-tip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%);
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s ease;
+  z-index: 20;
+}
+.fvp-badge:hover .fvp-badge-tip { opacity: 1; visibility: visible; }
+.fvp-empty { font-size: 11.5px; color: var(--text-muted); }
+
+@media (max-width: 720px) {
+  .nav-sub { left: 0; top: calc(100% + 6px); }
+}

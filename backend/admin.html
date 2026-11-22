@@ -40,7 +40,7 @@
         <li class="nav-item-row" data-nav-row="status"><button class="nav-btn" data-mod="status" onclick="cms.switchMod('status')"><span class="nav-label" data-label="status">状态</span><span class="nav-count" id="count-status">0</span></button></li>
         <li class="nav-item-row" data-nav-row="quirky"><button class="nav-btn" data-mod="quirky" onclick="cms.switchMod('quirky')"><span class="nav-label" data-label="quirky">奇奇怪怪</span><span class="nav-count" id="count-quirky">0</span></button></li>
         <li class="nav-item-row" data-nav-row="settings">
-          <button class="nav-btn" data-mod="settings" onclick="cms.switchMod('settings')"><span class="nav-label">管理</span></button>
+          <button class="nav-btn" data-mod="settings" onclick="cms.openSettings(event)"><span class="nav-label">管理</span></button>
           <ul class="nav-sub" id="settings-subnav" hidden>
             <li><button type="button" class="nav-sub-btn" data-jump="card-site">站点信息</button></li>
             <li><button type="button" class="nav-sub-btn" data-jump="card-modules">栏目与图标</button></li>
@@ -175,6 +175,11 @@
                 <span class="settings-tip">留空即不显示 · 保存后前台立即生效</span>
               </div>
               <form id="footer-form">
+                <div class="check-row">
+                  <label class="check-label" for="footer-copyright">
+                    <input type="checkbox" id="footer-copyright" /> 显示版权声明（© 年份 站名 · All Rights Reserved.）
+                  </label>
+                </div>
                 <div class="field-grid">
                   <div class="field">
                     <label class="field-label" for="footer-icp">ICP 备案号</label>
@@ -193,7 +198,10 @@
                     <input class="field-input" id="footer-extra" maxlength="120" placeholder="如：本站由 简单博客 驱动" />
                   </div>
                 </div>
-                <div class="footer-preview" id="footer-preview"></div>
+                <div class="footer-preview">
+                  <span class="fvp-label">前台效果（备案徽章悬停可看文字，点击跳转备案网站）</span>
+                  <div class="fvp-badges" id="footer-preview"></div>
+                </div>
                 <div class="settings-actions">
                   <button class="btn btn-primary" type="submit">保存页脚</button>
                 </div>

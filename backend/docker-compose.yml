@@ -54,6 +54,8 @@ services:
       SITE_ICP: ${SITE_ICP:-}
       SITE_POLICE: ${SITE_POLICE:-}
       SITE_MOE: ${SITE_MOE:-}
+      # 是否显示版权行（1 / 0），后台「管理 → 页脚与备案」可随时切换
+      SITE_COPYRIGHT: ${SITE_COPYRIGHT:-1}
       # 通行密钥（Passkey）需要 HTTPS；反向代理域名与后端 host 不一致时可显式指定
       WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-}
       WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:-}

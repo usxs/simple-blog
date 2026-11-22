@@ -45,6 +45,7 @@
       "panelUrl": "https://monitor.example.com/#/"
     },
     "footer": {
+      "copyright": true,
       "icpText": "京ICP备2026000001号-1",
       "policeText": "京公网安备 11010502030146号",
       "moeText": "萌ICP备20231234号",
@@ -110,19 +111,20 @@ POST /api/admin/site
 
 成功返回 `200 {"ok":true,"username":"…"}` 并下发会话 Cookie；失败 `401`。
 
-`footer` 是页脚备案信息（三个备案号留空即整枚徽章隐藏）；`socials` 是首页标题下方的社交链接（留空即隐藏该项）。
+`footer` 是页脚备案信息（三个备案号留空即整枚徽章隐藏，前台只显示图标，悬停看号码、点击跳官方查询页；`copyright=false` 时连版权行一起隐藏）；`socials` 是首页标题下方的社交链接（留空即隐藏该项）。
 两者都在后台「管理 → 页脚与备案 / 社交链接」维护，也支持 `POST /api/admin/site` 局部合并：
 
 ```jsonc
 POST /api/admin/site
 {
-  "footer": { "icpText": "京ICP备2026000001号-1", "policeText": "京公网安备 11010502030146号", "moeText": "萌ICP备20231234号" },
+  "footer": { "copyright": false, "icpText": "京ICP备2026000001号-1", "policeText": "京公网安备 11010502030146号", "moeText": "萌ICP备20231234号" },
   "socials": { "github": "https://github.com/your-name", "email": "hi@example.com" }
 }
 ```
 
 | 字段 | 长度 | 说明 |
 | --- | --- | --- |
+| `footer.copyright` | — | 布尔值，是否显示 `© 年份 站名 · All Rights Reserved.`，默认 `true` |
 | `footer.icpText` | 60 | ICP 备案号，前台徽章链接到 `beian.miit.gov.cn` |
 | `footer.policeText` | 60 | 公安网备案号，前台按其中数字生成 `beian.mps.gov.cn` 查询链接 |
 | `footer.moeText` | 60 | 萌 ICP 备案号，前台按其中数字生成 `icp.gov.moe` 查询链接 |

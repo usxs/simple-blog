@@ -419,12 +419,14 @@ function applyFooter(footer) {
   var f = footer || {};
   var host = document.getElementById('footer-badges');
   var extra = document.getElementById('footer-extra');
+  var meta = document.getElementById('footer-meta');
+  if (meta) meta.hidden = f.copyright === false;
   if (host) {
     var badges = footerBadges(f);
     host.innerHTML = badges.map(function (b) {
-      return '<a class="footer-badge" href="' + escapeHtml(b.href) + '" target="_blank" rel="noopener noreferrer">' +
+      return '<a class="footer-badge" href="' + escapeHtml(b.href) + '" target="_blank" rel="noopener noreferrer" aria-label="' + escapeHtml(b.text) + '">' +
         '<span class="footer-badge-icon">' + FOOTER_ICONS[b.kind] + '</span>' +
-        '<span class="footer-badge-text">' + escapeHtml(b.text) + '</span></a>';
+        '<span class="footer-badge-tip" role="tooltip">' + escapeHtml(b.text) + '</span></a>';
     }).join('');
     host.hidden = !badges.length;
   }

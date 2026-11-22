@@ -688,8 +688,7 @@ var cms = {
     }
 
     // 「管理」「探针」都是独立页面，不参与列表 / 编辑器布局
-    var subnav = document.getElementById('settings-subnav');
-    if (subnav) subnav.hidden = m !== 'settings';
+    this.closeSettingsMenu();
 
     var PAGES = { settings: 'admin-settings', probe: 'admin-probe' };
     var pageId = PAGES[m] || '';
@@ -1460,20 +1459,16 @@ var cms = {
     var host = document.getElementById('footer-preview');
     if (!host) return;
     var list = this.footerBadgeList();
-    var extra = (document.getElementById('footer-extra').value || '').trim();
-    var html = '<div class="fvp-meta">© ' + new Date().getFullYear() + ' <strong>' +
-      cms.escape(document.getElementById('site-name').value || '站点名称') + '</strong> · All Rights Reserved.</div>';
-    if (list.length) {
-      html += '<div class="fvp-badges">' + list.map(function (b) {
-        return '<span class="fvp-badge">' + cms.FOOTER_ICONS[b.kind] + '<span>' + cms.escape(b.text) + '</span></span>';
-      }).join('') + '</div>';
-    }
-    if (extra) html += '<div class="fvp-extra">' + cms.escape(extra) + '</div>';
-    host.innerHTML = html;
+    host.innerHTML = list.length ? list.map(function (b) {
+      return '<span class="fvp-badge">' + cms.FOOTER_ICONS[b.kind] +
+        '<span class="fvp-badge-tip">' + cms.escape(b.text) + '</span></span>';
+    }).join('') : '<span class="fvp-empty">还没有填写备案号，徽章不会显示</span>';
   },
 
   renderFooterSettings: function (footer) {
     var f = footer || {};
+    var copyEl = document.getElementById('footer-copyright');
+    if (copyEl) copyEl.checked = f.copyright !== false;
     document.getElementById('footer-icp').value = f.icpText || '';
     document.getElementById('footer-police').value = f.policeText || '';
     document.getElementById('footer-moe').value = f.moeText || '';
@@ -1492,7 +1487,8 @@ var cms = {
           icpText: document.getElementById('footer-icp').value.trim(),
           policeText: document.getElementById('footer-police').value.trim(),
           moeText: document.getElementById('footer-moe').value.trim(),
-          extra: document.getElementById('footer-extra').value.trim()
+          extra: document.getElementById('footer-extra').value.trim(),
+          copyright: !!document.getElementById('footer-copyright').checked
         }
       }
     }).then(function (res) {
@@ -1537,8 +1533,32 @@ var cms = {
     });
   },
 
+  // 侧边栏「管理」二级菜单：点击后从右侧弹出
+  openSettings: function (ev) {
+    if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    var subnav = document.getElementById('settings-subnav');
+    var row = document.querySelector('.nav-item-row[data-nav-row="settings"]');
+    var willOpen = !subnav || subnav.hidden;
+    if (this.mod !== 'settings') {
+      this.switchMod('settings');
+    } else if (!willOpen) {
+      this.closeSettingsMenu();
+      return;
+    }
+    if (subnav) subnav.hidden = false;
+    if (row) row.classList.add('menu-open');
+  },
+
+  closeSettingsMenu: function () {
+    var subnav = document.getElementById('settings-subnav');
+    if (subnav) subnav.hidden = true;
+    var row = document.querySelector('.nav-item-row[data-nav-row="settings"]');
+    if (row) row.classList.remove('menu-open');
+  },
+
   // 侧边栏「管理」二级菜单：跳到对应卡片
   jumpToCard: function (cardId) {
+    this.closeSettingsMenu();
     var card = document.getElementById(cardId);
     if (!card) return;
     var subs = document.querySelectorAll('#settings-subnav .nav-sub-btn');
@@ -1773,6 +1793,15 @@ var cms = {
     if (socialForm) {
       socialForm.addEventListener('submit', function (e) { e.preventDefault(); self.saveSocials(); });
     }
+
+    // 点击「管理」以外的区域，或按 Esc，收起二级菜单
+    document.addEventListener('click', function (ev) {
+      var row = document.querySelector('.nav-item-row[data-nav-row="settings"]');
+      if (row && !row.contains(ev.target)) self.closeSettingsMenu();
+    });
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape') self.closeSettingsMenu();
+    });
 
     var subnav = document.getElementById('settings-subnav');
     if (subnav) {

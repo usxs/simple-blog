@@ -56,6 +56,7 @@ On phones the sidebar collapses into a **floating bottom navigation** and the cu
 | Section customization | Rename (≤ 12 chars), change the URL path (e.g. `/moments` → `/diary`), pick one of 16 built-in icons or upload your own PNG / JPG / SVG / WebP |
 | Section ordering | Drag the ⋮⋮ handle in "Settings → Sections"; desktop sidebar, mobile dock and admin sidebar all follow the new order (persisted in `data/site.json`) |
 | Custom paths | Sections can use custom paths such as `/diary`; old URLs keep working and redirect, and nav links, `sitemap.xml` and SSR metadata follow the new path |
+| Footer & filings | ICP / police / Moe-ICP filing numbers are editable in the admin (empty = hidden). The public site shows icon-only badges: hover to read the number, click to open the official lookup page. The `© year name · All Rights Reserved.` line has its own on/off switch. Everything sits at the bottom of the sidebar and is hidden below 860px; the monochrome icons follow the light/dark theme |
 | Deploy version | Hover the sidebar "Node ONLINE" badge to see the deployed short version, commit and branch |
 | Post search | The post-list search box matches title / excerpt / tags; Chinese by substring, English by subsequence; filters as soon as IME composition ends, supports Enter and Esc without rebuilding the input |
 | Mobile | Below 860px the layout switches to one column with a floating bottom nav; 375–430px gets dedicated spacing so all entries fit |
@@ -411,6 +412,7 @@ Full parameters: [docs/API.md](docs/API.md).
    - After a path change the old URL still works (302 to the new one), but `sitemap`, nav links and SSR metadata follow the new path
    - Uploaded icons live in `img/<date>/` — include them in backups
    - Drag the ⋮⋮ handle to reorder; the frontend sidebar, mobile dock and admin sidebar all follow
+   - Footer: filing numbers only render as icon badges (hover = number, click = official query page); `© year name · All Rights Reserved.` is toggled by "Show copyright line" and never displayed in the admin preview
 8. **Site config is cached in the browser**: the frontend stores the last `/api/site` (section toggles / names / paths / order) in `localStorage` under `sp_site_cache_v1`, so the first paint already matches it — hidden sections never flash — and the site still renders when the backend is unreachable or slow. New values are fetched on the next visit and replace the cache (the backend uses `updatedAt` to detect changes). If a change doesn't show up, hard-refresh (`Cmd/Ctrl + Shift + R`) or clear that key.
 9. **First paint never waits for the backend**: home, lists and posts render from cached data / SSR content first; node status, probe data and backend config refresh asynchronously. A slow or dead backend never blanks the page — the node badge just shows OFFLINE.
 10. **SEO and domains**: `canonical` uses `SITE_URL`. If both `example.com` and `www.example.com` answer, pick one and 301 the other, otherwise you get duplicate content.
