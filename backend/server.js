@@ -14,7 +14,7 @@ const {
 
 const auth = require('./backend/auth');
 const { buildSitemap, PUBLIC_SITE_URL } = require('./backend/sitemap');
-const { notifyIndexNow } = require('./backend/indexnow');
+const { notifyIndexNow, getIndexNowConfig, saveIndexNowConfig, verifyKeyFile } = require('./backend/indexnow');
 const site = require('./backend/site');
 const { fetchProbeServers } = require('./backend/probe-source');
 const image = require('./backend/image');
@@ -314,6 +314,31 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && pathname === '/api/admin/site') {
     if (!guardAuth(req, res)) return;
     return auth.handleSiteSave(req, res);
+  }
+
+  // 3.8.1 IndexNow 密钥: GET /api/admin/indexnow
+  if (req.method === 'GET' && pathname === '/api/admin/indexnow') {
+    if (!guardAuth(req, res)) return;
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+    return res.end(JSON.stringify({ ok: true, config: getIndexNowConfig() }));
+  }
+
+  // 3.8.2 保存 IndexNow 密钥: POST /api/admin/indexnow
+  if (req.method === 'POST' && pathname === '/api/admin/indexnow') {
+    if (!guardAuth(req, res)) return;
+    return auth.readJsonBody(req, res, function (data) {
+      const result = saveIndexNowConfig(data);
+      if (!result.ok) return auth.respond(res, 400, { ok: false, error: result.error });
+      return auth.respond(res, 200, { ok: true, config: result.config });
+    });
+  }
+
+  // 3.8.3 检查密钥文件: POST /api/admin/indexnow/verify
+  if (req.method === 'POST' && pathname === '/api/admin/indexnow/verify') {
+    if (!guardAuth(req, res)) return;
+    return verifyKeyFile().then(function (result) {
+      return auth.respond(res, result.ok ? 200 : 400, result);
+    });
   }
 
   // 3.9 修改管理员用户名: POST /api/auth/change-username

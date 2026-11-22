@@ -46,6 +46,7 @@
             <li><button type="button" class="nav-sub-btn" data-jump="card-modules">栏目与图标</button></li>
             <li><button type="button" class="nav-sub-btn" data-jump="card-footer">页脚与备案</button></li>
             <li><button type="button" class="nav-sub-btn" data-jump="card-social">社交链接</button></li>
+            <li><button type="button" class="nav-sub-btn" data-jump="card-indexnow">搜索引擎推送</button></li>
             <li><button type="button" class="nav-sub-btn" data-jump="card-account">管理员账号</button></li>
             <li><button type="button" class="nav-sub-btn" data-jump="card-totp">两步验证</button></li>
             <li><button type="button" class="nav-sub-btn" data-jump="card-passkey">通行密钥</button></li>
@@ -198,10 +199,6 @@
                     <input class="field-input" id="footer-extra" maxlength="120" placeholder="如：本站由 简单博客 驱动" />
                   </div>
                 </div>
-                <div class="footer-preview">
-                  <span class="fvp-label">前台效果（备案徽章悬停可看文字，点击跳转备案网站）</span>
-                  <div class="fvp-badges" id="footer-preview"></div>
-                </div>
                 <div class="settings-actions">
                   <button class="btn btn-primary" type="submit">保存页脚</button>
                 </div>
@@ -237,6 +234,40 @@
                   <button class="btn btn-primary" type="submit">保存社交链接</button>
                 </div>
                 <div class="auth-error" id="social-error"></div>
+              </form>
+            </section>
+
+            <section class="settings-card settings-card--wide" id="card-indexnow">
+              <div class="settings-card-head">
+                <h3>搜索引擎推送</h3>
+                <span class="settings-badge" id="indexnow-badge" data-on="false">未启用</span>
+              </div>
+              <p class="settings-tip">
+                IndexNow 会在文章发布 / 删除后立刻通知 Bing、Yandex、Seznam、Naver（Google 不支持该协议，仍靠 sitemap 抓取）。
+                密钥为 8–64 位字母、数字或短横线，可用 <code>openssl rand -hex 16</code> 生成。
+              </p>
+              <form id="indexnow-form">
+                <div class="field-grid">
+                  <div class="field">
+                    <label class="field-label" for="indexnow-key">IndexNow 密钥</label>
+                    <input class="field-input" id="indexnow-key" maxlength="64" placeholder="例如 3f2a9c1b7d4e5f60" autocomplete="off" spellcheck="false" />
+                  </div>
+                  <div class="field">
+                    <label class="field-label" for="indexnow-location">密钥文件地址（可选）</label>
+                    <input class="field-input" id="indexnow-location" maxlength="300" placeholder="默认 https://你的域名/密钥.txt" autocomplete="off" spellcheck="false" />
+                  </div>
+                </div>
+                <p class="settings-tip">
+                  还需要把内容等于密钥的文本文件 <code id="indexnow-filename">密钥.txt</code>
+                  放到前端根目录一起部署，否则搜索引擎无法验证密钥。
+                </p>
+                <div class="settings-actions">
+                  <button class="btn btn-primary" type="submit">保存密钥</button>
+                  <button class="btn" type="button" id="indexnow-verify-btn">检查密钥文件</button>
+                  <button class="btn" type="button" id="indexnow-download-btn">下载密钥文件</button>
+                </div>
+                <div class="settings-tip" id="indexnow-status"></div>
+                <div class="auth-error" id="indexnow-error"></div>
               </form>
             </section>
 
@@ -474,6 +505,12 @@
       <div class="auth-hint">修改成功后将吊销其它设备的登录状态，当前设备自动续签</div>
     </div>
   </div>
+
+  <button class="to-top" id="back-to-top" type="button" aria-label="回到顶部" data-show="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 19V5" /><path d="m5 12 7-7 7 7" />
+    </svg>
+  </button>
 
   <div class="toast" id="toast"></div>
 

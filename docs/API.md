@@ -265,6 +265,11 @@ POST /api/admin/site
 | `POST /api/auth/sessions/block` | `{id, scope:'ip'\|'device'\|'both', note?}` — 按 IP 或设备指纹加入登录黑名单 |
 | `POST /api/auth/blocklist/remove` | `{type:'ip'\|'device', value}` — 解除封禁 |
 | `GET /api/auth/sessions/geo?ip=` | `{ok, label, country, region, city, isp}` — IP 归属地（内网地址直接返回本机提示） |
+| `GET /api/admin/indexnow` | 读取 IndexNow 配置：`{key, keyLocation, valid, enabled, source:'file'\|'env'\|'none', fileName}` |
+| `POST /api/admin/indexnow` | `{key, keyLocation?}` 保存密钥（`key` 为空即关闭推送）；密钥需 8–64 位字母数字或短横线 |
+| `POST /api/admin/indexnow/verify` | 抓取 `keyLocation` 校验文件内容；未部署时返回「这个地址返回的是网页…」或「文件内容与密钥不一致」 |
+
+IndexNow 配置优先读取 `data/indexnow.json`（后台写入），没有再回落到环境变量 `INDEXNOW_KEY` / `INDEXNOW_KEY_LOCATION`；配置变化后不需要重启，下一次发布 / 删除文章即生效。
 
 会话状态判定：最近 3 分钟内有请求的记为 `online`，否则 `offline`；被踢下线、主动退出、过期归档的进入 `history`（保留最近 80 条）。黑名单命中后，登录接口返回 403「该设备或 IP 已被禁止登录」。
 

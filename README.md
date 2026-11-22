@@ -53,7 +53,8 @@
 | 动态 / 工具 / 状态 / 奇思妙想 | 多个可独立维护的内容板块，共用同一套增删改查接口 |
 | 图片上传 | 后台粘贴或选择图片，服务端自动转 WebP 并压缩到 2560px 内，原图不落盘 |
 | 评论 | 访客评论 + 验证码 + 后台审核 + 楼中楼回复，支持邮件/站点联系方式（不公开） |
-| SEO | 真实路径路由、文章页 SSR、动态 `sitemap.xml`、`robots.txt`、Open Graph、JSON-LD 结构化数据、IndexNow 即时推送 |
+| SEO | 真实路径路由、文章页 SSR、动态 `sitemap.xml`、`robots.txt`、Open Graph、JSON-LD 结构化数据、IndexNow 即时推送（后台可配） |
+| 细节体验 | 内容超过一屏时右下角出现「回到顶部」按钮；管理页侧边栏悬停即展开二级菜单，点右侧箭头可固定 |
 | 服务器探针 | 后台侧边栏「探针」可切换数据源：CF-Server-Monitor（`/api/servers`）或极简探针 monitor（`/api/nodes`），两种节点统一成同一套卡片 |
 | 栏目开关 | 在「管理 → 前台栏目」一键决定前台是否显示；关闭后前台导航隐藏，直接访问该地址会显示「栏目已关闭」占位页 |
 | 栏目自定义 | 栏目可改名（最多 12 字）、改访问路径（如把 `/moments` 改成 `/diary`）、换图标：16 个内置图标任选，或自行上传 PNG / JPG / SVG / WebP |
@@ -322,7 +323,7 @@ Pages 项目 → **Custom domains** → 添加 `www.example.com`，按提示在 
 1. Google Search Console 添加资源，**推荐用「网域」类型**（DNS TXT 验证），而不是「网址前缀」——否则 sitemap 的主机名对不上会一直提示「无法读取」；
 2. Bing Webmaster Tools 可以直接从 GSC 导入站点；
 3. 两边都提交 `https://www.example.com/sitemap.xml`；
-4. 想让 Bing 更快收录新文章：后端 `.env` 里填 `INDEXNOW_KEY=<32 位随机串>`，并把同名 `<KEY>.txt`（内容就是这个 key）放进 `frontend/` 根目录一起部署。
+4. 想让 Bing 更快收录新文章：登录后台「管理 → 搜索引擎推送」，用 `openssl rand -hex 16` 生成一串密钥，填进密钥框保存；再点「下载密钥文件」拿到 `<KEY>.txt`，放进 `frontend/` 根目录一起部署，最后点「检查密钥文件」确认可用。（也仍支持用环境变量 `INDEXNOW_KEY` 配置，后台填写的优先级更高。）
 
 更细的步骤、证书、备份与排障见 [docs/DEPLOY.md](docs/DEPLOY.md)。
 
@@ -336,7 +337,7 @@ Pages 项目 → **Custom domains** → 添加 `www.example.com`，按提示在 
 | `SITE_PUBLIC_URL` | 是 | 前端站点地址，写进 sitemap 与推送的 URL |
 | `BACKEND_PUBLIC_URL` | 是 | 后端地址，写进 `robots.txt` 的 Sitemap 行 |
 | `CAPTCHA_SECRET` | 否 | 留空自动生成并持久化到 `data/captcha-secret.json` |
-| `INDEXNOW_KEY` | 否 | 填了才会在发布/删除文章后向 Bing 等推送 |
+| `INDEXNOW_KEY` | 否 | 也可在后台「管理 → 搜索引擎推送」填写（优先于环境变量）；填了才会在发布/删除文章后向 Bing 等推送 |
 | `INDEXNOW_KEY_LOCATION` | 否 | key 文件完整 URL，默认 `${SITE_PUBLIC_URL}/<KEY>.txt` |
 | `PROBE_ENABLED` | 否 | 是否启用前台探针数据，`0` 关闭（默认启用） |
 | `PROBE_PROVIDER` | 否 | 探针类型：`cf`（CF-Server-Monitor）或 `minimal`（极简探针 monitor） |

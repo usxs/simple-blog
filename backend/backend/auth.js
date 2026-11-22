@@ -1585,4 +1585,7 @@ module.exports = {
   handleSessionBlock,
   handleBlocklistRemove,
   handleSessionGeo,
+  // 供其他模块复用（IndexNow 等）
+  readJsonBody,
+  respond,
 };

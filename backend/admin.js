@@ -1120,6 +1120,7 @@ var cms = {
       this.renderPasskeys(pkeys);
 
       this.renderSessions(data.sessions || [], data.history || [], data.blocked || []);
+      this.loadIndexNow();
     } catch (e) {
       if (String(e && e.message) === 'unauthorized') return;
       this.notify('管理信息加载失败：' + (e && e.message ? e.message : '未知错误'));
@@ -1455,15 +1456,7 @@ var cms = {
     return list;
   },
 
-  renderFooterPreview: function () {
-    var host = document.getElementById('footer-preview');
-    if (!host) return;
-    var list = this.footerBadgeList();
-    host.innerHTML = list.length ? list.map(function (b) {
-      return '<span class="fvp-badge">' + cms.FOOTER_ICONS[b.kind] +
-        '<span class="fvp-badge-tip">' + cms.escape(b.text) + '</span></span>';
-    }).join('') : '<span class="fvp-empty">还没有填写备案号，徽章不会显示</span>';
-  },
+  renderFooterPreview: function () { /* 前台效果预览已移除 */ },
 
   renderFooterSettings: function (footer) {
     var f = footer || {};
@@ -1497,6 +1490,93 @@ var cms = {
     }).catch(function (e) {
       err.textContent = e.message || '保存失败';
     });
+  },
+
+  // ---------------- IndexNow 推送 ----------------
+  loadIndexNow: function () {
+    var self = this;
+    return this.api('/api/admin/indexnow').then(function (res) {
+      self.renderIndexNow(res.config);
+    }).catch(function () { /* 忽略：不影响其它设置 */ });
+  },
+
+  renderIndexNow: function (cfg) {
+    var c = cfg || {};
+    var keyEl = document.getElementById('indexnow-key');
+    var locEl = document.getElementById('indexnow-location');
+    if (keyEl) keyEl.value = c.key || '';
+    if (locEl) locEl.value = c.rawKeyLocation || '';
+    var badge = document.getElementById('indexnow-badge');
+    if (badge) {
+      badge.textContent = c.valid ? '已启用' : '未启用';
+      badge.setAttribute('data-on', c.valid ? 'true' : 'false');
+    }
+    var nameEl = document.getElementById('indexnow-filename');
+    if (nameEl) nameEl.textContent = (c.key || '密钥') + '.txt';
+    var statusEl = document.getElementById('indexnow-status');
+    if (statusEl) {
+      statusEl.textContent = c.valid
+        ? '已生效，密钥文件地址：' + c.keyLocation
+        : '填写密钥并保存后才会开始推送';
+    }
+  },
+
+  saveIndexNow: function (ev) {
+    if (ev && ev.preventDefault) ev.preventDefault();
+    var err = document.getElementById('indexnow-error');
+    var statusEl = document.getElementById('indexnow-status');
+    if (err) err.textContent = '';
+    this.api('/api/admin/indexnow', {
+      method: 'POST',
+      body: {
+        key: document.getElementById('indexnow-key').value.trim(),
+        keyLocation: document.getElementById('indexnow-location').value.trim()
+      }
+    }).then(function (res) {
+      cms.renderIndexNow(res.config);
+      cms.notify(res.config && res.config.valid ? 'IndexNow 已启用' : 'IndexNow 已关闭');
+      if (statusEl && res.config && res.config.valid) statusEl.textContent = '已保存，密钥文件地址：' + res.config.keyLocation;
+    }).catch(function (e) {
+      if (err) err.textContent = e.message || '保存失败';
+    });
+  },
+
+  verifyIndexNowKey: function () {
+    var btn = document.getElementById('indexnow-verify-btn');
+    var statusEl = document.getElementById('indexnow-status');
+    var err = document.getElementById('indexnow-error');
+    if (err) err.textContent = '';
+    if (btn) { btn.disabled = true; btn.textContent = '检查中…'; }
+    this.api('/api/admin/indexnow/verify', { method: 'POST', body: {} })
+      .then(function (res) {
+        if (statusEl) statusEl.textContent = '✅ 密钥文件可访问：' + res.keyLocation;
+        cms.notify('密钥文件检查通过');
+      })
+      .catch(function (e) {
+        var msg = (e && e.message) || '检查失败';
+        if (err) err.textContent = msg;
+        if (statusEl) statusEl.textContent = '❌ ' + msg;
+      })
+      .finally(function () {
+        if (btn) { btn.disabled = false; btn.textContent = '检查密钥文件'; }
+      });
+  },
+
+  downloadIndexNowKey: function () {
+    var el = document.getElementById('indexnow-key');
+    var key = el ? el.value.trim() : '';
+    if (!key) {
+      document.getElementById('indexnow-status').textContent = '请先填写并保存密钥';
+      return;
+    }
+    var blob = new Blob([key], { type: 'text/plain' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = key + '.txt';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    document.getElementById('indexnow-status').textContent = '已下载 ' + key + '.txt，请放到前端根目录一起部署';
   },
 
   // ---------------- 社交链接 ----------------
@@ -1533,18 +1613,39 @@ var cms = {
     });
   },
 
-  // 侧边栏「管理」二级菜单：点击后从右侧弹出
+  // 侧边栏「管理」二级菜单：鼠标悬停临时展开；点右侧小三角固定展开（点别处才收起）；
+  // 点按钮左侧（图标与文字）仍是原来的行为——直接进入管理页，不弹菜单。
+  menuPinned: false,
+  suppressHoverUntil: 0,
+
   openSettings: function (ev) {
-    if (ev) { ev.preventDefault(); ev.stopPropagation(); }
     var subnav = document.getElementById('settings-subnav');
-    var row = document.querySelector('.nav-item-row[data-nav-row="settings"]');
-    var willOpen = !subnav || subnav.hidden;
-    if (this.mod !== 'settings') {
-      this.switchMod('settings');
-    } else if (!willOpen) {
-      this.closeSettingsMenu();
+    var btn = (ev && (ev.currentTarget || ev.target)) || null;
+    if (btn && btn.closest) btn = btn.closest('.nav-btn') || btn;
+    var rect = btn && btn.getBoundingClientRect ? btn.getBoundingClientRect() : null;
+    var onArrow = !!(ev && rect && typeof ev.clientX === 'number' && ev.clientX >= rect.right - 26);
+
+    if (onArrow) {
+      if (ev.preventDefault) ev.preventDefault();
+      if (ev.stopPropagation) ev.stopPropagation();
+      // 只有在「已固定展开」时第二次点箭头才收起，否则一律固定展开
+      var willOpen = !(this.menuPinned && subnav && !subnav.hidden);
+      this.menuPinned = willOpen;
+      if (willOpen) this.showSettingsMenu();
+      else this.closeSettingsMenu();
       return;
     }
+
+    // 左侧：正常进入「管理」页，不弹出二级菜单（并短暂抑制悬停自动展开）
+    this.menuPinned = false;
+    this.suppressHoverUntil = Date.now() + 500;
+    this.closeSettingsMenu();
+    this.switchMod('settings');
+  },
+
+  showSettingsMenu: function () {
+    var subnav = document.getElementById('settings-subnav');
+    var row = document.querySelector('.nav-item-row[data-nav-row="settings"]');
     if (subnav) subnav.hidden = false;
     if (row) row.classList.add('menu-open');
   },
@@ -1554,10 +1655,12 @@ var cms = {
     if (subnav) subnav.hidden = true;
     var row = document.querySelector('.nav-item-row[data-nav-row="settings"]');
     if (row) row.classList.remove('menu-open');
+    this.menuPinned = false;
   },
 
   // 侧边栏「管理」二级菜单：跳到对应卡片
   jumpToCard: function (cardId) {
+    if (this.mod !== 'settings') this.switchMod('settings');
     this.closeSettingsMenu();
     var card = document.getElementById(cardId);
     if (!card) return;
@@ -1792,6 +1895,43 @@ var cms = {
     var socialForm = document.getElementById('social-form');
     if (socialForm) {
       socialForm.addEventListener('submit', function (e) { e.preventDefault(); self.saveSocials(); });
+    }
+
+    var indexnowForm = document.getElementById('indexnow-form');
+    if (indexnowForm) {
+      indexnowForm.addEventListener('submit', function (e) { e.preventDefault(); self.saveIndexNow(); });
+      var verifyBtn = document.getElementById('indexnow-verify-btn');
+      if (verifyBtn) verifyBtn.addEventListener('click', function () { self.verifyIndexNowKey(); });
+      var dlBtn = document.getElementById('indexnow-download-btn');
+      if (dlBtn) dlBtn.addEventListener('click', function () { self.downloadIndexNowKey(); });
+    }
+
+    // 侧边栏「管理」：悬停展开、移开 180ms 后收起（点右侧固定后不受影响）
+    var settingsRow = document.querySelector('.nav-item-row[data-nav-row="settings"]');
+    var settingsSub = document.getElementById('settings-subnav');
+    var hideTimer = null;
+    function cancelHide() {
+      if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+    }
+    function scheduleHide() {
+      if (self.menuPinned) return;
+      cancelHide();
+      hideTimer = setTimeout(function () {
+        hideTimer = null;
+        if (!self.menuPinned) self.closeSettingsMenu();
+      }, 180);
+    }
+    if (settingsRow) {
+      settingsRow.addEventListener('mouseenter', function () {
+        if (Date.now() < self.suppressHoverUntil) return;
+        cancelHide();
+        self.showSettingsMenu();
+      });
+      settingsRow.addEventListener('mouseleave', scheduleHide);
+    }
+    if (settingsSub) {
+      settingsSub.addEventListener('mouseenter', cancelHide);
+      settingsSub.addEventListener('mouseleave', scheduleHide);
     }
 
     // 点击「管理」以外的区域，或按 Esc，收起二级菜单
@@ -2486,6 +2626,22 @@ var cms = {
     new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
   }
   window.addEventListener('load', schedule);
+})();
+
+// 回到顶部：内容超过一屏时出现
+(function initBackToTop() {
+  var btn = document.getElementById('back-to-top');
+  if (!btn) return;
+  function update() {
+    var scrolled = window.pageYOffset || document.documentElement.scrollTop || 0;
+    var extra = document.documentElement.scrollHeight - window.innerHeight;
+    btn.setAttribute('data-show', (scrolled > 260 && extra > 220) ? 'true' : 'false');
+  }
+  window.addEventListener('scroll', update, { passive: true });
+  window.addEventListener('resize', update);
+  btn.addEventListener('click', function () { window.scrollTo({ top: 0, behavior: 'smooth' }); });
+  setTimeout(update, 300);
+  window.__refreshBackToTop = update;
 })();
 
 cms.init();

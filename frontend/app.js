@@ -443,6 +443,35 @@ function applyFooter(footer) {
 
 applyFooter(SITE_CONFIG.footer);
 
+// 回到顶部：内容超过一屏时在右下角出现
+(function () {
+  var btn = document.getElementById('back-to-top');
+  if (!btn) return;
+  var raf = null;
+  function update() {
+    raf = null;
+    var scrolled = window.pageYOffset || document.documentElement.scrollTop || 0;
+    var extra = document.documentElement.scrollHeight - window.innerHeight;
+    var show = scrolled > 260 && extra > 220;
+    btn.setAttribute('data-show', show ? 'true' : 'false');
+  }
+  function schedule() {
+    if (raf) return;
+    raf = window.requestAnimationFrame ? window.requestAnimationFrame(update) : setTimeout(update, 60);
+  }
+  window.addEventListener('scroll', schedule, { passive: true });
+  window.addEventListener('resize', schedule);
+  btn.addEventListener('click', function () {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+  var host = document.getElementById('page-content');
+  if (host && window.MutationObserver) {
+    new MutationObserver(function () { setTimeout(schedule, 80); }).observe(host, { childList: true, subtree: true });
+  }
+  window.__refreshBackToTop = schedule;
+  setTimeout(schedule, 120);
+})();
+
 // 把条目的 date 字段解析为可比毫秒数（北京时间锚定）；解析失败回退 mtime
 function dateMsOf(item) {
   var raw = String((item && item.date) || '').trim();

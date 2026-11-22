@@ -158,10 +158,11 @@ wrangler pages deploy frontend --project-name simple-blog
    - 提交后通常需要 1–2 天才会抓取，期间状态显示「已提交」是正常的。
 3. **Bing Webmaster Tools**：可直接从 GSC 导入站点，再提交同一个 sitemap。
 4. **IndexNow**（可选，但很划算）：
-   ```bash
-   openssl rand -hex 16        # 例如 8f3c...e21
-   ```
-   把结果填进后端 `.env` 的 `INDEXNOW_KEY`，并在前端站点根目录（`frontend/`）放一个同名文件 `8f3c...e21.txt`，内容就是这串 key 本身。之后每次在后台发布或删除文章，后端都会通知 Bing/Yandex 重新抓取。
+   两种配置方式，任选其一：
+   - 后台：`https://api.example.com/admin.html` → 「管理 → 搜索引擎推送」，填入 `openssl rand -hex 16` 生成的密钥并保存；
+   - 环境变量：在 `backend/.env` 里写 `INDEXNOW_KEY=<密钥>`。
+
+   如果走后台，点「下载密钥文件」即可拿到 `<KEY>.txt`；两种方式都需要把这个文件（内容就是密钥本身）放到前端站点根目录（`frontend/`）一起部署，最后在后台点「检查密钥文件」确认能读到。之后每次发布 / 删除文章，后端都会通知 Bing/Yandex 重新抓取。
 
 ## 六、备份与迁移
 

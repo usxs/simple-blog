@@ -50,7 +50,8 @@ On phones the sidebar collapses into a **floating bottom navigation** and the cu
 | Sections | Multiple independently maintained content sections (moments, tools, status, quirky) sharing one CRUD API |
 | Image upload | Paste or pick an image in the admin; the server converts it to WebP and caps the long edge at 2560px — the original never touches disk |
 | Comments | Visitor comments with captcha, moderation queue, threaded replies, optional contact field (never public) |
-| SEO | Real-path routing, per-article SSR, dynamic `sitemap.xml`, `robots.txt`, Open Graph, JSON-LD, IndexNow push |
+| SEO | Real-path routing, per-article SSR, dynamic `sitemap.xml`, `robots.txt`, Open Graph, JSON-LD, IndexNow push (configurable in the admin) |
+| Details | A compact “back to top” button appears once a page is longer than the viewport; the admin sidebar submenu opens on hover and can be pinned via the arrow |
 | Server probe | The admin sidebar "Probe" page can switch data sources: CF-Server-Monitor (`/api/servers`) or the minimal monitor probe (`/api/nodes`); both are normalized into the same cards |
 | Section toggles | Decide per section whether it appears on the frontend ("Settings → Sections"); disabled sections are hidden from the nav and their URLs show a "closed" placeholder page |
 | Section customization | Rename (≤ 12 chars), change the URL path (e.g. `/moments` → `/diary`), pick one of 16 built-in icons or upload your own PNG / JPG / SVG / WebP |
@@ -322,7 +323,7 @@ Walk through this list — all green means the deployment is fine:
 1. Add the site in Google Search Console — **prefer the "Domain" property** (DNS TXT verification) over "URL prefix", otherwise the sitemap host never matches and GSC keeps saying it cannot be read;
 2. Bing Webmaster Tools can import the site from GSC directly;
 3. Submit `https://www.example.com/sitemap.xml` in both;
-4. For faster Bing indexing of new posts: set `INDEXNOW_KEY=<32-char random string>` in the backend `.env`, and deploy a file named `<KEY>.txt` (content is the key) at the `frontend/` root.
+4. For faster Bing indexing of new posts: open **Admin → Search engine push**, generate a key with `openssl rand -hex 16`, paste it and save. Use **Download key file** to get `<KEY>.txt`, deploy it at the `frontend/` root together with the site, then click **Check key file** to confirm. (`INDEXNOW_KEY` in the environment still works; the admin value wins.)
 
 Detailed steps, certificates, backups and troubleshooting: [docs/DEPLOY.md](docs/DEPLOY.md).
 
@@ -336,7 +337,7 @@ Backend (`backend/.env`):
 | `SITE_PUBLIC_URL` | yes | Frontend URL used in the sitemap and push links |
 | `BACKEND_PUBLIC_URL` | yes | Backend URL written into the `robots.txt` Sitemap line |
 | `CAPTCHA_SECRET` | no | Generated automatically and persisted to `data/captcha-secret.json` when empty |
-| `INDEXNOW_KEY` | no | When set, publish/delete pushes URLs to Bing and friends |
+| `INDEXNOW_KEY` | no | Can also be set in the admin (takes precedence); when present, publish/delete pushes URLs to Bing and friends |
 | `INDEXNOW_KEY_LOCATION` | no | Full URL of the key file; defaults to `${SITE_PUBLIC_URL}/<KEY>.txt` |
 | `PROBE_ENABLED` | no | Enables frontend probe data; `0` disables (default enabled) |
 | `PROBE_PROVIDER` | no | Probe type: `cf` (CF-Server-Monitor) or `minimal` (minimal monitor) |
