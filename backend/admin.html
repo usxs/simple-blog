@@ -47,6 +47,7 @@
             <li><button type="button" class="nav-sub-btn" data-jump="card-footer">页脚与备案</button></li>
             <li><button type="button" class="nav-sub-btn" data-jump="card-social">社交链接</button></li>
             <li><button type="button" class="nav-sub-btn" data-jump="card-indexnow">搜索引擎推送</button></li>
+            <li><button type="button" class="nav-sub-btn" data-jump="card-telegram">碎碎念同步</button></li>
             <li><button type="button" class="nav-sub-btn" data-jump="card-account">管理员账号</button></li>
             <li><button type="button" class="nav-sub-btn" data-jump="card-totp">两步验证</button></li>
             <li><button type="button" class="nav-sub-btn" data-jump="card-passkey">通行密钥</button></li>
@@ -107,6 +108,7 @@
               <span id="list-title">文章列表</span>
               <div style="display:flex;gap:6px;">
                 <button class="btn" id="probe-now-btn" style="padding:3px 9px;font-size:12px;display:none;" onclick="cms.triggerProbeNow()">立即探测</button>
+                <button class="btn" id="memo-telegram-btn" style="padding:3px 9px;font-size:12px;display:none;" onclick="cms.openTelegramSettings()">Telegram 同步</button>
                 <button class="btn" id="new-item-btn" style="padding:3px 9px;font-size:12px;" onclick="cms.newItem()">+ 新建</button>
               </div>
             </div>
@@ -268,6 +270,55 @@
                 </div>
                 <div class="settings-tip" id="indexnow-status"></div>
                 <div class="auth-error" id="indexnow-error"></div>
+              </form>
+            </section>
+
+            <section class="settings-card settings-card--wide" id="card-telegram">
+              <div class="settings-card-head">
+                <h3>碎碎念同步</h3>
+                <span class="settings-badge" id="telegram-badge" data-on="false">未启用</span>
+              </div>
+              <p class="settings-tip">
+                开启后，新建或编辑「碎碎念」会自动发到 Telegram 频道，删除时同步撤回。
+                内容里的图片会一起发送（最多 4 张）。需要一个 Bot：在 Telegram 里找 <code>@BotFather</code>
+                建机器人拿 Token，把机器人拉进频道并给「发消息」权限，频道 ID 形如 <code>@your_channel</code> 或 <code>-1001234567890</code>。
+              </p>
+              <form id="telegram-form">
+                <div class="check-row">
+                  <label class="check-label">
+                    <input type="checkbox" id="telegram-enabled" />
+                    启用碎碎念同步到 Telegram
+                  </label>
+                </div>
+                <div class="field-grid">
+                  <div class="field">
+                    <label class="field-label" for="telegram-token">Bot Token</label>
+                    <input class="field-input" id="telegram-token" type="password" autocomplete="new-password" spellcheck="false" placeholder="123456789:AA…（留空表示不修改）" />
+                  </div>
+                  <div class="field">
+                    <label class="field-label" for="telegram-chat">频道 / 会话 ID</label>
+                    <input class="field-input" id="telegram-chat" autocomplete="off" spellcheck="false" placeholder="@your_channel 或 -1001234567890" />
+                  </div>
+                </div>
+                <div class="field-grid">
+                  <div class="field">
+                    <label class="field-label" for="telegram-site">站点地址（拼图片链接用）</label>
+                    <input class="field-input" id="telegram-site" autocomplete="off" spellcheck="false" placeholder="默认取 SITE_PUBLIC_URL" />
+                  </div>
+                  <div class="field">
+                    <label class="field-label">发送选项</label>
+                    <label class="check-label" style="margin-top:8px">
+                      <input type="checkbox" id="telegram-silent" />
+                      静默发送（不推送提醒）
+                    </label>
+                  </div>
+                </div>
+                <div class="settings-actions">
+                  <button class="btn btn-primary" type="submit">保存设置</button>
+                  <button class="btn" type="button" id="telegram-test-btn">发送测试消息</button>
+                </div>
+                <div class="settings-tip" id="telegram-status"></div>
+                <div class="auth-error" id="telegram-error"></div>
               </form>
             </section>
 

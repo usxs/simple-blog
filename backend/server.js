@@ -18,6 +18,7 @@ const { notifyIndexNow, getIndexNowConfig, saveIndexNowConfig, verifyKeyFile } =
 const site = require('./backend/site');
 const { fetchProbeServers } = require('./backend/probe-source');
 const image = require('./backend/image');
+const telegram = require('./backend/telegram');
 
 const {
   ROOT_DIR,
@@ -338,6 +339,34 @@ const server = http.createServer((req, res) => {
     if (!guardAuth(req, res)) return;
     return verifyKeyFile().then(function (result) {
       return auth.respond(res, result.ok ? 200 : 400, result);
+    });
+  }
+
+  // 3.8.4 碎碎念 → Telegram 同步
+  if (req.method === 'GET' && pathname === '/api/admin/telegram') {
+    if (!guardAuth(req, res)) return;
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+    return res.end(JSON.stringify({ ok: true, config: telegram.publicConfig(), synced: telegram.syncedCount() }));
+  }
+
+  if (req.method === 'POST' && pathname === '/api/admin/telegram') {
+    if (!guardAuth(req, res)) return;
+    return auth.readJsonBody(req, res, function (data) {
+      try {
+        const cfg = telegram.saveConfig(data || {});
+        return auth.respond(res, 200, { ok: true, config: telegram.publicConfig(cfg), synced: telegram.syncedCount() });
+      } catch (e) {
+        return auth.respond(res, 500, { ok: false, error: '保存失败：' + (e.message || '未知错误') });
+      }
+    });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/admin/telegram/test') {
+    if (!guardAuth(req, res)) return;
+    return telegram.testConnection().then(function (result) {
+      return auth.respond(res, 200, result);
+    }).catch(function (e) {
+      return auth.respond(res, 400, { ok: false, error: e.message || '连接 Telegram 失败' });
     });
   }
 
@@ -887,6 +916,11 @@ const server = http.createServer((req, res) => {
           item.date = item.date || cnNowStamp();
           if (isNew || !item.mtime) item.mtime = Date.now();
           fs.writeFileSync(path.join(MUSINGS_DIR, item.id + '.md'), buildMdContent(item, 'moments'), 'utf8');
+          // 碎碎念同步到 Telegram（后台异步，失败不影响保存）
+          telegram.syncMoment(item).then(function (r) {
+            if (r && r.ok) console.log('[telegram] 已同步碎碎念 ' + item.id);
+            else if (r && r.error) console.warn('[telegram] 同步失败：' + r.error);
+          }).catch(function (e) { console.warn('[telegram] 同步异常：' + (e.message || e)); });
           const list = readMusings();
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
           return res.end(JSON.stringify({ ok: true, item: item, data: list, version: getHash(list) }));
@@ -978,6 +1012,7 @@ const server = http.createServer((req, res) => {
         if (mod === 'moments') {
           const filePath = path.join(MUSINGS_DIR, sanitizeId(id) + '.md');
           if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+          telegram.forgetMoment(sanitizeId(id)).catch(function (e) { console.warn('[telegram] 撤回失败：' + (e.message || e)); });
           const list = readMusings();
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
           return res.end(JSON.stringify({ ok: true, data: list, version: getHash(list) }));

@@ -698,6 +698,15 @@ var cms = {
       var el = document.getElementById(id);
       if (el) el.hidden = (id !== pageId);
     });
+    // 二级菜单高亮只在「正在看哪个区块」时存在，切到其它页面一律清空
+    if (m === 'settings') {
+      var self2 = this;
+      setTimeout(function () { self2.syncSubnavActive(); }, 0);
+    } else {
+      this.subnavTarget = '';
+      this.clearSubnavActive();
+    }
+
     // 存储路径提示只属于内容类页面，独立页面不显示
     var hintEl = document.getElementById('storage-hint');
     if (pageId) {
@@ -710,6 +719,8 @@ var cms = {
     document.getElementById('list-title').textContent = SCHEMAS[m].label + '列表';
     document.getElementById('storage-hint').textContent = SCHEMAS[m].storageHint;
     document.getElementById('probe-now-btn').style.display = m === 'status' ? 'inline-block' : 'none';
+    var memoBtn = document.getElementById('memo-telegram-btn');
+    if (memoBtn) memoBtn.style.display = m === 'moments' ? 'inline-block' : 'none';
     document.getElementById('new-item-btn').style.display = m === 'comments' ? 'none' : 'inline-block';
 
     this.renderList();
@@ -1121,6 +1132,7 @@ var cms = {
 
       this.renderSessions(data.sessions || [], data.history || [], data.blocked || []);
       this.loadIndexNow();
+      this.loadTelegram();
     } catch (e) {
       if (String(e && e.message) === 'unauthorized') return;
       this.notify('管理信息加载失败：' + (e && e.message ? e.message : '未知错误'));
@@ -1562,6 +1574,92 @@ var cms = {
       });
   },
 
+  openTelegramSettings: function () {
+    this.openSettings({});
+    var self = this;
+    setTimeout(function () { self.jumpToCard('card-telegram'); }, 260);
+  },
+
+  loadTelegram: function () {
+    var self = this;
+    return this.api('/api/admin/telegram').then(function (res) {
+      self.renderTelegram(res.config, res.synced);
+    }).catch(function () { /* 忽略：不影响其它设置 */ });
+  },
+
+  renderTelegram: function (cfg, synced) {
+    var c = cfg || {};
+    var enabled = document.getElementById('telegram-enabled');
+    var chat = document.getElementById('telegram-chat');
+    var site = document.getElementById('telegram-site');
+    var silent = document.getElementById('telegram-silent');
+    var token = document.getElementById('telegram-token');
+    var badge = document.getElementById('telegram-badge');
+    var status = document.getElementById('telegram-status');
+    if (enabled) enabled.checked = !!c.enabled;
+    if (chat) chat.value = c.chatId || '';
+    if (site) site.value = c.siteUrl || '';
+    if (silent) silent.checked = !!c.silent;
+    if (token) {
+      token.value = '';
+      token.placeholder = c.hasToken ? ('已保存 ' + c.botTokenMasked + '（留空不修改）') : '123456789:AA…';
+    }
+    var ready = !!(c.enabled && c.hasToken && c.chatId);
+    if (badge) {
+      badge.textContent = ready ? '已启用' : (c.enabled ? '待补全' : '未启用');
+      badge.setAttribute('data-on', ready ? 'true' : 'false');
+    }
+    if (status) {
+      if (!c.enabled) status.textContent = '开关关闭时不会同步任何碎碎念。';
+      else if (!c.hasToken) status.textContent = '还差 Bot Token，填好并保存后开始同步。';
+      else if (!c.chatId) status.textContent = '还差频道 / 会话 ID。';
+      else status.textContent = '已同步 ' + (synced || 0) + ' 条碎碎念；新建、编辑会重发，删除会撤回。';
+    }
+  },
+
+  saveTelegram: function (ev) {
+    if (ev && ev.preventDefault) ev.preventDefault();
+    var err = document.getElementById('telegram-error');
+    var status = document.getElementById('telegram-status');
+    if (err) err.textContent = '';
+    var payload = {
+      enabled: document.getElementById('telegram-enabled').checked,
+      chatId: document.getElementById('telegram-chat').value.trim(),
+      siteUrl: document.getElementById('telegram-site').value.trim(),
+      silent: document.getElementById('telegram-silent').checked
+    };
+    var tokenVal = document.getElementById('telegram-token').value.trim();
+    if (tokenVal) payload.botToken = tokenVal;
+    this.api('/api/admin/telegram', { method: 'POST', body: payload }).then(function (res) {
+      cms.renderTelegram(res.config, res.synced);
+      cms.notify('碎碎念同步设置已保存');
+      if (status) status.textContent = '已保存。' + (res.config && res.config.enabled ? '可以点「发送测试消息」验证。' : '');
+    }).catch(function (e) {
+      if (err) err.textContent = e.message || '保存失败';
+    });
+  },
+
+  testTelegram: function () {
+    var btn = document.getElementById('telegram-test-btn');
+    var err = document.getElementById('telegram-error');
+    var status = document.getElementById('telegram-status');
+    if (err) err.textContent = '';
+    if (btn) { btn.disabled = true; btn.textContent = '发送中…'; }
+    this.api('/api/admin/telegram/test', { method: 'POST', body: {} })
+      .then(function (res) {
+        if (status) status.textContent = '✅ 已发送测试消息' + (res.botUsername ? '（' + res.botUsername + '）' : '') + '，请到频道查看。';
+        cms.notify('测试消息已发送');
+      })
+      .catch(function (e) {
+        var msg = (e && e.message) || '发送失败';
+        if (err) err.textContent = msg;
+        if (status) status.textContent = '❌ ' + msg;
+      })
+      .finally(function () {
+        if (btn) { btn.disabled = false; btn.textContent = '发送测试消息'; }
+      });
+  },
+
   downloadIndexNowKey: function () {
     var el = document.getElementById('indexnow-key');
     var key = el ? el.value.trim() : '';
@@ -1617,6 +1715,8 @@ var cms = {
   // 点按钮左侧（图标与文字）仍是原来的行为——直接进入管理页，不弹菜单。
   menuPinned: false,
   suppressHoverUntil: 0,
+  subnavTarget: '',
+  subnavHoldUntil: 0,
 
   openSettings: function (ev) {
     var subnav = document.getElementById('settings-subnav');
@@ -1658,21 +1758,68 @@ var cms = {
     this.menuPinned = false;
   },
 
+  clearSubnavActive: function () {
+    var subs = document.querySelectorAll('#settings-subnav .nav-sub-btn');
+    for (var i = 0; i < subs.length; i++) subs[i].classList.remove('active');
+  },
+
+  // 高亮「当前正在看的那张卡片」；不在管理页或看不到卡片时全部取消
+  syncSubnavActive: function () {
+    if (this.mod !== 'settings') { this.clearSubnavActive(); return; }
+    var page = document.getElementById('admin-settings');
+    if (!page || page.hidden) { this.clearSubnavActive(); return; }
+    var cards = page.querySelectorAll('.settings-card[id]');
+    if (!cards.length) { this.clearSubnavActive(); return; }
+
+    // 刚点过的区块只要还在视野里就保持高亮（同一行左右两张卡不会互相抢）
+    var target = this.subnavTarget;
+    if (target) {
+      var tEl = document.getElementById(target);
+      var hold = Date.now() < this.subnavHoldUntil;
+      if (tEl) {
+        var tr = tEl.getBoundingClientRect();
+        if (hold || (tr.bottom > 120 && tr.top < window.innerHeight * 0.6)) {
+          this.setSubnavActive(target);
+          return;
+        }
+      }
+      this.subnavTarget = '';
+    }
+
+    // 否则取「顶部离 170px 最近且已滚过」的那张；同一行并列时取文档顺序靠前的
+    var current = '';
+    var bestTop = -Infinity;
+    for (var i = 0; i < cards.length; i++) {
+      var top = cards[i].getBoundingClientRect().top;
+      if (top <= 170 && top > bestTop) { bestTop = top; current = cards[i].id; }
+    }
+    if (!current) current = cards[0].id;
+    this.setSubnavActive(current);
+  },
+
+  setSubnavActive: function (cardId) {
+    var subs = document.querySelectorAll('#settings-subnav .nav-sub-btn');
+    for (var j = 0; j < subs.length; j++) {
+      subs[j].classList.toggle('active', subs[j].getAttribute('data-jump') === cardId);
+    }
+  },
+
   // 侧边栏「管理」二级菜单：跳到对应卡片
   jumpToCard: function (cardId) {
     if (this.mod !== 'settings') this.switchMod('settings');
     this.closeSettingsMenu();
     var card = document.getElementById(cardId);
     if (!card) return;
-    var subs = document.querySelectorAll('#settings-subnav .nav-sub-btn');
-    for (var i = 0; i < subs.length; i++) {
-      subs[i].classList.toggle('active', subs[i].getAttribute('data-jump') === cardId);
-    }
+    this.subnavTarget = cardId;
+    this.subnavHoldUntil = Date.now() + 1400;
+    this.setSubnavActive(cardId);
     card.scrollIntoView({ behavior: 'smooth', block: 'start' });
     card.classList.remove('card-flash');
     void card.offsetWidth;
     card.classList.add('card-flash');
     setTimeout(function () { card.classList.remove('card-flash'); }, 1200);
+    var self = this;
+    setTimeout(function () { self.syncSubnavActive(); }, 420);
   },
 
   renderProbeSettings: function (probe) {
@@ -1897,6 +2044,13 @@ var cms = {
       socialForm.addEventListener('submit', function (e) { e.preventDefault(); self.saveSocials(); });
     }
 
+    var telegramForm = document.getElementById('telegram-form');
+    if (telegramForm) {
+      telegramForm.addEventListener('submit', function (e) { e.preventDefault(); self.saveTelegram(); });
+      var tgTest = document.getElementById('telegram-test-btn');
+      if (tgTest) tgTest.addEventListener('click', function () { self.testTelegram(); });
+    }
+
     var indexnowForm = document.getElementById('indexnow-form');
     if (indexnowForm) {
       indexnowForm.addEventListener('submit', function (e) { e.preventDefault(); self.saveIndexNow(); });
@@ -1905,6 +2059,14 @@ var cms = {
       var dlBtn = document.getElementById('indexnow-download-btn');
       if (dlBtn) dlBtn.addEventListener('click', function () { self.downloadIndexNowKey(); });
     }
+
+    // 滚动时更新二级菜单高亮（只在管理页生效）
+    var scrollRaf = false;
+    window.addEventListener('scroll', function () {
+      if (scrollRaf) return;
+      scrollRaf = true;
+      requestAnimationFrame(function () { scrollRaf = false; self.syncSubnavActive(); });
+    }, { passive: true });
 
     // 侧边栏「管理」：悬停展开、移开 180ms 后收起（点右侧固定后不受影响）
     var settingsRow = document.querySelector('.nav-item-row[data-nav-row="settings"]');
