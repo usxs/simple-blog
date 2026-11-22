@@ -1,0 +1,59 @@
+# 直接用 Docker Hub 上的镜像启动（不需要源码，也不需要 Dockerfile）
+#
+#   mkdir -p data article Musings img file && touch config.json
+#   docker compose -f docker-compose.hub.yml up -d
+#
+# 数据仍然落在当前目录的 config.json / article / Musings / img / file / data，
+# 升级方式：改 IMAGE_TAG 后 `docker compose -f docker-compose.hub.yml up -d`。
+#
+# 环境变量与 docker-compose.yml 完全一致，可直接复用同一个 .env。
+
+services:
+  backend:
+    image: ${IMAGE_NAME:-starspacec/simple-blog-backend}:${IMAGE_TAG:-latest}
+    container_name: simple-blog-backend
+    restart: unless-stopped
+    user: "1000:1000"
+    ports:
+      - "127.0.0.1:${HOST_PORT:-33001}:33001"
+    environment:
+      TZ: Asia/Shanghai
+      NODE_ENV: production
+      PORT: "33001"
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      SITE_PUBLIC_URL: ${SITE_PUBLIC_URL:-https://www.example.com}
+      BACKEND_PUBLIC_URL: ${BACKEND_PUBLIC_URL:-https://api.example.com}
+      CAPTCHA_SECRET: ${CAPTCHA_SECRET:-}
+      INDEXNOW_KEY: ${INDEXNOW_KEY:-}
+      INDEXNOW_KEY_LOCATION: ${INDEXNOW_KEY_LOCATION:-}
+      PROBE_ENABLED: ${PROBE_ENABLED:-1}
+      PROBE_PROVIDER: ${PROBE_PROVIDER:-cf}
+      PROBE_URL: ${PROBE_URL:-}
+      PROBE_PANEL_URL: ${PROBE_PANEL_URL:-}
+      SITE_NAME: ${SITE_NAME:-简单博客}
+      SITE_AVATAR: ${SITE_AVATAR:-简}
+      SITE_TITLE: ${SITE_TITLE:-简单博客}
+      SITE_SUBTITLE: ${SITE_SUBTITLE:-这里是我的个人博客，记录技术、折腾与生活。}
+      SITE_GITHUB: ${SITE_GITHUB:-}
+      SITE_X: ${SITE_X:-}
+      SITE_TELEGRAM: ${SITE_TELEGRAM:-}
+      SITE_EMAIL: ${SITE_EMAIL:-}
+      SITE_ICP: ${SITE_ICP:-}
+      SITE_POLICE: ${SITE_POLICE:-}
+      SITE_MOE: ${SITE_MOE:-}
+      SITE_COPYRIGHT: ${SITE_COPYRIGHT:-1}
+      WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-}
+      WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:-}
+    volumes:
+      - ./config.json:/app/config.json
+      - ./article:/app/article
+      - ./Musings:/app/Musings
+      - ./img:/app/img
+      - ./file:/app/file
+      - ./data:/app/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

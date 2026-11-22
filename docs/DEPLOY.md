@@ -17,6 +17,38 @@ docker -v && docker compose version
 
 ## 二、部署后端
 
+### 方式 0：直接用 Docker Hub 镜像（最快）
+
+不想拉源码、不想本地构建，可以直接跑发布好的镜像：
+
+```bash
+mkdir -p blog-backend && cd blog-backend
+mkdir -p data article Musings img file && touch config.json
+sudo chown -R 1000:1000 data article Musings img file config.json
+
+docker run -d --name simple-blog-backend --restart unless-stopped \
+  -p 127.0.0.1:33001:33001 \
+  -v "$PWD/config.json:/app/config.json" \
+  -v "$PWD/article:/app/article" -v "$PWD/Musings:/app/Musings" \
+  -v "$PWD/img:/app/img" -v "$PWD/file:/app/file" -v "$PWD/data:/app/data" \
+  -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD='换成你自己的密码' \
+  -e SITE_PUBLIC_URL='https://www.example.com' \
+  -e BACKEND_PUBLIC_URL='https://api.example.com' \
+  starspacec/simple-blog-backend:latest
+```
+
+镜像：<https://hub.docker.com/r/starspacec/simple-blog-backend>，标签 `latest` 与版本号；当前发布的是 `linux/amd64`。
+
+用 compose 的话，把仓库里的 `docker-compose.hub.yml` 和 `.env.example` 拷到目录里，改名 `.env` 后：
+
+```bash
+docker compose -f docker-compose.hub.yml up -d
+```
+
+后续步骤（Nginx 反代、HTTPS、前端 Pages）与下面的「方式 A」完全相同。
+
+### 方式 A：从源码构建
+
 ```bash
 git clone https://github.com/<your-name>/simple-blog.git
 cd simple-blog/backend

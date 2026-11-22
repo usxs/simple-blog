@@ -3,6 +3,15 @@
 本项目的所有重要变更记录在此文件中，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.15.0] - 2026-11-23
+
+### 新增
+
+- 后端镜像发布到 Docker Hub：`starspacec/simple-blog-backend`（`latest` + 版本标签），`docker pull` 即可部署，无需源码。
+- 新增 `docker-compose.hub.yml`：只用现成镜像，复用同一个 `.env`，数据仍落在当前目录。
+- 新增 GitHub Actions 工作流 `.github/workflows/docker.yml`：打 `v*` 标签时自动构建 `linux/amd64` 与 `linux/arm64` 并推送到 GHCR（配置 `DOCKERHUB_ENABLED`、`DOCKERHUB_USERNAME`、`DOCKERHUB_TOKEN` 后同时推 Docker Hub）。
+- 镜像补充 OCI 标签与 `HEALTHCHECK`（`/api/auth/status`），`docker run` 后也能看到健康状态。
+
 ## [1.14.0] - 2026-11-23
 
 ### 新增

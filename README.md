@@ -2,6 +2,8 @@
 
 **简体中文** · [English](README.en.md)
 
+[![Docker](https://img.shields.io/badge/docker-starspacec%2Fsimple--blog--backend-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/starspacec/simple-blog-backend)
+
 一套可以自己部署的极简个人博客系统：**Cloudflare Pages 静态前端 + 自托管 Node 后端**。
 
 前端是零构建的纯静态 SPA（HTML/CSS/原生 JS），由 Pages 的 Functions 在边缘做服务端渲染，保证搜索引擎能拿到每篇文章的完整正文；后端是零框架依赖的 Node 服务，负责账号登录、文章/动态管理、图片上传与评论，数据全部以 Markdown / JSON 文件形式落盘，换个机器拷走目录就能搬家。
@@ -99,6 +101,7 @@
 | 栏目自定义 | 栏目可改名（最多 12 字）、改访问路径（如把 `/moment` 改成 `/diary`）、换图标：16 个内置图标任选，或自行上传 PNG / JPG / SVG / WebP |
 | 栏目排序 | 在「管理 → 前台栏目」拖动左侧 ⋮⋮ 调整顺序，桌面侧边栏、手机底栏、后台侧边栏三处同步生效（顺序存在 `data/site.json`） |
 | 自定义路径 | 栏目路径可改，`/posts`、`/diary` 之类都行；改名后旧地址仍可访问并自动跳转，导航链接、`sitemap.xml`、SSR 元信息同步更新 |
+| Docker 镜像 | 后端镜像已发布到 Docker Hub（`starspacec/simple-blog-backend`），`docker pull` 即可启动；仓库内附 `docker-compose.hub.yml`，也可以用 GitHub Actions 自动构建多架构镜像 |
 | 部署版本 | 鼠标悬停侧边栏「节点 ONLINE」弹出小气泡，显示当前线上部署的短版本号、提交与分支，排查「线上到底是哪一版」很方便 |
 | 文章搜索 | 文章列表页搜索框：标题 / 摘要 / 标签模糊匹配，中文按子串、英文支持子序列；输入法组合结束后立即过滤，支持回车与 Esc 清空，列表只更新容器不重建输入框 |
 | 移动端 | ≤860px 自动切单列布局并显示底部悬浮导航；底栏是「液态玻璃」样式，除首页外向下滚动自动收起、向上滚动出现，320–430px 窄屏 8 个入口一屏放得下 |
@@ -141,9 +144,14 @@ simple-blog/
 │   │   ├── image.js          # WebP 转换与压缩
 │   │   ├── sitemap.js        # 动态 sitemap
 │   │   ├── indexnow.js       # IndexNow 推送
+│   │   ├── links.js          # 友链：申请、审核、限流
+│   │   ├── notify.js         # 邮件 / Bark 通知与模板
+│   │   ├── mailer.js         # 零依赖 SMTP 客户端
+│   │   ├── telegram.js       # 瞬间同步到 Telegram 频道
 │   │   └── probe.js          # 站点可用性探测
-│   ├── Dockerfile
-│   ├── docker-compose.yml
+│   ├── Dockerfile                # 镜像：node:20-alpine + sharp，非 root，带 healthcheck
+│   ├── docker-compose.yml        # 从源码构建（docker compose up -d --build）
+│   ├── docker-compose.hub.yml    # 直接用 Docker Hub 镜像（无需源码）
 │   ├── .env.example
 │   ├── config.json           # 工具/状态/奇思妙想的初始空数据
 │   └── data/                 # 运行时生成：auth.json、sessions.json、验证码密钥等
@@ -197,6 +205,40 @@ cd simple-blog
 > Fork 之后，本仓库的更新不会自动同步到你的副本；需要同步时在 GitHub 上点 **Sync fork**，或在本地 `git remote add upstream https://github.com/usxs/simple-blog.git && git fetch upstream && git merge upstream/main`。
 
 ### 2. 部署后端（服务器上）
+
+#### 2.0 用现成镜像（可选，不需要源码）
+
+已经构建好的镜像发布在 Docker Hub：<https://hub.docker.com/r/starspacec/simple-blog-backend>（`linux/amd64`，支持 `latest` 与版本号标签）。
+
+```bash
+mkdir -p blog-backend && cd blog-backend
+mkdir -p data article Musings img file && touch config.json
+sudo chown -R 1000:1000 data article Musings img file config.json
+
+docker run -d --name simple-blog-backend --restart unless-stopped \
+  -p 127.0.0.1:33001:33001 \
+  -v "$PWD/config.json:/app/config.json" \
+  -v "$PWD/article:/app/article" -v "$PWD/Musings:/app/Musings" \
+  -v "$PWD/img:/app/img" -v "$PWD/file:/app/file" -v "$PWD/data:/app/data" \
+  -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD='换成你自己的强密码' \
+  -e SITE_PUBLIC_URL='https://www.example.com' \
+  -e BACKEND_PUBLIC_URL='https://api.example.com' \
+  starspacec/simple-blog-backend:latest
+```
+
+或者用仓库里的 `docker-compose.hub.yml`（复用同一个 `.env`，数据同样落在当前目录）：
+
+```bash
+curl -O https://raw.githubusercontent.com/usxs/simple-blog/main/backend/docker-compose.hub.yml
+curl -o .env https://raw.githubusercontent.com/usxs/simple-blog/main/backend/.env.example
+vim .env
+docker compose -f docker-compose.hub.yml up -d
+```
+
+升级只需改 `IMAGE_TAG`（或 `docker compose -f docker-compose.hub.yml pull && ... up -d`），数据在卷里不受影响。
+
+如果镜像架构不匹配（例如 ARM 服务器），第 2 节下面的「从源码构建」方式可以本地构建任意架构。
+
 
 #### 2.1 检查 Docker
 

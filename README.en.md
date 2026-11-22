@@ -2,6 +2,8 @@
 
 [简体中文](README.md) · **English**
 
+[![Docker](https://img.shields.io/badge/docker-starspacec%2Fsimple--blog--backend-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/starspacec/simple-blog-backend)
+
 A minimal, self-hosted personal blog: **Cloudflare Pages static frontend + self-hosted Node backend**.
 
 The frontend is a build-free static SPA (HTML/CSS/vanilla JS). Pages Functions render each article at the edge so search engines always receive the full text in the HTML. The backend is a zero-framework Node service handling login, content management, image uploads and comments — everything is stored as Markdown / JSON files, so moving to another machine is just copying a directory.
@@ -97,6 +99,7 @@ On phones the sidebar collapses into a **liquid-glass bottom bar** that hides on
 | Notifications | Configure SMTP email and Bark push under **Push**. Notifications **to visitors** (comment replies, link review results) always go out by email; notifications **to the admin** (new comments, link applications, security alerts) can be routed to email, Bark, or both via checkboxes. Eight templates in three groups are editable with a one-click reset; emails use a dark outer frame with a light grey body card |
 | Configurable admin path | The dashboard lives at `/admin` by default; change it under **Manage → Site info** to any 2–24 character slug. The old path 302-redirects to the new one |
 | Telegram sync | Turn it on in **Manage → Moment sync**; every new or edited moment is posted to your Telegram channel (images included, up to 4) and deleting a moment removes the message. A **Send test message** button verifies the bot/channel pairing |
+| Docker image | The backend image is published on Docker Hub (`starspacec/simple-blog-backend`); `docker-compose.hub.yml` deploys it without source, and the bundled GitHub Actions workflow builds multi-arch images |
 | Deploy version | Hover the sidebar "Node ONLINE" badge to see the deployed short version, commit and branch |
 | Post search | The post-list search box matches title / excerpt / tags; Chinese by substring, English by subsequence; filters as soon as IME composition ends, supports Enter and Esc without rebuilding the input |
 | Mobile | Below 860px the layout collapses to one column and a floating dock appears; the dock is a frosted glass panel with specular highlights and a glass selection pill; it auto-hides when scrolling down and returns when scrolling up, fitting all 7 entries even at 320–430px |
@@ -197,6 +200,38 @@ cd simple-blog
 > A fork does not track upstream automatically. To sync later, click **Sync fork** on GitHub, or locally `git remote add upstream https://github.com/usxs/simple-blog.git && git fetch upstream && git merge upstream/main`.
 
 ### 2. Deploy the backend (on the server)
+
+#### 2.0 Use the published image (optional, no source needed)
+
+A prebuilt image is on Docker Hub: <https://hub.docker.com/r/starspacec/simple-blog-backend> (`linux/amd64`, `latest` plus version tags).
+
+```bash
+mkdir -p blog-backend && cd blog-backend
+mkdir -p data article Musings img file && touch config.json
+sudo chown -R 1000:1000 data article Musings img file config.json
+
+docker run -d --name simple-blog-backend --restart unless-stopped \
+  -p 127.0.0.1:33001:33001 \
+  -v "$PWD/config.json:/app/config.json" \
+  -v "$PWD/article:/app/article" -v "$PWD/Musings:/app/Musings" \
+  -v "$PWD/img:/app/img" -v "$PWD/file:/app/file" -v "$PWD/data:/app/data" \
+  -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD='a-strong-password' \
+  -e SITE_PUBLIC_URL='https://www.example.com' \
+  -e BACKEND_PUBLIC_URL='https://api.example.com' \
+  starspacec/simple-blog-backend:latest
+```
+
+Or use the bundled `docker-compose.hub.yml` with the same `.env`:
+
+```bash
+curl -O https://raw.githubusercontent.com/usxs/simple-blog/main/backend/docker-compose.hub.yml
+curl -o .env https://raw.githubusercontent.com/usxs/simple-blog/main/backend/.env.example
+vim .env
+docker compose -f docker-compose.hub.yml up -d
+```
+
+To upgrade just change `IMAGE_TAG` (or run `pull` then `up -d`); data lives in the volumes. On ARM hosts, build from source instead — the image above is `amd64`.
+
 
 #### 2.1 Check Docker
 

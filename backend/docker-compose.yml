@@ -2,7 +2,8 @@
 #
 # 使用方式：
 #   1. cp .env.example .env && vim .env      # 至少填 ADMIN_PASSWORD 或首次用后台初始化向导
-#   2. docker compose up -d --build          # 首次或改动代码后必须带 --build
+#   2. docker compose up -d --build          # 从源码构建（首次或改动代码后必须带 --build）
+#      或 docker compose pull && docker compose up -d --no-build   # 直接用 Docker Hub 上的镜像
 #   3. 浏览器打开 http://127.0.0.1:33001/    # 若在服务器上，建议用 Nginx/Cloudflare 反代到该端口
 #
 # 数据卷：config.json / article / Musings / img / file / data 全部以相对路径挂载到宿主机，
@@ -11,7 +12,8 @@
 services:
   backend:
     build: .
-    image: simple-blog-backend:latest
+    # 也可以用现成镜像：docker compose pull && docker compose up -d --no-build
+    image: ${IMAGE_NAME:-starspacec/simple-blog-backend}:${IMAGE_TAG:-latest}
     container_name: simple-blog-backend
     restart: unless-stopped
     user: "1000:1000"
