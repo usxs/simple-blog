@@ -997,12 +997,17 @@ button, input, textarea {
  * 评论区：多级嵌套（层中层）+ 缩进结构 + 推特风格黑白认证徽章
  * ============================================================================ */
 .comments-section {
-  /* 与标题下方实线等长；左右内边距把内容收在 760px，位置不变 */
+  /* 分隔线铺满整行（与 .reader-meta 的线等长），内容与正文左对齐、同为 760px */
   margin: 48px 0 0;
-  padding: 32px max(0px, calc((100% - 760px) / 2)) 0;
+  padding: 32px 0 0;
   border-top: 1px solid var(--border);
   width: 100%;
   max-width: none;
+}
+
+/* 评论区里的每一块都与正文同宽同起点，不再居中缩进 */
+.comments-section > * {
+  max-width: 760px;
 }
 
 .comments-head {
