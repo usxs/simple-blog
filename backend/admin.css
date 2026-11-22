@@ -1504,3 +1504,85 @@ body.md-lightbox-locked {
 .to-top:hover, .to-top:focus-visible { color: var(--text-primary); border-color: var(--text-primary); outline: none; }
 .to-top svg { width: 14px; height: 14px; }
 @media (max-width: 720px) { .to-top { right: 14px; bottom: 14px; } }
+
+/* ---------------- 间距微调：文本、输入框、按钮之间多留一点呼吸 ---------------- */
+.workspace { padding: 38px 32px 64px; }
+.auth-bar { padding: 13px 16px; }
+
+/* 编辑器表单 */
+.form-body { gap: 20px; padding: 22px; }
+.field { gap: 9px; }
+.field-label { line-height: 1.55; }
+.field-input,
+.field-textarea { padding: 10px 13px; }
+.field-textarea { line-height: 1.72; }
+
+/* 按钮 */
+.btn { padding: 8px 16px; }
+.btn-row { padding-top: 14px; gap: 12px; margin-top: 6px; }
+
+/* 管理页卡片 */
+.settings-head { gap: 6px; margin-bottom: 20px; }
+.settings-grid { gap: 20px; }
+.settings-card { padding: 22px 22px 20px; }
+.settings-card-head { margin-bottom: 15px; row-gap: 6px; }
+.settings-card .settings-tip { margin-bottom: 16px; line-height: 1.72; }
+.field-grid { gap: 14px 18px; }
+.settings-actions { margin-top: 18px; gap: 10px; }
+.settings-card .settings-actions { padding-top: 16px; }
+.check-row { margin: 6px 0 10px; }
+.settings-card .field-input { margin-bottom: 0; }
+
+/* 列表 / 浮层里的表单 */
+.panel-head { padding: 15px 18px; }
+.item-row { padding: 14px 16px; }
+.auth-card .field,
+.modal-card .field { margin-bottom: 16px; }
+
+/* ---------------- 说明文字与表单节奏 ---------------- */
+/* 卡片内的表单改成等距纵向排布：字段区 / 说明 / 按钮 / 状态各自留 16px */
+.settings-card form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.settings-card form > .field-grid { gap: 14px 18px; }
+.settings-card form .settings-tip { margin: 0; }
+.settings-card form .settings-actions { margin-top: 0; padding-top: 0; }
+.settings-card form .auth-error { margin: 0; }
+.settings-card form .check-row { margin: 0; }
+
+/* 表单里的说明文字：更松的行距，长文限制阅读宽度 */
+.settings-card .settings-tip {
+  line-height: 1.78;
+  max-width: 76ch;
+}
+.settings-card p.settings-tip { margin: 0 0 14px; }
+.settings-card form p.settings-tip { margin-bottom: 0; }
+.settings-card p.settings-tip:last-child { margin-bottom: 0; }
+.settings-card .settings-tip + .settings-actions,
+.settings-card .settings-actions + .settings-tip { margin-top: 2px; }
+
+/* 说明里的行内代码 */
+.settings-tip code {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+/* 表单里的复选框行：与输入框对齐 */
+.check-label--field { display: inline-flex; align-items: center; gap: 8px; min-height: 22px; }
+
+/* 空的状态 / 错误行不占位，避免卡片底部多出一段空白 */
+.settings-card form .settings-tip:empty,
+.settings-card form .auth-error:empty,
+.settings-card .auth-error:empty { display: none; }
+
+/* 操作结果这类动态提示：字号略小、颜色更淡，和说明文字区分开 */
+#indexnow-status:not(:empty),
+#telegram-status:not(:empty),
+#probe-hint:not(:empty) { font-size: 12px; color: var(--text-secondary); }
