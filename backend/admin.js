@@ -688,6 +688,9 @@ var cms = {
     }
 
     // 「管理」「探针」都是独立页面，不参与列表 / 编辑器布局
+    var subnav = document.getElementById('settings-subnav');
+    if (subnav) subnav.hidden = m !== 'settings';
+
     var PAGES = { settings: 'admin-settings', probe: 'admin-probe' };
     var pageId = PAGES[m] || '';
     var grid = document.querySelector('.cms-grid');
@@ -1105,6 +1108,8 @@ var cms = {
       document.getElementById('site-subtitle').value = site.subtitle || '';
       this.applyModuleConfig(site.modules, site.order);
       this.renderModules();
+      this.renderFooterSettings(site.footer);
+      this.renderSocials(site.socials);
       this.renderProbeSettings(site.probe);
 
       document.getElementById('account-username').value = data.username || '';
@@ -1432,6 +1437,121 @@ var cms = {
   },
 
   // ---------------- 探针数据源 ----------------
+  // ---------------- 页脚与备案 ----------------
+  FOOTER_ICONS: {
+    icp: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21.5s7.5-3.7 7.5-9.5V5.2L12 2.5 4.5 5.2v6.8c0 5.8 7.5 9.5 7.5 9.5z"/><path d="m8.8 11.8 2.2 2.2 4.4-4.4"/></svg>',
+    police: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4.5 5.4v6.6c0 5.4 7.5 9 7.5 9s7.5-3.6 7.5-9V5.4L12 2z"/><path d="m12 7.4 1.35 2.74 3.02.44-2.18 2.13.51 3.01L12 14.32l-2.7 1.4.51-3.01-2.18-2.13 3.02-.44L12 7.4z"/></svg>',
+    moe: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1L12 21.5l8.8-8.8a5 5 0 0 0 0-7.1z"/></svg>'
+  },
+
+  footerBadgeList: function () {
+    var icp = (document.getElementById('footer-icp').value || '').trim();
+    var police = (document.getElementById('footer-police').value || '').trim();
+    var moe = (document.getElementById('footer-moe').value || '').trim();
+    var digits = function (t) { return String(t || '').replace(/[^0-9]/g, ''); };
+    var list = [];
+    if (icp) list.push({ kind: 'icp', text: icp, href: 'https://beian.miit.gov.cn/' });
+    if (police) list.push({ kind: 'police', text: police, href: 'https://beian.mps.gov.cn/#/query/webSearch?code=' + encodeURIComponent(digits(police)) });
+    if (moe) list.push({ kind: 'moe', text: moe, href: 'https://icp.gov.moe/?keyword=' + encodeURIComponent(digits(moe)) });
+    return list;
+  },
+
+  renderFooterPreview: function () {
+    var host = document.getElementById('footer-preview');
+    if (!host) return;
+    var list = this.footerBadgeList();
+    var extra = (document.getElementById('footer-extra').value || '').trim();
+    var html = '<div class="fvp-meta">© ' + new Date().getFullYear() + ' <strong>' +
+      cms.escape(document.getElementById('site-name').value || '站点名称') + '</strong> · All Rights Reserved.</div>';
+    if (list.length) {
+      html += '<div class="fvp-badges">' + list.map(function (b) {
+        return '<span class="fvp-badge">' + cms.FOOTER_ICONS[b.kind] + '<span>' + cms.escape(b.text) + '</span></span>';
+      }).join('') + '</div>';
+    }
+    if (extra) html += '<div class="fvp-extra">' + cms.escape(extra) + '</div>';
+    host.innerHTML = html;
+  },
+
+  renderFooterSettings: function (footer) {
+    var f = footer || {};
+    document.getElementById('footer-icp').value = f.icpText || '';
+    document.getElementById('footer-police').value = f.policeText || '';
+    document.getElementById('footer-moe').value = f.moeText || '';
+    document.getElementById('footer-extra').value = f.extra || '';
+    this.renderFooterPreview();
+  },
+
+  saveFooter: function (ev) {
+    if (ev && ev.preventDefault) ev.preventDefault();
+    var err = document.getElementById('footer-error');
+    err.textContent = '';
+    this.api('/api/admin/site', {
+      method: 'POST',
+      body: {
+        footer: {
+          icpText: document.getElementById('footer-icp').value.trim(),
+          policeText: document.getElementById('footer-police').value.trim(),
+          moeText: document.getElementById('footer-moe').value.trim(),
+          extra: document.getElementById('footer-extra').value.trim()
+        }
+      }
+    }).then(function (res) {
+      cms.renderFooterSettings(res.site && res.site.footer);
+      cms.notify('页脚已保存');
+    }).catch(function (e) {
+      err.textContent = e.message || '保存失败';
+    });
+  },
+
+  // ---------------- 社交链接 ----------------
+  renderSocials: function (socials) {
+    var s = socials || {};
+    document.getElementById('social-github').value = s.github || '';
+    document.getElementById('social-x').value = s.x || '';
+    document.getElementById('social-telegram').value = s.telegram || '';
+    var email = String(s.email || '');
+    document.getElementById('social-email').value = email.indexOf('mailto:') === 0 ? email.slice(7) : email;
+  },
+
+  saveSocials: function (ev) {
+    if (ev && ev.preventDefault) ev.preventDefault();
+    var err = document.getElementById('social-error');
+    err.textContent = '';
+    var email = document.getElementById('social-email').value.trim();
+    if (email && email.indexOf('mailto:') !== 0) email = 'mailto:' + email;
+    this.api('/api/admin/site', {
+      method: 'POST',
+      body: {
+        socials: {
+          github: document.getElementById('social-github').value.trim(),
+          x: document.getElementById('social-x').value.trim(),
+          telegram: document.getElementById('social-telegram').value.trim(),
+          email: email
+        }
+      }
+    }).then(function (res) {
+      cms.renderSocials(res.site && res.site.socials);
+      cms.notify('社交链接已保存');
+    }).catch(function (e) {
+      err.textContent = e.message || '保存失败';
+    });
+  },
+
+  // 侧边栏「管理」二级菜单：跳到对应卡片
+  jumpToCard: function (cardId) {
+    var card = document.getElementById(cardId);
+    if (!card) return;
+    var subs = document.querySelectorAll('#settings-subnav .nav-sub-btn');
+    for (var i = 0; i < subs.length; i++) {
+      subs[i].classList.toggle('active', subs[i].getAttribute('data-jump') === cardId);
+    }
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    card.classList.remove('card-flash');
+    void card.offsetWidth;
+    card.classList.add('card-flash');
+    setTimeout(function () { card.classList.remove('card-flash'); }, 1200);
+  },
+
   renderProbeSettings: function (probe) {
     var p = probe || {};
     var provider = document.getElementById('probe-provider');
@@ -1637,6 +1757,30 @@ var cms = {
         err.textContent = e2.message === 'unauthorized' ? '' : ('操作失败：' + e2.message);
       }
     });
+
+    var footerForm = document.getElementById('footer-form');
+    if (footerForm) {
+      footerForm.addEventListener('submit', function (e) { e.preventDefault(); self.saveFooter(); });
+      ['footer-icp', 'footer-police', 'footer-moe', 'footer-extra'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('input', function () { self.renderFooterPreview(); });
+      });
+    }
+    var siteNameEl = document.getElementById('site-name');
+    if (siteNameEl) siteNameEl.addEventListener('input', function () { self.renderFooterPreview(); });
+
+    var socialForm = document.getElementById('social-form');
+    if (socialForm) {
+      socialForm.addEventListener('submit', function (e) { e.preventDefault(); self.saveSocials(); });
+    }
+
+    var subnav = document.getElementById('settings-subnav');
+    if (subnav) {
+      subnav.addEventListener('click', function (ev) {
+        var btn = ev.target.closest ? ev.target.closest('[data-jump]') : null;
+        if (btn) self.jumpToCard(btn.getAttribute('data-jump'));
+      });
+    }
 
     var probeForm = document.getElementById('probe-form');
     if (probeForm) {

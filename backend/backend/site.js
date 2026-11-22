@@ -25,7 +25,7 @@ const { ROOT_DIR } = require('./storage');
 const DATA_DIR = process.env.AUTH_DATA_DIR || path.join(ROOT_DIR, 'data');
 const SITE_FILE = path.join(DATA_DIR, 'site.json');
 
-const LIMITS = { name: 40, avatarText: 2, title: 80, subtitle: 200, moduleName: 12, icon: 300, route: 24, probeUrl: 300 };
+const LIMITS = { name: 40, avatarText: 2, title: 80, subtitle: 200, moduleName: 12, icon: 300, route: 24, probeUrl: 300, footerText: 60, footerNote: 120, socialUrl: 200 };
 
 // 前台导航栏目（顺序即前台顺序）
 const MODULE_KEYS = ['home', 'posts', 'moments', 'tools', 'probe', 'status', 'quirky'];
@@ -92,6 +92,54 @@ function normalizeProbe(stored) {
     url: src.url === undefined ? PROBE_DEFAULTS.url : pickUrl(src.url),
     panelUrl: src.panelUrl === undefined ? PROBE_DEFAULTS.panelUrl : pickUrl(src.panelUrl)
   };
+}
+
+// 页脚：ICP / 公安 / 萌 ICP 备案（留空即不显示）+ 一行自定义说明
+const FOOTER_DEFAULTS = {
+  icpText: String(process.env.SITE_ICP || '').trim(),
+  policeText: String(process.env.SITE_POLICE || '').trim(),
+  moeText: String(process.env.SITE_MOE || '').trim(),
+  extra: String(process.env.SITE_FOOTER_EXTRA || '').trim()
+};
+
+// 首页社交链接（留空即不显示）
+const SOCIAL_KEYS = ['github', 'x', 'telegram', 'email'];
+const SOCIAL_DEFAULTS = {
+  github: String(process.env.SITE_GITHUB || '').trim(),
+  x: String(process.env.SITE_X || '').trim(),
+  telegram: String(process.env.SITE_TELEGRAM || '').trim(),
+  email: String(process.env.SITE_EMAIL || '').trim()
+};
+
+/** 可选文本：undefined 用默认值，空串就是空串（允许在后台清空） */
+function pickOptional(value, fallback, max) {
+  if (value === undefined) return fallback;
+  return String(value == null ? '' : value).trim().slice(0, max);
+}
+
+/** 社交链接：允许 mailto: 与 http(s)，其余丢弃 */
+function pickSocial(value, fallback) {
+  const s = pickOptional(value, fallback, LIMITS.socialUrl);
+  if (!s) return '';
+  if (/^mailto:[^\s]+$/i.test(s)) return s;
+  return /^https?:\/\/[^\s]+$/i.test(s) ? s : '';
+}
+
+function normalizeFooter(stored) {
+  const src = stored && typeof stored === 'object' ? stored : {};
+  return {
+    icpText: pickOptional(src.icpText, FOOTER_DEFAULTS.icpText, LIMITS.footerText),
+    policeText: pickOptional(src.policeText, FOOTER_DEFAULTS.policeText, LIMITS.footerText),
+    moeText: pickOptional(src.moeText, FOOTER_DEFAULTS.moeText, LIMITS.footerText),
+    extra: pickOptional(src.extra, FOOTER_DEFAULTS.extra, LIMITS.footerNote)
+  };
+}
+
+function normalizeSocials(stored) {
+  const src = stored && typeof stored === 'object' ? stored : {};
+  const out = {};
+  SOCIAL_KEYS.forEach((key) => { out[key] = pickSocial(src[key], SOCIAL_DEFAULTS[key]); });
+  return out;
 }
 
 const DEFAULTS = {
@@ -177,6 +225,8 @@ function getSite() {
     modules: normalizeModules(source.modules),
     order: normalizeOrder(source.order),
     probe: normalizeProbe(source.probe),
+    footer: normalizeFooter(source.footer),
+    socials: normalizeSocials(source.socials),
     updatedAt: Number(source.updatedAt) || 0
   };
 }
@@ -219,6 +269,26 @@ function saveSite(patch) {
     });
   }
 
+  let footer = current.footer;
+  if (p.footer && typeof p.footer === 'object') {
+    footer = normalizeFooter({
+      icpText: p.footer.icpText === undefined ? current.footer.icpText : p.footer.icpText,
+      policeText: p.footer.policeText === undefined ? current.footer.policeText : p.footer.policeText,
+      moeText: p.footer.moeText === undefined ? current.footer.moeText : p.footer.moeText,
+      extra: p.footer.extra === undefined ? current.footer.extra : p.footer.extra
+    });
+  }
+
+  let socials = current.socials;
+  if (p.socials && typeof p.socials === 'object') {
+    socials = normalizeSocials({
+      github: p.socials.github === undefined ? current.socials.github : p.socials.github,
+      x: p.socials.x === undefined ? current.socials.x : p.socials.x,
+      telegram: p.socials.telegram === undefined ? current.socials.telegram : p.socials.telegram,
+      email: p.socials.email === undefined ? current.socials.email : p.socials.email
+    });
+  }
+
   const next = {
     name: pickText(p.name, current.name, LIMITS.name),
     avatarText: pickText(p.avatarText, current.avatarText, LIMITS.avatarText),
@@ -227,6 +297,8 @@ function saveSite(patch) {
     modules,
     order,
     probe,
+    footer,
+    socials,
     updatedAt: Date.now()
   };
   ensureDataDir();

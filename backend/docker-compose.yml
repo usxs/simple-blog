@@ -45,6 +45,15 @@ services:
       SITE_AVATAR: ${SITE_AVATAR:-简}
       SITE_TITLE: ${SITE_TITLE:-简单博客}
       SITE_SUBTITLE: ${SITE_SUBTITLE:-这里是我的个人博客，记录技术、折腾与生活。}
+      # 首页社交链接（首次启动的默认值，之后在后台「管理 → 社交链接」修改；留空则不显示）
+      SITE_GITHUB: ${SITE_GITHUB:-}
+      SITE_X: ${SITE_X:-}
+      SITE_TELEGRAM: ${SITE_TELEGRAM:-}
+      SITE_EMAIL: ${SITE_EMAIL:-}
+      # 页脚备案号（同样只是默认值，后台「管理 → 页脚与备案」可改；留空则不显示）
+      SITE_ICP: ${SITE_ICP:-}
+      SITE_POLICE: ${SITE_POLICE:-}
+      SITE_MOE: ${SITE_MOE:-}
       # 通行密钥（Passkey）需要 HTTPS；反向代理域名与后端 host 不一致时可显式指定
       WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-}
       WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:-}

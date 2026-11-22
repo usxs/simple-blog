@@ -44,6 +44,18 @@
       "url": "https://monitor.example.com",
       "panelUrl": "https://monitor.example.com/#/"
     },
+    "footer": {
+      "icpText": "京ICP备2026000001号-1",
+      "policeText": "京公网安备 11010502030146号",
+      "moeText": "萌ICP备20231234号",
+      "extra": "本站由 简单博客 驱动"
+    },
+    "socials": {
+      "github": "https://github.com/your-name",
+      "x": "",
+      "telegram": "https://t.me/your-name",
+      "email": "mailto:hi@example.com"
+    },
     "updatedAt": 0
   }
 }
@@ -97,6 +109,26 @@ POST /api/admin/site
 ```
 
 成功返回 `200 {"ok":true,"username":"…"}` 并下发会话 Cookie；失败 `401`。
+
+`footer` 是页脚备案信息（三个备案号留空即整枚徽章隐藏）；`socials` 是首页标题下方的社交链接（留空即隐藏该项）。
+两者都在后台「管理 → 页脚与备案 / 社交链接」维护，也支持 `POST /api/admin/site` 局部合并：
+
+```jsonc
+POST /api/admin/site
+{
+  "footer": { "icpText": "京ICP备2026000001号-1", "policeText": "京公网安备 11010502030146号", "moeText": "萌ICP备20231234号" },
+  "socials": { "github": "https://github.com/your-name", "email": "hi@example.com" }
+}
+```
+
+| 字段 | 长度 | 说明 |
+| --- | --- | --- |
+| `footer.icpText` | 60 | ICP 备案号，前台徽章链接到 `beian.miit.gov.cn` |
+| `footer.policeText` | 60 | 公安网备案号，前台按其中数字生成 `beian.mps.gov.cn` 查询链接 |
+| `footer.moeText` | 60 | 萌 ICP 备案号，前台按其中数字生成 `icp.gov.moe` 查询链接 |
+| `footer.extra` | 120 | 页脚补充说明（如「本站由 X 驱动」），留空不显示 |
+| `socials.github` / `x` / `telegram` | 200 | 只接受 `http(s)` 地址 |
+| `socials.email` | 200 | 只接受 `mailto:`；后台输入纯邮箱会自动补 `mailto:` |
 
 ### `GET /api/sync?module=<模块>[&version=<哈希>]`
 

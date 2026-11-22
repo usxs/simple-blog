@@ -39,7 +39,19 @@
         <li class="nav-item-row" data-nav-row="probe-config"><button class="nav-btn" data-mod="probe" onclick="cms.switchMod('probe')"><span class="nav-label">探针</span></button></li>
         <li class="nav-item-row" data-nav-row="status"><button class="nav-btn" data-mod="status" onclick="cms.switchMod('status')"><span class="nav-label" data-label="status">状态</span><span class="nav-count" id="count-status">0</span></button></li>
         <li class="nav-item-row" data-nav-row="quirky"><button class="nav-btn" data-mod="quirky" onclick="cms.switchMod('quirky')"><span class="nav-label" data-label="quirky">奇奇怪怪</span><span class="nav-count" id="count-quirky">0</span></button></li>
-        <li class="nav-item-row" data-nav-row="settings"><button class="nav-btn" data-mod="settings" onclick="cms.switchMod('settings')"><span class="nav-label">管理</span></button></li>
+        <li class="nav-item-row" data-nav-row="settings">
+          <button class="nav-btn" data-mod="settings" onclick="cms.switchMod('settings')"><span class="nav-label">管理</span></button>
+          <ul class="nav-sub" id="settings-subnav" hidden>
+            <li><button type="button" class="nav-sub-btn" data-jump="card-site">站点信息</button></li>
+            <li><button type="button" class="nav-sub-btn" data-jump="card-modules">栏目与图标</button></li>
+            <li><button type="button" class="nav-sub-btn" data-jump="card-footer">页脚与备案</button></li>
+            <li><button type="button" class="nav-sub-btn" data-jump="card-social">社交链接</button></li>
+            <li><button type="button" class="nav-sub-btn" data-jump="card-account">管理员账号</button></li>
+            <li><button type="button" class="nav-sub-btn" data-jump="card-totp">两步验证</button></li>
+            <li><button type="button" class="nav-sub-btn" data-jump="card-passkey">通行密钥</button></li>
+            <li><button type="button" class="nav-sub-btn" data-jump="card-sessions">登录会话</button></li>
+          </ul>
+        </li>
       </ul>
 
       <div class="sidebar-footer">
@@ -112,11 +124,11 @@
         <section class="admin-settings" id="admin-settings" hidden>
           <header class="settings-head">
             <h2 class="settings-title">管理</h2>
-            <p class="settings-desc">站点信息 · 账号安全 · 多因素认证 · 登录会话</p>
+            <p class="settings-desc">站点信息 · 栏目与页脚 · 社交链接 · 账号安全 · 多因素认证 · 登录会话</p>
           </header>
 
           <div class="settings-grid">
-            <section class="settings-card settings-card--wide">
+            <section class="settings-card settings-card--wide" id="card-site">
               <div class="settings-card-head">
                 <h3>站点信息</h3>
                 <span class="settings-tip">保存后对前台立即生效</span>
@@ -147,7 +159,7 @@
               </form>
             </section>
 
-            <section class="settings-card settings-card--wide">
+            <section class="settings-card settings-card--wide" id="card-modules">
               <div class="settings-card-head">
                 <h3>前台栏目</h3>
                 <span class="settings-tip">拖动左侧 ⋮⋮ 调整顺序 · 开关即时生效 · 可改名称与图标</span>
@@ -157,7 +169,70 @@
               <div class="auth-error" id="module-error"></div>
             </section>
 
-            <section class="settings-card">
+            <section class="settings-card settings-card--wide" id="card-footer">
+              <div class="settings-card-head">
+                <h3>页脚与备案</h3>
+                <span class="settings-tip">留空即不显示 · 保存后前台立即生效</span>
+              </div>
+              <form id="footer-form">
+                <div class="field-grid">
+                  <div class="field">
+                    <label class="field-label" for="footer-icp">ICP 备案号</label>
+                    <input class="field-input" id="footer-icp" maxlength="60" placeholder="京ICP备2026000001号-1" />
+                  </div>
+                  <div class="field">
+                    <label class="field-label" for="footer-police">公安网备案号</label>
+                    <input class="field-input" id="footer-police" maxlength="60" placeholder="京公网安备 11010502030146号" />
+                  </div>
+                  <div class="field">
+                    <label class="field-label" for="footer-moe">萌 ICP 备案号</label>
+                    <input class="field-input" id="footer-moe" maxlength="60" placeholder="萌ICP备20231234号" />
+                  </div>
+                  <div class="field">
+                    <label class="field-label" for="footer-extra">补充说明（可选）</label>
+                    <input class="field-input" id="footer-extra" maxlength="120" placeholder="如：本站由 简单博客 驱动" />
+                  </div>
+                </div>
+                <div class="footer-preview" id="footer-preview"></div>
+                <div class="settings-actions">
+                  <button class="btn btn-primary" type="submit">保存页脚</button>
+                </div>
+                <div class="auth-error" id="footer-error"></div>
+              </form>
+            </section>
+
+            <section class="settings-card settings-card--wide" id="card-social">
+              <div class="settings-card-head">
+                <h3>社交链接</h3>
+                <span class="settings-tip">显示在首页标题下方 · 清空即隐藏该项</span>
+              </div>
+              <form id="social-form">
+                <div class="field-grid">
+                  <div class="field">
+                    <label class="field-label" for="social-github">GitHub</label>
+                    <input class="field-input" id="social-github" maxlength="200" placeholder="https://github.com/your-name" />
+                  </div>
+                  <div class="field">
+                    <label class="field-label" for="social-x">X（Twitter）</label>
+                    <input class="field-input" id="social-x" maxlength="200" placeholder="https://x.com/your-name" />
+                  </div>
+                  <div class="field">
+                    <label class="field-label" for="social-telegram">Telegram</label>
+                    <input class="field-input" id="social-telegram" maxlength="200" placeholder="https://t.me/your-name" />
+                  </div>
+                  <div class="field">
+                    <label class="field-label" for="social-email">邮箱</label>
+                    <input class="field-input" id="social-email" maxlength="200" placeholder="hi@example.com" />
+                  </div>
+                </div>
+                <div class="settings-actions">
+                  <button class="btn btn-primary" type="submit">保存社交链接</button>
+                </div>
+                <div class="auth-error" id="social-error"></div>
+              </form>
+            </section>
+
+            <section class="settings-card" id="card-account">
               <div class="settings-card-head">
                 <h3>管理员账号</h3>
               </div>
@@ -178,7 +253,7 @@
               </form>
             </section>
 
-            <section class="settings-card">
+            <section class="settings-card" id="card-totp">
               <div class="settings-card-head">
                 <h3>两步验证</h3>
                 <span class="settings-badge" id="totp-badge">未启用</span>
@@ -216,7 +291,7 @@
               <div class="auth-error" id="totp-error"></div>
             </section>
 
-            <section class="settings-card">
+            <section class="settings-card" id="card-passkey">
               <div class="settings-card-head">
                 <h3>通行密钥</h3>
                 <span class="settings-tip">指纹 / 面容 / 安全密钥</span>
@@ -229,7 +304,7 @@
               <div class="auth-error" id="passkey-error"></div>
             </section>
 
-            <section class="settings-card">
+            <section class="settings-card" id="card-sessions">
               <div class="settings-card-head">
                 <h3>登录会话</h3>
                 <span class="settings-tip" id="session-count"></span>

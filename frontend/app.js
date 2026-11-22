@@ -297,6 +297,13 @@ function applySitePayload(site) {
     document.title = site.title ? String(site.title) : SITE_CONFIG.name;
   }
   if (site.modules) applySiteModules(site.modules, site.order);
+  if (site.footer) applyFooter(site.footer);
+  if (site.socials) {
+    SITE_CONFIG.socials = site.socials;
+    refreshHomeSocials();
+  }
+  var ownerEl = document.getElementById('footer-owner');
+  if (ownerEl && site.name) ownerEl.textContent = String(site.name);
   if (site.subtitle) {
     SITE_CONFIG.homeBio = String(site.subtitle);
     var bioEl = document.querySelector('.home-bio');
@@ -367,12 +374,72 @@ if (cachedSiteData && cachedSiteData.site) {
     .catch(function () { /* 本地直开 / 无 Functions 时静默 */ });
 })();
 
-var icpEl = document.getElementById('site-icp');
-if (SITE_CONFIG.icpText) {
-  icpEl.textContent = SITE_CONFIG.icpText;
-} else {
-  icpEl.style.display = 'none';
+// ---------------- 页脚：备案信息（ICP / 公安 / 萌 ICP） ----------------
+var FOOTER_ICONS = {
+  icp: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21.5s7.5-3.7 7.5-9.5V5.2L12 2.5 4.5 5.2v6.8c0 5.8 7.5 9.5 7.5 9.5z"/><path d="m8.8 11.8 2.2 2.2 4.4-4.4"/></svg>',
+  police: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4.5 5.4v6.6c0 5.4 7.5 9 7.5 9s7.5-3.6 7.5-9V5.4L12 2z"/><path d="m12 7.4 1.35 2.74 3.02.44-2.18 2.13.51 3.01L12 14.32l-2.7 1.4.51-3.01-2.18-2.13 3.02-.44L12 7.4z"/></svg>',
+  moe: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1L12 21.5l8.8-8.8a5 5 0 0 0 0-7.1z"/></svg>'
+};
+
+function footerDigits(text) {
+  return String(text || '').replace(/[^0-9]/g, '');
 }
+
+// 备案号 → 官方查询链接（ICP 走工信部，公安走网安备案查询，萌 ICP 走 icp.gov.moe）
+function footerBadges(footer) {
+  var f = footer || {};
+  var out = [];
+  if (f.icpText) {
+    out.push({ kind: 'icp', text: String(f.icpText), href: 'https://beian.miit.gov.cn/' });
+  }
+  if (f.policeText) {
+    var policeCode = footerDigits(f.policeText);
+    out.push({
+      kind: 'police',
+      text: String(f.policeText),
+      href: policeCode
+        ? 'https://beian.mps.gov.cn/#/query/webSearch?code=' + encodeURIComponent(policeCode)
+        : 'https://beian.mps.gov.cn/'
+    });
+  }
+  if (f.moeText) {
+    var moeCode = footerDigits(f.moeText);
+    out.push({
+      kind: 'moe',
+      text: String(f.moeText),
+      href: moeCode
+        ? 'https://icp.gov.moe/?keyword=' + encodeURIComponent(moeCode)
+        : 'https://icp.gov.moe/'
+    });
+  }
+  return out;
+}
+
+function applyFooter(footer) {
+  var f = footer || {};
+  var host = document.getElementById('footer-badges');
+  var extra = document.getElementById('footer-extra');
+  if (host) {
+    var badges = footerBadges(f);
+    host.innerHTML = badges.map(function (b) {
+      return '<a class="footer-badge" href="' + escapeHtml(b.href) + '" target="_blank" rel="noopener noreferrer">' +
+        '<span class="footer-badge-icon">' + FOOTER_ICONS[b.kind] + '</span>' +
+        '<span class="footer-badge-text">' + escapeHtml(b.text) + '</span></a>';
+    }).join('');
+    host.hidden = !badges.length;
+  }
+  if (extra) {
+    if (f.extra) {
+      extra.textContent = String(f.extra);
+      extra.hidden = false;
+    } else {
+      extra.textContent = '';
+      extra.hidden = true;
+    }
+  }
+}
+
+applyFooter(SITE_CONFIG.footer);
 
 // 把条目的 date 字段解析为可比毫秒数（北京时间锚定）；解析失败回退 mtime
 function dateMsOf(item) {
@@ -637,8 +704,20 @@ function renderHomeSocials() {
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>' +
     '</a>');
   }
-  if (!items.length) return '';
-  return '<div class="home-socials">' + items.join('') + '</div>';
+  return '<div class="home-socials"' + (items.length ? '' : ' hidden') + '>' + items.join('') + '</div>';
+}
+
+// 站点配置晚于首页渲染时，就地更新社交链接（不重绘整个首页）
+function refreshHomeSocials() {
+  var host = document.querySelector('.home-socials');
+  if (!host) return;
+  var html = renderHomeSocials();
+  var tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  var next = tmp.firstElementChild;
+  if (!next) return;
+  host.innerHTML = next.innerHTML;
+  host.hidden = next.hidden;
 }
 
 var commentBox = {
