@@ -601,3 +601,19 @@ body,
   padding-left: .9rem;
   padding-right: .9rem;
 }
+
+/* Material 给页脚链接用的是「深色页脚」上的浅色文字，浅底不适用，这里强制回到正文灰 */
+.md-footer .md-copyright,
+.md-footer .md-copyright a,
+.md-footer .md-copyright__highlight a,
+.md-footer .md-copyright__highlight {
+  color: var(--sb-text-2) !important;
+}
+
+.md-footer .md-social__link {
+  color: var(--sb-text-3) !important;
+}
+
+.md-footer .md-social__link svg {
+  fill: currentColor;
+}
