@@ -7,9 +7,25 @@ edit_uri: edit/main/handbook/
 docs_dir: handbook
 copyright: MIT License · simple-blog contributors
 
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  generator: false
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/usxs/simple-blog
+      name: GitHub
+    - icon: fontawesome/brands/docker
+      link: https://hub.docker.com/r/starspacec/simple-blog-backend
+      name: Docker Hub
+
 theme:
   name: material
   language: zh
+  logo: images/logo.svg
+  favicon: images/logo.svg
+  font: false
   icon:
     repo: fontawesome/brands/github
   palette:
