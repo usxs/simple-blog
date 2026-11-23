@@ -617,3 +617,14 @@ body,
 .md-footer .md-social__link svg {
   fill: currentColor;
 }
+
+/* 首页「从这里开始」与页脚之间留出呼吸感 */
+.md-content__inner:has(.sb-hero) {
+  padding-bottom: 7.5rem;
+}
+
+@media screen and (max-width: 44.9375em) {
+  .md-content__inner:has(.sb-hero) {
+    padding-bottom: 3.5rem;
+  }
+}
