@@ -561,12 +561,13 @@ body,
   align-items: center;
   justify-content: center;
   gap: 1.4rem;
-  padding: .55rem 1rem;
+  padding: .45rem 1rem;
 }
 
 .md-copyright {
-  color: var(--sb-text-1);
-  font-size: .76rem;
+  color: var(--sb-text-2);
+  font-size: .72rem;
+  letter-spacing: .01em;
 }
 
 .md-copyright a {
