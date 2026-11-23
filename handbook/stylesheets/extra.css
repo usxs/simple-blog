@@ -267,7 +267,7 @@ body,
   background: transparent !important;
   border-left: none;
   border-bottom: 1px solid var(--sb-border);
-  padding: .55rem .9rem;
+  padding: .55rem .9rem .55rem .9rem;
   font-weight: 600;
   font-size: .78rem;
 }
@@ -542,4 +542,61 @@ body,
 [data-md-color-scheme="slate"] .sb-feature:hover,
 [data-md-color-scheme="slate"] .sb-link-card:hover {
   background: #171a20;
+}
+
+
+/* 页脚：去掉「上一页 / 下一页」，只保留 MIT License 与社交图标 */
+.md-footer__inner,
+.md-footer__inner:not([hidden]) {
+  display: none;
+}
+
+.md-footer-meta {
+  background: var(--sb-bg-soft);
+  border-top: 1px solid var(--sb-border);
+}
+
+.md-footer-meta__inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.4rem;
+  padding: .55rem 1rem;
+}
+
+.md-copyright {
+  color: var(--sb-text-2);
+  font-size: .74rem;
+}
+
+.md-copyright a {
+  color: var(--sb-text-2);
+  text-decoration: none;
+}
+
+.md-copyright a:hover {
+  color: var(--sb-brand);
+}
+
+.md-social {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+}
+
+.md-social__link {
+  color: var(--sb-text-3);
+}
+
+.md-social__link:hover {
+  color: var(--sb-brand);
+}
+
+/* 提示块标题：Material 给 ltr 方向留了 2rem 图标位，这里去掉图标后要收回内边距 */
+[dir="ltr"] .md-typeset .admonition-title,
+[dir="ltr"] .md-typeset summary,
+[dir="rtl"] .md-typeset .admonition-title,
+[dir="rtl"] .md-typeset summary {
+  padding-left: .9rem;
+  padding-right: .9rem;
 }

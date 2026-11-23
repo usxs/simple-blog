@@ -5,7 +5,7 @@ repo_url: https://github.com/usxs/simple-blog
 repo_name: usxs/simple-blog
 edit_uri: edit/main/handbook/
 docs_dir: handbook
-copyright: MIT License · simple-blog contributors
+copyright: '<a href="https://github.com/usxs/simple-blog/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>'
 
 extra_css:
   - stylesheets/extra.css
@@ -64,6 +64,9 @@ markdown_extensions:
   - pymdownx.superfences
   - pymdownx.tabbed:
       alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - pymdownx.inlinehilite
   - toc:
       permalink: true
