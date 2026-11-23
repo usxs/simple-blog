@@ -5,6 +5,7 @@
 [![License](https://img.shields.io/badge/license-MIT-555?logo=opensourceinitiative&logoColor=white)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![Cloudflare Pages](https://img.shields.io/badge/Cloudflare%20Pages-deployed-F38020?logo=cloudflare&logoColor=white)](https://pages.cloudflare.com)
+[![Docs](https://img.shields.io/badge/docs-usxs.github.io%2Fsimple--blog-555?logo=readthedocs&logoColor=white)](https://usxs.github.io/simple-blog/)
 
 [![Docker](https://img.shields.io/badge/docker-starspacec%2Fsimple--blog--backend-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/starspacec/simple-blog-backend)
 [![Docker pulls](https://img.shields.io/docker/pulls/starspacec/simple-blog-backend?logo=docker&logoColor=white)](https://hub.docker.com/r/starspacec/simple-blog-backend)
