@@ -528,3 +528,18 @@ body,
   margin: 0 auto;
   max-width: 56rem;
 }
+
+
+/* 特性卡：深浅两种主题下都与页面底色拉开一点层次 */
+[data-md-color-scheme="default"] .sb-feature,
+[data-md-color-scheme="default"] .sb-link-card {
+  background: #fafafa;
+}
+[data-md-color-scheme="slate"] .sb-feature,
+[data-md-color-scheme="slate"] .sb-link-card {
+  background: #14161b;
+}
+[data-md-color-scheme="slate"] .sb-feature:hover,
+[data-md-color-scheme="slate"] .sb-link-card:hover {
+  background: #171a20;
+}
