@@ -11,6 +11,7 @@
   --sb-text-1: #1c1c1c;
   --sb-text-2: #67676c;
   --sb-border: #e2e2e3;
+  --sb-border-strong: #d2d2d7;
   --sb-radius: 12px;
   --sb-radius-sm: 8px;
   --sb-shadow: 0 1px 2px rgba(16, 18, 22, .04);
@@ -40,6 +41,7 @@
   --sb-text-1: #f3f5f7;
   --sb-text-2: #98989f;
   --sb-border: #2a2f38;
+  --sb-border-strong: #363d4a;
   --sb-shadow: 0 1px 2px rgba(0, 0, 0, .3);
 }
 
@@ -627,4 +629,34 @@ body,
   .md-content__inner:has(.sb-hero) {
     padding-bottom: 3.5rem;
   }
+}
+
+/* 链接卡：Material 的 .md-typeset a 会清掉底部边框，这里补全四边 */
+.md-typeset .sb-link,
+.md-typeset .sb-link:visited {
+  border: 1px solid var(--sb-border);
+  text-decoration: none;
+}
+
+.md-typeset .sb-link:hover,
+.md-typeset .sb-link:focus-visible {
+  border-color: color-mix(in srgb, var(--sb-brand) 40%, var(--sb-border));
+  background: var(--sb-bg-alt);
+  text-decoration: none;
+}
+
+
+/* 链接卡：加深边线并加一点点底与投影，四边都清晰可辨 */
+.md-typeset .sb-link,
+.md-typeset .sb-link:visited {
+  background: var(--sb-bg);
+  border-color: var(--sb-border-strong);
+  box-shadow: 0 1px 2px rgba(15, 18, 24, .04);
+}
+
+.md-typeset .sb-link:hover,
+.md-typeset .sb-link:focus-visible {
+  border-color: color-mix(in srgb, var(--sb-brand) 45%, var(--sb-border-strong));
+  background: var(--sb-bg-alt);
+  box-shadow: 0 2px 8px rgba(15, 18, 24, .07);
 }
