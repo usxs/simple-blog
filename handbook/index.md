@@ -56,3 +56,7 @@ Cloudflare Pages（前端静态资源 + Pages Functions）
 
 !!! note "脱敏说明"
     本文档出现的域名一律为 `example.com`，镜像与仓库地址指向公开项目本身；不包含任何服务器地址、密钥或个人数据。
+
+---
+
+文档站由 MkDocs Material 构建，随仓库 `main` 分支自动发布。
