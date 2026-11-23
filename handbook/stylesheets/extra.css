@@ -565,8 +565,8 @@ body,
 }
 
 .md-copyright {
-  color: var(--sb-text-2);
-  font-size: .74rem;
+  color: var(--sb-text-1);
+  font-size: .76rem;
 }
 
 .md-copyright a {
@@ -585,7 +585,7 @@ body,
 }
 
 .md-social__link {
-  color: var(--sb-text-3);
+  color: var(--sb-text-2);
 }
 
 .md-social__link:hover {
