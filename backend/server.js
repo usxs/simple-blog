@@ -3,6 +3,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const lock = require('./backend/lock');
 
 const {
   ipRateStore,
@@ -148,6 +149,34 @@ startProbeScheduler();
  * 新管理接口统一鉴权：先校验跨站（403），再校验会话（401）。
  * 返回 true 表示已放行，false 表示响应已发出。
  */
+function isTruthyFlag(value) {
+  return value === true || value === 1 || value === '1' || value === 'true';
+}
+
+// 后台视图：整篇文章加密不再要求先解锁，服务端用保存的口令自动解密；
+// encpwd 只在这里使用，返回给客户端前必须删除。
+function toAdminPost(post) {
+  if (!post || typeof post !== 'object') return post;
+  const out = Object.assign({}, post);
+  delete out.encpwd;
+  if (!out.enc) {
+    out.locked = false;
+    return out;
+  }
+  if (post.encpwd) {
+    try {
+      out.content = lock.decryptText({ salt: post.encsalt, iv: post.enciv, tag: post.enctag, data: post.content }, post.encpwd);
+      out.locked = false;
+      out.autoUnlocked = true;
+      return out;
+    } catch (err) { /* 口令失效或密文损坏：退回锁定态，正文留空 */ }
+  }
+  out.content = '';
+  out.locked = true;
+  out.autoUnlocked = false;
+  return out;
+}
+
 function guardAuth(req, res) {
   const method = String(req.method || 'GET').toUpperCase();
   if (method !== 'GET' && method !== 'HEAD' && !auth.assertSameOrigin(req)) {
@@ -954,7 +983,14 @@ const server = http.createServer((req, res) => {
     // 后台（已登录）需要正文编辑，仍返回全文
     const authed = auth.isAuthenticated(req);
     const wantFull = authed && reqUrl.searchParams.get('full') !== '0';
-    const list = (mod === 'posts' && !wantFull) ? rawList.map(summarizeItem) : rawList;
+    let list;
+    if (mod === 'posts' && !wantFull) {
+      list = rawList.filter(p => p && !p.hidden).map(summarizeItem);
+    } else if (mod === 'posts' && wantFull) {
+      list = rawList.map(toAdminPost);
+    } else {
+      list = rawList;
+    }
 
     const serverVer = getHash(list);
     const etag = '"' + (wantFull ? 'f' : 's') + '-' + serverVer + '"';
@@ -1009,15 +1045,166 @@ const server = http.createServer((req, res) => {
       postId = '';
     }
     const found = readArticles().find(p => String(p.id) === postId);
-    if (!found) {
-      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+    // 隐藏文章对匿名访客等同于不存在：不返回标题、摘要或任何正文线索
+    if (!found || (found.hidden && !auth.isAuthenticated(req))) {
+      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
       return res.end(JSON.stringify({ error: 'Not Found' }));
     }
+    if (found.enc) {
+      res.writeHead(200, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store'
+      });
+      return res.end(JSON.stringify({
+        ok: true,
+        post: {
+          id: found.id,
+          title: found.title,
+          date: found.date,
+          tag: found.tag,
+          tags: found.tags,
+          mtime: found.mtime,
+          hidden: found.hidden,
+          locked: true,
+          enchint: found.enchint || '',
+          excerpt: ''
+        }
+      }));
+    }
+    const publicPost = Object.assign({}, found);
+    delete publicPost.encpwd;
     res.writeHead(200, {
       'Content-Type': 'application/json; charset=utf-8',
-      'Cache-Control': 'public, max-age=60'
+      'Cache-Control': 'no-store'
     });
-    return res.end(JSON.stringify({ ok: true, post: found }));
+    return res.end(JSON.stringify({ ok: true, post: publicPost }));
+  }
+
+  // 9.6 公开整篇解锁：口令只用于这一次解密，不落盘、不回传
+  if (req.method === 'POST' && pathname.startsWith('/api/public/post/') && pathname.endsWith('/unlock')) {
+    const rawId = pathname.slice('/api/public/post/'.length, -'/unlock'.length);
+    let postId = '';
+    try { postId = sanitizeId(decodeURIComponent(rawId)); } catch (e) { postId = ''; }
+    const post = readArticles().find(p => String(p.id) === postId);
+    if (!post || post.hidden) {
+      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+      return res.end(JSON.stringify({ error: 'Not Found' }));
+    }
+    let body = '';
+    let size = 0;
+    req.on('data', chunk => {
+      size += chunk.length;
+      if (size > 64 * 1024) { req.destroy(); return; }
+      body += chunk;
+    });
+    req.on('end', () => {
+      let data = {};
+      try { data = JSON.parse(body || '{}'); } catch (e) { data = {}; }
+      if (!post.enc) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ error: '文章未加密' }));
+      }
+      try {
+        const content = lock.decryptText({ salt: post.encsalt, iv: post.enciv, tag: post.enctag, data: post.content }, String(data.password || ''));
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({ ok: true, content: content }));
+      } catch (e) {
+        res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({ error: '口令错误' }));
+      }
+    });
+    return;
+  }
+
+  // 9.7 公开片段解锁
+  if (req.method === 'POST' && pathname === '/api/public/unlock-fragment') {
+    let body = '';
+    let size = 0;
+    req.on('data', chunk => {
+      size += chunk.length;
+      if (size > 256 * 1024) { req.destroy(); return; }
+      body += chunk;
+    });
+    req.on('end', () => {
+      let data = {};
+      try { data = JSON.parse(body || '{}'); } catch (e) { data = {}; }
+      const payload = String(data.payload || '').trim();
+      if (!payload) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ error: '缺少加密片段' }));
+      }
+      try {
+        const content = lock.decryptFragment(payload, String(data.password || ''));
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({ ok: true, content: content }));
+      } catch (e) {
+        res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({ error: '口令错误或该片段已损坏' }));
+      }
+    });
+    return;
+  }
+
+  // 9.8 后台整篇解锁：成功后把口令写回文章（仅服务端），以后后台直接可见明文
+  if (req.method === 'POST' && pathname === '/api/admin/post/unlock') {
+    if (!guardAuth(req, res)) return;
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      let data = {};
+      try { data = JSON.parse(body || '{}'); } catch (e) { data = {}; }
+      const postId = sanitizeId(data.id);
+      const post = readArticles().find(p => String(p.id) === postId);
+      if (!post) {
+        res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ error: '文章不存在' }));
+      }
+      if (!post.enc) {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        return res.end(JSON.stringify({ ok: true, content: post.content || '' }));
+      }
+      try {
+        const content = lock.decryptText({ salt: post.encsalt, iv: post.enciv, tag: post.enctag, data: post.content }, String(data.password || ''));
+        // 记住口令，后台下次打开无需再解密；公开接口仍只返回 locked
+        try { storage.saveItem('posts', Object.assign({}, post, { encpwd: String(data.password || '') })); } catch (e) { /* 写回失败不影响本次返回 */ }
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({ ok: true, content: content }));
+      } catch (e) {
+        res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: '口令错误' }));
+      }
+    });
+    return;
+  }
+
+  // 9.9 后台片段解锁：把 :::locked 的密文还原成明文，供作者取消片段加密
+  if (req.method === 'POST' && pathname === '/api/admin/unlock-fragment') {
+    if (!guardAuth(req, res)) return;
+    let body = '';
+    let size = 0;
+    req.on('data', chunk => {
+      size += chunk.length;
+      if (size > 256 * 1024) { req.destroy(); return; }
+      body += chunk;
+    });
+    req.on('end', () => {
+      let data = {};
+      try { data = JSON.parse(body || '{}'); } catch (e) { data = {}; }
+      const payload = String(data.payload || '').trim();
+      if (!payload) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ error: '缺少加密片段' }));
+      }
+      try {
+        const content = lock.decryptFragment(payload, String(data.password || ''));
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({ ok: true, content: content }));
+      } catch (e) {
+        res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: '口令错误或该片段已损坏' }));
+      }
+    });
+    return;
   }
 
   // 10. 保存、回复评论与审核接口
@@ -1072,6 +1259,55 @@ const server = http.createServer((req, res) => {
           return res.end(JSON.stringify({ ok: true, item: updatedTarget, data: all, version: getHash(all) }));
         }
 
+        // 文章加密：密文与口令都在服务端处理，后台可凭保存的口令自动解密；
+        // 未加密正文里的 :::lock 片段在落盘前统一替换成密文。
+        if (mod === 'posts') {
+          const existing = readArticles().find(p => String(p.id) === String(item.id));
+          const incoming = String(item.content || '');
+          const wantsEnc = isTruthyFlag(item.enc);
+          const password = String(item.encPassword || '');
+          const preserveContent = isTruthyFlag(item.preserveContent);
+          delete item.encPassword;
+          delete item.password;
+          delete item.preserveContent;
+
+          if (wantsEnc) {
+            const effectivePassword = password || String((existing && existing.encpwd) || '');
+            const keepCipher = existing && existing.enc && (preserveContent || incoming === '');
+            if (keepCipher) {
+              item.content = existing.content;
+              item.encsalt = existing.encsalt;
+              item.enciv = existing.enciv;
+              item.enctag = existing.enctag;
+              item.enchint = existing.enchint;
+              item.encpwd = existing.encpwd || '';
+            } else {
+              if (!effectivePassword) {
+                const err = new Error('启用加密需要设置访问口令');
+                err.status = 400;
+                throw err;
+              }
+              const encrypted = lock.encryptText(incoming, effectivePassword);
+              item.content = encrypted.data;
+              item.encsalt = encrypted.salt;
+              item.enciv = encrypted.iv;
+              item.enctag = encrypted.tag;
+              item.enchint = String(item.enchint || '').slice(0, 60);
+              item.encpwd = effectivePassword;
+            }
+            item.enc = true;
+          } else {
+            item.enc = false;
+            item.encsalt = '';
+            item.enciv = '';
+            item.enctag = '';
+            item.enchint = '';
+            item.encpwd = '';
+            const fragments = lock.encryptFragments(incoming);
+            item.content = fragments.content;
+          }
+        }
+
         const saved = storage.saveItem(mod, item);
         item = saved.item;
 
@@ -1091,13 +1327,16 @@ const server = http.createServer((req, res) => {
         if (mod === 'status') await runAllProbes();
 
         // status 等模块保存后可能被探测结果改写，统一以最新读取结果为准
-        const list = (mod === 'posts' || mod === 'moments') ? saved.list : storage.getModuleData(mod);
-        const savedItem = list.find(i => String(i.id) === String(item.id)) || item;
+        const rawList = (mod === 'posts' || mod === 'moments') ? saved.list : storage.getModuleData(mod);
+        // 后台响应也不能带 encpwd / 密文：统一转成后台视图（自动解密、locked 状态）
+        const list = mod === 'posts' ? rawList.map(toAdminPost) : rawList;
+        const savedItem = list.find(i => String(i.id) === String(item.id)) || (mod === 'posts' ? toAdminPost(item) : item);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ ok: true, item: savedItem, data: list, version: getHash(list) }));
       } catch (e) {
-        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ error: 'Invalid JSON' }));
+        const status = Number(e && e.status) || 400;
+        res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: String((e && e.message) || 'Invalid JSON') }));
       }
     });
     return;
@@ -1120,7 +1359,7 @@ const server = http.createServer((req, res) => {
           storage.deleteItem('posts', postId);
           // 通知 IndexNow 该文章地址已移除（fire-and-forget）
           notifyIndexNow(PUBLIC_SITE_URL + '/post/' + encodeURIComponent(String(postId)));
-          const list = readArticles();
+          const list = readArticles().map(toAdminPost);
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
           return res.end(JSON.stringify({ ok: true, data: list, version: getHash(list) }));
         }

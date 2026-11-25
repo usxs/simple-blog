@@ -285,6 +285,7 @@ function getSite() {
     footer: normalizeFooter(source.footer),
     socials: normalizeSocials(source.socials),
     whitelist: normalizeWhitelist(source.whitelist === undefined ? WHITELIST_DEFAULTS : source.whitelist),
+    whitelistEnabled: source.whitelistEnabled === undefined ? true : source.whitelistEnabled !== false,
     adminPath: normalizeAdminPath(source.adminPath),
     updatedAt: Number(source.updatedAt) || 0
   };
@@ -360,6 +361,7 @@ function saveSite(patch) {
     footer,
     socials,
     whitelist: p.whitelist === undefined ? current.whitelist : normalizeWhitelist(p.whitelist),
+    whitelistEnabled: p.whitelistEnabled === undefined ? current.whitelistEnabled : p.whitelistEnabled !== false,
     adminPath: p.adminPath === undefined ? current.adminPath : normalizeAdminPath(p.adminPath),
     updatedAt: Date.now()
   };

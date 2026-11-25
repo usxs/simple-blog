@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-theme-mode="auto">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>401 · 简单博客</title>
+  <meta name="robots" content="noindex" />
+  <meta name="description" content="需要验证身份。这个页面需要验证身份后才能访问。" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 34'%3E%3Crect width='34' height='34' rx='7' fill='%23141416'/%3E%3Ctext x='50%25' y='53%25' dominant-baseline='central' text-anchor='middle' fill='%23FFFFFF' font-family='monospace' font-weight='600' font-size='18'%3ES%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/status.css?v=20261125-1" />
+</head>
+<body data-status-code="401">
+  <main class="status-shell status-screen">
+    <div class="status-brand">
+      <span class="status-logo" data-site-avatar>S</span>
+      <span data-site-name>简单博客</span>
+    </div>
+    <section class="status-card" role="alert">
+      <p class="status-kicker">ERROR 401</p>
+      <h1 class="status-title">需要验证身份</h1>
+      <p class="status-desc">这个页面需要验证身份后才能访问。</p>
+      <div class="status-actions">
+        <a class="status-btn status-btn--primary" href="/">回到首页</a>
+        <button class="status-btn" type="button" onclick="if (history.length > 1) history.back(); else location.href='/'; return false;">返回上一页</button>
+      </div>
+      <p class="status-note">如果你是从旧链接进入，请先回到首页重新打开。</p>
+    </section>
+    <footer class="status-footer">
+      <span data-site-copyright>© 2026 简单博客</span>
+      <a href="/">example.com</a>
+    </footer>
+  </main>
+  <script src="/status.js?v=20261125-1"></script>
+</body>
+</html>

@@ -13,6 +13,24 @@
 /index.html
   Cache-Control: public, max-age=0, must-revalidate
 
+/404.html
+  Cache-Control: no-store
+
+/401.html
+  Cache-Control: no-store
+
+/403.html
+  Cache-Control: no-store
+
+/500.html
+  Cache-Control: no-store
+
+/status.css
+  Cache-Control: public, max-age=60, stale-while-revalidate=86400
+
+/status.js
+  Cache-Control: public, max-age=60, stale-while-revalidate=86400
+
 /style.css
   Cache-Control: public, max-age=60, stale-while-revalidate=86400
 

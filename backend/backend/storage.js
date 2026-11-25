@@ -297,6 +297,17 @@ function normalizeTags(value) {
   return out;
 }
 
+// 访问口令只用于后台自动解密，front matter 里以 base64 存放，公开接口永远不会返回。
+function decodeEncPassword(value) {
+  try {
+    const text = String(value == null ? '' : value).trim();
+    if (!text) return '';
+    return Buffer.from(text, 'base64').toString('utf8');
+  } catch (err) {
+    return '';
+  }
+}
+
 function parseMdFile(filePath, fileId) {
   try {
     const raw = fs.readFileSync(filePath, 'utf8').replace(/^\uFEFF/, '');
@@ -336,6 +347,7 @@ function parseMdFile(filePath, fileId) {
       enciv: String(meta.enciv || ''),
       enctag: String(meta.enctag || ''),
       enchint: String(meta.enchint || ''),
+      encpwd: decodeEncPassword(meta.encpwd), // 仅服务端 / 后台使用；公开接口永远不会返回
       mtime: Math.round(Number(meta.mtime) || stat.mtimeMs),
       content: String(body || '')
     };
@@ -363,6 +375,7 @@ function buildMdContent(item, type) {
       lines.push('enciv: ' + String(item.enciv || ''));
       lines.push('enctag: ' + String(item.enctag || ''));
       if (item.enchint) lines.push('enchint: ' + String(item.enchint).replace(/[\r\n]+/g, ' ').slice(0, 60));
+      if (item.encpwd) lines.push('encpwd: ' + Buffer.from(String(item.encpwd), 'utf8').toString('base64'));
     }
   } else {
     lines.push('date: ' + cleanDate);
