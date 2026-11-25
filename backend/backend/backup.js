@@ -633,7 +633,7 @@ function buildMigrationDoc(manifest) {
     '   }',
     '   ~~~',
     '',
-    '5. 打开后台（https://你的域名/<adminPath>），确认文章、评论、图片、碎碎念都在。',
+    '5. 打开后台（https://你的域名/<adminPath>），确认文章、评论、图片、瞬间都在。',
     '',
     '## 迁移后检查清单',
     '',

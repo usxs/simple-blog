@@ -505,6 +505,20 @@ button, input, textarea { font: inherit; color: inherit; background: none; borde
   background: var(--bg-canvas);
 }
 .auth-overlay[data-mode="hidden"] { display: none; }
+/* 首屏先显示中性加载态，避免已登录时闪现登录页 / 首次部署时闪现登录再切初始化 */
+.auth-overlay[data-mode="boot"] .auth-card { display: none; }
+.auth-boot {
+  display: none; align-items: center; gap: 10px;
+  color: var(--text-muted); font-size: 14px;
+}
+.auth-overlay[data-mode="boot"] .auth-boot { display: flex; }
+.auth-boot-spinner {
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--text-muted);
+  animation: auth-boot-spin .7s linear infinite;
+}
+@keyframes auth-boot-spin { to { transform: rotate(360deg); } }
 .auth-card {
   width: min(360px, calc(100vw - 32px));
   background: var(--bg-surface);
