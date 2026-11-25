@@ -15,11 +15,13 @@
 
 **Docs**: <https://usxs.github.io/simple-blog/> (deployment guide, handbook, FAQ)
 
+**Simple Blog — anything but simple.**
+
 A minimal, self-hosted personal blog. The repository ships three variants on three branches — same content model, same API, only the renderer and the storage differ:
 
-- **V1** (`main`): Cloudflare Pages static frontend + self-hosted Node backend, data stored as Markdown / JSON files
-- **V2** (`v2-sqlite`): same two-tier deployment, backend switched to SQLite (Node's built-in `node:sqlite`, no third-party driver)
-- **V3** (`v3-monolith`): frontend and backend in one process, SQLite + in-process SSR — Cloudflare Pages not required
+- **V1** (`main`, Docker `latest`): Cloudflare Pages static frontend + self-hosted Node backend, data stored as Markdown / JSON files
+- **V2** (`v2-sqlite`, Docker `v2`): same two-tier deployment, backend switched to SQLite (Node's built-in `node:sqlite`, no third-party driver)
+- **V3** (`v3-monolith`, Docker `v3`): frontend and backend in one process, SQLite + in-process SSR — Cloudflare Pages not required
 
 The frontend is a build-free static SPA (HTML/CSS/vanilla JS): on V1/V2 Pages Functions inject SSR at the edge, on V3 the Node process renders the same HTML itself. Both paths hand search engines the full article text. The backend is a zero-framework Node service handling login, content management, image uploads and comments.
 
@@ -58,7 +60,7 @@ The frontend is a build-free static SPA (HTML/CSS/vanilla JS): on V1/V2 Pages Fu
 | Login | Posts |
 | --- | --- |
 | ![Login](docs/screenshots/admin-login.png) | ![Admin](docs/screenshots/admin.png) |
-| <sub>Login: password + server-side session, optional 2FA and passkeys</sub> | <sub>Posts: Markdown editing and preview, image upload, comment moderation</sub> |
+| <sub>Login: password + server-side session, optional 2FA and passkeys</sub> | <sub>Posts: content / preview / compare views, encrypted posts auto-unlocked, image upload, comment moderation</sub> |
 
 | Links review | Notifications |
 | --- | --- |
@@ -97,13 +99,13 @@ On phones the sidebar collapses into a **liquid-glass bottom bar** that hides on
 | Settings page | Site info (name / avatar text / browser title / subtitle), username and password change, 2FA, passkeys and session management in one place; changes apply immediately without redeploying |
 | Two-factor (2FA) | Standard TOTP (RFC 6238) — scan with Google Authenticator / 1Password, then enter the 6-digit code on login; 10 single-use backup codes |
 | Passkeys | WebAuthn fingerprint / face / security-key login; the server stores public keys only, supports multiple devices, also usable as a passwordless login entry |
-| Posts | Markdown authoring, live preview, date archives, date ordering |
+| Posts | Markdown authoring with three switchable views — content, preview, compare (<kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd>); date archives and date ordering |
 | Markdown | Headings, nested lists, nested blockquotes, horizontal rules, tables with alignment, task lists, inline styles; fenced code with language label, line numbers, copy button and zoom lightbox; ```` ```mermaid ```` diagrams rendered in the browser |
 | Sections | Multiple independently maintained content sections (moments, tools, status, quirky) sharing one CRUD API |
 | Image upload | Paste or pick an image in the admin; the server converts it to WebP and caps the long edge at 2560px — the original never touches disk |
 | Comments | Visitor comments with captcha, moderation queue, threaded replies, optional contact field (never public) |
 | SEO | Real-path routing, per-article SSR, dynamic `sitemap.xml`, `robots.txt`, Open Graph, JSON-LD, IndexNow push (configurable in the admin) |
-| Details | A compact “back to top” button appears once a page is longer than the viewport; the admin sidebar submenu opens on hover and can be pinned via the arrow |
+| Details | A compact “back to top” button appears once a page is longer than the viewport; Settings uses top tabs (General / Security / Integrations / Backup), and sidebar shortcuts jump straight to the matching tab |
 | Server probe | The admin sidebar "Probe" page can switch data sources: CF-Server-Monitor (`/api/servers`) or the minimal monitor probe (`/api/nodes`); both are normalized into the same cards |
 | Section toggles | Decide per section whether it appears on the frontend ("Settings → Sections"); disabled sections are hidden from the nav and their URLs show a "closed" placeholder page |
 | Section customization | Rename (≤ 12 chars), change the URL path (e.g. `/moment` → `/diary`), pick one of 16 built-in icons or upload your own PNG / JPG / SVG / WebP |
@@ -112,9 +114,10 @@ On phones the sidebar collapses into a **liquid-glass bottom bar** that hides on
 | Footer & filings | ICP / police / Moe-ICP filing numbers are editable in the admin (empty = hidden). The public site shows icon-only badges: hover to read the number, click to open the official lookup page. The `© year name · All Rights Reserved.` line has its own on/off switch. Everything sits at the bottom of the sidebar and is hidden below 860px; the monochrome icons follow the light/dark theme |
 | Friend links | A dedicated `/links` page where visitors submit their site (URL, name, icon URL — no file uploads); submissions wait for review. Without an icon the first character of the site name is used. The admin **Links** page groups them by pending / approved / rejected with approve, reject, edit and delete |
 | Notifications | Configure SMTP email and Bark push under **Push**. Notifications **to visitors** (comment replies, link review results) always go out by email; notifications **to the admin** (new comments, link applications, security alerts) can be routed to email, Bark, or both via checkboxes. Eight templates in three groups are editable with a one-click reset; emails use a dark outer frame with a light grey body card |
-| Configurable admin path | The dashboard lives at `/admin` by default; change it under **Manage → Site info** to any 2–24 character slug. The old path 302-redirects to the new one |
+| Configurable admin path | The dashboard lives at `/admin` by default; change it under **Manage → Site info** to any 2–24 character slug. The old path returns 401 instead of redirecting, so the new entry stays hidden |
 | Telegram sync | Turn it on in **Manage → Moment sync**; every new or edited moment is posted to your Telegram channel (images included, up to 4) and deleting a moment removes the message. A **Send test message** button verifies the bot/channel pairing |
-| Docker image | The backend image is published on Docker Hub (`starspacec/simple-blog-backend`); `docker-compose.hub.yml` deploys it without source, and the bundled GitHub Actions workflow builds multi-arch images |
+| Admin UI | Every replaceable binary option is a Switch; the post editor uses a proof-sheet layout with no emoji icons; the workspace has content / preview / compare views with monospace pane labels and keycap hints |
+| Docker image | One image for V1 / V2 / V3 — `starspacec/simple-blog-backend` with stable tags `latest`, `v2`, `v3`; multi-arch (`linux/amd64` + `linux/arm64`), built per branch by GitHub Actions; on V3 a single container serves both site and admin |
 | Deploy version | Hover the sidebar "Node ONLINE" badge to see the deployed short version, commit and branch |
 | Post search | The post-list search box matches title / excerpt / tags; Chinese by substring, English by subsequence; filters as soon as IME composition ends, supports Enter and Esc without rebuilding the input |
 | Mobile | Below 860px the layout collapses to one column and a floating dock appears; the dock is a frosted glass panel with specular highlights and a glass selection pill; it auto-hides when scrolling down and returns when scrolling up, fitting all 7 entries even at 320–430px |
@@ -259,9 +262,38 @@ cd simple-blog
 
 ### 2. Deploy the backend (on the server)
 
-#### 2.0 Use the published image (optional, no source needed)
+#### 2.0 Use the published image (recommended, no source needed)
 
-A prebuilt image is on Docker Hub: <https://hub.docker.com/r/starspacec/simple-blog-backend> (`linux/amd64`, `latest` plus version tags).
+The image is on Docker Hub: <https://hub.docker.com/r/starspacec/simple-blog-backend>, built for `linux/amd64` and `linux/arm64`. Each branch has a stable tag:
+
+| Tag | Variant | What you get |
+| --- | --- | --- |
+| `latest` | V1 | Node backend with file storage; the frontend still goes to Cloudflare Pages |
+| `v2` | V2 | Node backend with SQLite; the frontend still goes to Cloudflare Pages |
+| `v3` | V3 | **Site + admin in one container**, no Pages needed |
+
+Stable tags move with their branches. To pin one build, use the short SHA tag CI produces (e.g. `3a1b2c4`), or push a tag such as `v3.0.0` so CI also emits `3.0.0` / `3.0` / `3`. Roll back the same way.
+
+**V3: the shortest path, one container**
+
+```bash
+mkdir -p blog && cd blog
+mkdir -p data img file
+sudo chown -R 1000:1000 data img file
+
+docker run -d --name simple-blog --restart unless-stopped \
+  -p 127.0.0.1:33001:33001 \
+  -v "$PWD/data:/app/data" -v "$PWD/img:/app/img" -v "$PWD/file:/app/file" \
+  -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD='a-strong-password' \
+  -e SITE_PUBLIC_URL='https://blog.example.com' \
+  starspacec/simple-blog-backend:v3
+```
+
+Once it is up, `http://127.0.0.1:33001/` on the server is the site and `/admin` on the same origin is the admin; put Nginx in front when you are ready. V3 needs no `BACKEND_PUBLIC_URL` and no frontend deployment.
+
+**V1 / V2: the image is the backend only**
+
+Full command for V1 (file storage):
 
 ```bash
 mkdir -p blog-backend && cd blog-backend
@@ -279,16 +311,20 @@ docker run -d --name simple-blog-backend --restart unless-stopped \
   starspacec/simple-blog-backend:latest
 ```
 
-Or use the bundled `docker-compose.hub.yml` with the same `.env`:
+For V2 use `:v2`; SQLite only needs `data` (the database is `data/blog.db`), `img` and `file`. The `config.json`, `article` and `Musings` mounts are only required with `STORE=file`.
+
+Or use the bundled `docker-compose.hub.yml` with the same `.env`. V3 is shown below; for V1 / V2 switch the branch in the URLs to `main` / `v2-sqlite` and check `IMAGE_TAG`:
 
 ```bash
-curl -O https://raw.githubusercontent.com/usxs/simple-blog/main/backend/docker-compose.hub.yml
-curl -o .env https://raw.githubusercontent.com/usxs/simple-blog/main/backend/.env.example
+curl -O https://raw.githubusercontent.com/usxs/simple-blog/v3-monolith/backend/docker-compose.hub.yml
+curl -o .env https://raw.githubusercontent.com/usxs/simple-blog/v3-monolith/backend/.env.example
 vim .env
 docker compose -f docker-compose.hub.yml up -d
 ```
 
-To upgrade just change `IMAGE_TAG` (or run `pull` then `up -d`); data lives in the volumes. On ARM hosts, build from source instead — the image above is `amd64`.
+The compose file already sets `STORE=sqlite`, `DB_FILE` and a health check; V3 leaves `BACKEND_PUBLIC_URL` empty (same origin), V2 still points it at the API domain.
+
+To upgrade just change `IMAGE_TAG` (or run `pull` then `up -d`); data lives in the volumes. The image covers amd64 / arm64; for other architectures build from `backend/` on the matching branch.
 
 
 #### 2.1 Check Docker
@@ -382,7 +418,7 @@ Certificates: `certbot --nginx -d api.example.com`.
 
 #### 2.7 Log in to the admin
 
-Open `https://api.example.com/admin.html` and sign in with the credentials from `.env`. Everything — posts, comments, images, section toggles — lives there. Right after the first login, change the password under "Settings → Admin account".
+Open `https://api.example.com/admin` and sign in with the credentials from `.env`. Everything — posts, comments, images, section toggles — lives there. Right after the first login, change the password under "Settings → Admin account".
 
 ### 3. Deploy the frontend (Cloudflare Pages — V1 / V2 only)
 
@@ -447,7 +483,7 @@ Walk through this list — all green means the deployment is fine:
 | Open `https://www.example.com/` | Home renders, sidebar "Node" shows ONLINE |
 | Open any post `/post/<id>` | Full text; in the page source the `<title>` is the post title and `reader-content` contains the body (SSR works) |
 | `https://www.example.com/sitemap.xml` | XML with real paths (no `#/`) |
-| `https://api.example.com/admin.html` | You can log in |
+| `https://api.example.com/admin` | You can log in |
 | Upload an image in the admin | Returned Markdown points to `.webp`, image renders on the frontend |
 | Submit a comment | "Pending moderation"; the admin moderation list shows it |
 | Disable a section in "Settings → Sections" | It disappears from the frontend nav immediately; visiting its URL shows a "closed" page |

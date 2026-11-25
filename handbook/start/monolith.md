@@ -35,9 +35,30 @@ cd simple-blog/backend
 ```
 
 只需要 `backend/` 这一个目录，仓库根目录下的 `frontend/` 分支里已经不存在了——前端资源被搬进了 `backend/web/`
-（`index.html`、`app.js`、`style.css`、`markdown.js`），Cloudflare 的 Functions、`_headers`、`_redirects` 全部删除。
+（`index.html`、`app.js`、`style.css`、`markdown.js`），Cloudflare 的 Functions、`_headers`、`_redirects` 全部删除。用现成镜像部署可以跳过这一节。
 
-## 部署方式一：Docker（推荐）
+## 部署方式一：现成镜像（推荐，不需要源码）
+
+V3 镜像一个容器就同时提供站点与后台，不需要 Cloudflare Pages：
+
+```bash
+mkdir -p blog && cd blog
+mkdir -p data img file
+sudo chown -R 1000:1000 data img file
+
+docker run -d --name simple-blog --restart unless-stopped \
+  -p 127.0.0.1:33001:33001 \
+  -v "$PWD/data:/app/data" -v "$PWD/img:/app/img" -v "$PWD/file:/app/file" \
+  -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD='换成你自己的强密码' \
+  -e SITE_PUBLIC_URL='https://blog.example.com' \
+  starspacec/simple-blog-backend:v3
+```
+
+打开 `http://服务器IP:33001/` 就是站点，后台在同一个域名的 `/admin`。数据只需要 `data/`（含 `blog.db` 与 WAL 文件）、`img/`、`file/`；不需要 `config.json`、`article/`、`Musings/`，也不需要 `BACKEND_PUBLIC_URL`。
+
+固定某次构建或回滚时，把标签换成 CI 生成的短 SHA（如 `3a1b2c4`），或打 tag 后使用 `3.0.0`；生产环境前面加 Nginx 并配 HTTPS。
+
+## 部署方式二：从源码构建 Docker
 
 ```bash
 cd backend
@@ -59,7 +80,7 @@ docker compose up -d --build
 
 数据卷与 V2 相同：`data/`（含 `blog.db` 和 WAL 伴随文件）、`img/`、`file/`。
 
-## 部署方式二：直接跑 Node
+## 部署方式三：直接跑 Node
 
 需要 **Node ≥ 22.5**（`node:sqlite` 是 22.5 起内置的，不需要装任何数据库驱动）。
 

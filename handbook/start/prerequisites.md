@@ -16,7 +16,7 @@
 
 !!! tip "想先本地看看效果？"
     - **V1 / V2**：后端 `docker run` 起来，前端用 `python3 -m http.server` 或 `npx serve` 打开 `frontend/`，把 `frontend/app.js` 里的 `apiBaseUrl` 改成 `http://127.0.0.1:33001`。
-    - **V3**：直接 `PORT=33001 node server.js`（在 `backend/` 下），浏览器打开 `http://127.0.0.1:33001` 就是带 SSR 的完整站点，后台在 `/admin.html`。
+    - **V3**：直接 `PORT=33001 node server.js`（在 `backend/` 下），浏览器打开 `http://127.0.0.1:33001` 就是带 SSR 的完整站点，后台在 `/admin`。
 
 ## 2. 域名规划
 
@@ -72,13 +72,15 @@ img/、file/           # 图片与附件仍是文件，按日期分目录
 
 === "现成镜像（最快）"
 
-    直接用 Docker Hub 上构建好的镜像，不需要源码：
+    直接用 Docker Hub 上构建好的镜像，不需要源码。标签按版本分：
 
-    ```bash
-    docker pull starspacec/simple-blog-backend:latest
-    ```
+    | 版本 | 拉取 |
+    | --- | --- |
+    | V1（两段式，文件存储） | `docker pull starspacec/simple-blog-backend:latest` |
+    | V2（两段式，SQLite） | `docker pull starspacec/simple-blog-backend:v2` |
+    | V3（单体，站点 + 后台） | `docker pull starspacec/simple-blog-backend:v3` |
 
-    详见 [部署后端 → 方式 0](backend.md#方式-0用现成镜像)。
+    详见 [部署后端 → 方式 0](backend.md#方式-0用现成镜像) 与 [Docker 镜像](../ref/docker.md)。
 
 === "从源码构建"
 
