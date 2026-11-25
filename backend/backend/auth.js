@@ -1357,7 +1357,7 @@ function sessionOverview(req) {
       if (uaKey) seenHistoryKeys.add(uaKey);
       historyRecs.push(h);
     });
-  const history = historyRecs.slice(0, 40).map(h => sessionView(h, currentId, now, true));
+  const history = historyRecs.map(h => sessionView(h, currentId, now, true));
   return { sessions: active, history, blocked: listBlocked() };
 }
 
