@@ -3,7 +3,7 @@
 [简体中文](README.md) · **English**
 
 [![License](https://img.shields.io/badge/license-MIT-555?logo=opensourceinitiative&logoColor=white)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%E2%89%A520-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![Node](https://img.shields.io/badge/node-%E2%89%A520%20%C2%B7%20V2%2FV3%20%E2%89%A522.5-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![Cloudflare Pages](https://img.shields.io/badge/Cloudflare%20Pages-deployed-F38020?logo=cloudflare&logoColor=white)](https://pages.cloudflare.com)
 [![Docs](https://img.shields.io/badge/docs-usxs.github.io%2Fsimple--blog-555?logo=readthedocs&logoColor=white)](https://usxs.github.io/simple-blog/)
 
@@ -15,11 +15,15 @@
 
 **Docs**: <https://usxs.github.io/simple-blog/> (deployment guide, handbook, FAQ)
 
-A minimal, self-hosted personal blog: **Cloudflare Pages static frontend + self-hosted Node backend**.
+A minimal, self-hosted personal blog. The repository ships three variants on three branches — same content model, same API, only the renderer and the storage differ:
 
-The frontend is a build-free static SPA (HTML/CSS/vanilla JS). Pages Functions render each article at the edge so search engines always receive the full text in the HTML. The backend is a zero-framework Node service handling login, content management, image uploads and comments — everything is stored as Markdown / JSON files, so moving to another machine is just copying a directory.
+- **V1** (`main`): Cloudflare Pages static frontend + self-hosted Node backend, data stored as Markdown / JSON files
+- **V2** (`v2-sqlite`): same two-tier deployment, backend switched to SQLite (Node's built-in `node:sqlite`, no third-party driver)
+- **V3** (`v3-monolith`): frontend and backend in one process, SQLite + in-process SSR — Cloudflare Pages not required
 
-> For people who want to own their data without running a database or a build toolchain. The backend starts with one Docker command; the frontend is hosted for free on Cloudflare.
+The frontend is a build-free static SPA (HTML/CSS/vanilla JS): on V1/V2 Pages Functions inject SSR at the edge, on V3 the Node process renders the same HTML itself. Both paths hand search engines the full article text. The backend is a zero-framework Node service handling login, content management, image uploads and comments.
+
+> For people who want to own their data without a build toolchain: pick V1 for files you can copy anywhere, V2 for sturdier writes, V3 to run everything on one box. All three can migrate into each other — V1's *Settings → Transfer* bundles everything into a `.zip` (download or push), V2/V3 accept it with a token, and `backend/scripts/` covers the CLI route.
 
 ---
 
@@ -118,6 +122,10 @@ On phones the sidebar collapses into a **liquid-glass bottom bar** that hides on
 
 ## Architecture
 
+All three variants share one content model and one API. Only two things change: who renders the HTML, and where the data lives.
+
+**V1 / V2 — two tiers**
+
 ```
 Visitor browser
    │  HTTPS
@@ -126,14 +134,30 @@ Cloudflare Pages (static frontend)
    │  /post/<id>, /posts etc. are SSR-injected by Pages Functions at the edge
    │  /api/* is not on Pages — it calls the backend cross-origin
    ▼
-Your server: Nginx → Docker container (Node 20 + sharp)
+Your server: Nginx → Docker container (Node 22 + sharp)
    │
-   └── data/ article/ img/ file/ … all plain files on the host
+   ├─ V1: article/ Musings/ config.json img/ file/ … plain files on the host
+   └─ V2: data/blog.db (SQLite, WAL) + img/ file/ … images stay on disk
 ```
 
-- **Frontend**: `frontend/`, no build step — Pages publishes the directory as-is.
-- **Backend**: `backend/`, Node's native `http` module with a single dependency (`sharp` for WebP).
-- **Storage**: no database. Posts live in `article/<id>/<id>.md`, other content and comments are JSON files, images under `img/<date>/`.
+**V3 — single process**
+
+```
+Visitor browser
+   │  HTTPS
+   ▼
+Your server: Nginx → Docker container (Node 22)
+   │
+   ├─ /, /post/<id>, section pages → rendered in-process by backend/web/ssr.js
+   ├─ /app.js, /style.css          → static assets in backend/web/
+   ├─ /api/*, /admin*              → Node routes in the same process (same origin)
+   └─ data: data/blog.db (SQLite) + img/ file/
+```
+
+- **Frontend**: `frontend/` on V1/V2 (Pages publishes that directory as-is); `backend/web/` on V3, served by the same process.
+- **Backend**: `backend/`, Node's native `http` module with a single dependency (`sharp` for WebP); SQLite uses the built-in module, no driver dependency.
+- **Storage**: files on V1 (`article/<id>/<id>.md` plus JSON); SQLite on V2/V3 (`data/blog.db`), with post bodies kept as raw Markdown — `STORE=file` switches back to file storage.
+
 
 ## Project structure
 
@@ -142,26 +166,49 @@ simple-blog/
 ├── README.md                 # this file (Chinese: README.md, English: README.en.md)
 ├── CHANGELOG.md              # changelog
 ├── LICENSE                   # MIT
-├── backend/                  # backend service
-│   ├── server.js             # entry: routes, static files, public API
+├── backend/                  # backend service (identical on all three variants)
+│   ├── server.js             # entry: routes, static files, SSR, public API
 │   ├── admin.html/css/js     # admin UI (login, editor, uploads, moderation)
-│   ├── markdown.js           # Markdown renderer shared with SSR
+│   ├── markdown.js           # Markdown renderer shared by frontend and backend
+│   ├── web/                  # V3 frontend (V1/V2 keep it in frontend/)
+│   │   ├── index.html        # SPA shell; SSR injects content and meta
+│   │   ├── app.js            # routing, rendering, comments
+│   │   ├── style.css
+│   │   └── ssr.js            # in-process SSR: posts, section pages, meta
 │   ├── backend/
 │   │   ├── auth.js           # password, sessions, rate limit, CSRF, 2FA, passkeys
 │   │   ├── captcha.js        # comment captcha
-│   │   ├── storage.js        # post/JSON IO, filename sanitizing
+│   │   ├── storage.js        # storage dispatch: file or sqlite, per STORE
+│   │   ├── storage-file.js   # V1 file storage: Markdown + JSON
+│   │   ├── storage-db.js     # V2/V3 SQLite storage (same function signatures)
+│   │   ├── db.js             # node:sqlite connection, schema, WAL, transactions
+│   │   ├── kvfile.js         # config JSON → kv table in DB mode
+│   │   ├── mdparse.js        # Markdown front-matter parse and build
+│   │   ├── frontmatter.js    # YAML / TOML front-matter parser
+│   │   ├── text.js           # excerpts, search ranking, filename sanitizing
 │   │   ├── image.js          # WebP conversion and resizing
 │   │   ├── site.js           # site info, sections, paths, order, probe config
 │   │   ├── probe-source.js   # CF / minimal probe adapters
 │   │   ├── sitemap.js        # dynamic sitemap
 │   │   ├── indexnow.js       # IndexNow push
+│   │   ├── links.js          # friend links: apply, review, rate limit
+│   │   ├── notify.js         # email / Bark notifications and templates
+│   │   ├── mailer.js         # zero-dependency SMTP client
+│   │   ├── telegram.js       # moment sync to a Telegram channel
+│   │   ├── portable.js       # portable `.zip` bundle packing / unpacking
+│   │   ├── transfer.js       # admin "transfer" endpoints
+│   │   ├── migrate-import.js # receive side: token check, bundle into the DB
+│   │   ├── mdimport.js       # static blog → posts
+│   │   ├── mdexport.js       # posts → static blog
+│   │   ├── zip.js            # zero-dependency ZIP read/write
 │   │   └── probe.js          # uptime probes for the status page
+│   ├── scripts/              # CLI migration and import/export
 │   ├── Dockerfile
 │   ├── docker-compose.yml
 │   ├── .env.example
-│   ├── config.json           # empty seeds for tools/status/quirky
-│   └── data/                 # runtime: auth.json, sessions.json, site.json …
-├── frontend/                 # static site (Cloudflare Pages)
+│   ├── config.json           # empty seeds for tools/status/quirky (V1 / STORE=file)
+│   └── data/                 # runtime: blog.db, auth.json, sessions.json, site.json …
+├── frontend/                 # V1 / V2 static site (Cloudflare Pages); merged into backend/web on V3
 │   ├── index.html
 │   ├── app.js                # routing, rendering, comments, site-config cache
 │   ├── style.css
@@ -184,8 +231,8 @@ Below is the full path from zero to a working site, in order. Each step has a ve
 | Need | Notes |
 | --- | --- |
 | A server | Linux (Debian/Ubuntu); 1 vCPU / 1 GB RAM is enough; VPS or a home box, as long as it is reachable from the internet |
-| A domain | Two subdomains recommended: `www.example.com` for the frontend, `api.example.com` for the backend |
-| A Cloudflare account | The frontend is hosted on Pages for free |
+| A domain | Two subdomains recommended: `www.example.com` for the frontend, `api.example.com` for the backend; V3 needs only one (site and admin share it) |
+| A Cloudflare account | V1 / V2 only — the frontend is hosted on Pages for free; V3 skips this |
 | Docker | Docker Engine + Compose plugin installed on the server (checked in step 2.1) |
 
 ### 1. Clone (do you need to fork?)
@@ -337,7 +384,9 @@ Certificates: `certbot --nginx -d api.example.com`.
 
 Open `https://api.example.com/admin.html` and sign in with the credentials from `.env`. Everything — posts, comments, images, section toggles — lives there. Right after the first login, change the password under "Settings → Admin account".
 
-### 3. Deploy the frontend (Cloudflare Pages)
+### 3. Deploy the frontend (Cloudflare Pages — V1 / V2 only)
+
+> **V3 has no such step.** Its frontend lives in `backend/web/` and is served by the Node process, so the site is live once step 2 finishes. For the full V3 flow and `SITE_VERSION` and friends, see [Deploying V3 (monolith)](https://usxs.github.io/simple-blog/start/monolith/).
 
 The frontend is plain static files; no build is required. Pick one of two ways:
 
@@ -433,6 +482,9 @@ Backend (`backend/.env`):
 | `HOST_PORT` | no | Host port, default `33001` |
 | `ADMIN_PATH` | no | Initial dashboard path, default `admin`; can be changed later in the dashboard |
 | `AUTH_DATA_DIR` | no | Overrides the directory holding sessions, credentials, links and notification config (mainly for tests) |
+| `STORE` | no | Storage implementation: `sqlite` (default on V2/V3) or `file` (V1 behaviour); the V1 branch only has file storage |
+| `DB_FILE` | no | SQLite file path, default `data/blog.db` |
+| `SITE_VERSION` / `SITE_BRANCH` / `SITE_COMMIT` | no | Build info shown by `/version` and the dashboard on V3, usually injected by compose |
 
 ## API reference
 
@@ -509,10 +561,10 @@ Full parameters: [docs/API.md](docs/API.md).
 8. **Site config is cached in the browser**: the frontend stores the last `/api/site` (section toggles / names / paths / order) in `localStorage` under `sp_site_cache_v1`, so the first paint already matches it — hidden sections never flash — and the site still renders when the backend is unreachable or slow. New values are fetched on the next visit and replace the cache (the backend uses `updatedAt` to detect changes). If a change doesn't show up, hard-refresh (`Cmd/Ctrl + Shift + R`) or clear that key.
 9. **First paint never waits for the backend**: home, lists and posts render from cached data / SSR content first; node status, probe data and backend config refresh asynchronously. A slow or dead backend never blanks the page — the node badge just shows OFFLINE.
 10. **SEO and domains**: `canonical` uses `SITE_URL`. If both `example.com` and `www.example.com` answer, pick one and 301 the other, otherwise you get duplicate content.
-11. **Backups**: back up `config.json`, `article/`, `Musings/`, `img/`, `file/` and `data/` under `backend/` — six paths; `tar` them and keep a copy elsewhere.
+11. **Backups**: on V1 back up `config.json`, `article/`, `Musings/`, `img/`, `file/` and `data/` under `backend/`; on V2/V3 `data/` (including `blog.db` and its WAL sidecars), `img/` and `file/` are enough. `tar` them and keep a copy elsewhere.
 12. **2FA backup codes**: the 10 codes shown when enabling 2FA are displayed once — save them. Lost authenticator and no codes? Delete the `totp` field in `backend/data/auth.json` on the server and restart (2FA turns off).
 13. **Passkeys require HTTPS**: browsers do not expose the Passkey API over `http://` or a bare IP. The backend derives `rpId` from `X-Forwarded-Host`; if the proxy domain and backend domain differ, set `WEBAUTHN_RP_ID` / `WEBAUTHN_ORIGIN` explicitly. Keys are bound to the domain — changing domains means registering again.
-14. **Diagrams depend on a CDN**: ```` ```mermaid ```` blocks are rendered in the browser by lazily importing `mermaid@11` from jsDelivr — not bundled. Offline/intranet setups don't break; the block stays as source text. To change the CDN, edit the `import()` URL in `loadMermaid()` in `frontend/app.js` and `backend/admin.js`.
+14. **Diagrams depend on a CDN**: ```` ```mermaid ```` blocks are rendered in the browser by lazily importing `mermaid@11` from jsDelivr — not bundled. Offline/intranet setups don't break; the block stays as source text. To change the CDN, edit the `import()` URL in `loadMermaid()` in `frontend/app.js` (V3: `backend/web/app.js`) and `backend/admin.js`.
 15. **Comment anti-spam**: two comments from the same IP must be at least 30 seconds apart, at most 8 per hour and 30 per day; the captcha issues at most 30 challenges per 10 minutes. Limits return `429` with `Retry-After`, and the submit button shows a countdown. To relax for real visitors, change `CAPTCHA_MAX` in `backend/captcha.js` and the interval/count constants in `backend/server.js`.
 17. **Syncing moments to Telegram**: enable it in **Manage → Moment sync** and fill in two fields — the `Bot Token` from [@BotFather](https://t.me/BotFather) (`123456789:AA…`) and the channel id (`@your_channel` or a `-100…` number). The bot must be in the channel with permission to post, otherwise the API answers *not enough rights*. Images inside a moment are uploaded too; their URLs are built from **Site URL**, so it must be reachable from the internet. Editing deletes the old message and posts a new one; deleting removes it from the channel. Config lives in `backend/data/telegram.json` (0600), message ids in `telegram-map.json`.
 
@@ -529,7 +581,10 @@ Full parameters: [docs/API.md](docs/API.md).
 | Uploaded images stay jpg | `sharp` failed to build (look for a warn in `docker compose logs`) — rebuild; or `IMAGE_WEBP_DISABLE=1` is set |
 | sitemap shows the home page | Pages Functions not deployed (the directory must be named `functions/`), or `_redirects` points to the wrong domain |
 | Section changes don't show up | The frontend uses the cached site config: hard-refresh (`Cmd/Ctrl + Shift + R`) or run `localStorage.removeItem('sp_site_cache_v1')` and reload |
-| Blank line above the first sidebar item | Layout bug in older builds (empty `<li>` left behind after reordering); update `frontend/app.js` and `frontend/style.css` |
+| Blank line above the first sidebar item | Layout bug in older builds (empty `<li>` left behind after reordering); update `frontend/app.js` and `frontend/style.css` (V3: `backend/web/`) |
+| V2/V3 reports "data directory not writable" | `data/` (including `blog.db`) must be owned by `1000:1000`: `sudo chown -R 1000:1000 data img file` |
+| Comment submission says the post does not exist | Older builds checked `article/<id>` on disk; upgrade to a build with `storage.postExists` |
+| V3 home page returns `{"code":200,...}` JSON | That is the V1/V2 backend; V3 needs `backend/web/` and the monolith routes in server.js |
 
 ## Changelog
 

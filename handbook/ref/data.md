@@ -1,6 +1,11 @@
 # 数据与目录
 
-没有数据库，所有状态都是文件。备份 = 打包目录，迁移 = 拷目录。
+V1 没有数据库，所有状态都是文件（备份 = 打包目录，迁移 = 拷目录）。
+V2 / V3 把这些内容搬进 SQLite，图片与附件仍然是文件，目录结构完全兼容 V1。
+
+!!! info "两种存储共用一套代码"
+    `STORE=sqlite`（默认）走数据库，`STORE=file` 走 V1 的 Markdown 文件。
+    两种模式的读写接口一致，页面看到的东西也一样。
 
 ## 目录结构
 
@@ -68,6 +73,33 @@ tag: 日常
     }
   ]
 }
+```
+
+## 数据库结构（V2 / V3）
+
+数据库是一个文件：`data/blog.db`（WAL 模式，同目录还会有 `blog.db-wal`、`blog.db-shm`，
+备份时三个一起带上，或者先停容器再拷）。
+
+| 表 | 主键 | 内容 |
+| --- | --- | --- |
+| `posts` | `id` | 文章：title / date / tag / tags(JSON) / hidden / enc 系列 / mtime / content |
+| `moments` | `id` | 瞬间，字段与文章一致（没有加密字段的实际使用） |
+| `comments` | `seq` 自增 | 每条评论一行：`post_id` + `id` + `data`(JSON)，`UNIQUE(post_id, id)` |
+| `module_items` | `(module, id)` | 工具 / 状态 / 奇奇怪怪等列表型模块，一条一项，`ord` 控制顺序 |
+| `kv` | `key` | 站点配置、友链、通知、IndexNow、Telegram、备份设置、管理员凭据、迁移令牌 |
+| `meta` | `key` | 结构版本（`schema_version=2`）等内部状态 |
+
+文章正文在库里存**原始 Markdown**，不是渲染后的 HTML —— 导出、迁移、换版本都不会丢格式。
+图片/附件仍在 `img/`、`file/`，数据库只记正文里的 `/img/...` 链接。
+
+常用查询：
+
+```bash
+# 看有多少篇文章、多少条评论
+sqlite3 data/blog.db "select count(*) from posts; select count(*) from comments;"
+
+# 导出全部文章标题与日期
+sqlite3 data/blog.db "select date, title from posts order by date desc;"
 ```
 
 ## 权限

@@ -7,7 +7,7 @@
 | 镜像 | `starspacec/simple-blog-backend` |
 | 标签 | `latest`、版本号（如 `1.15.0`） |
 | 架构 | 目前发布 `linux/amd64`；打 `v*` 标签时 GitHub Actions 也会构建 `linux/arm64` 推 GHCR |
-| 基础镜像 | `node:20-alpine` |
+| 基础镜像 | `node:22-alpine`（内置 `node:sqlite`，不需要数据库驱动） |
 | 用户 | `1000:1000`（非 root） |
 | 端口 | `33001` |
 | 健康检查 | 每 30s 请求 `/api/auth/status` |

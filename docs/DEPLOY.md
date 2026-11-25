@@ -10,6 +10,9 @@
 - 一个域名，例如 `example.com`，计划用 `www.example.com` 做博客、`api.example.com` 做后端；
 - Cloudflare 账号（托管 DNS 并部署前端，免费额度够用）。
 
+!!! note "先确定做哪个版本"
+    本文按 **V1 / V2**（Cloudflare Pages + 自托管后端）写。**V3** 是前后端不分离的单体版，没有 Pages 那一段，部署见 [部署 V3 单体版](../handbook/start/monolith.md)；三个版本的区别见 [版本选择](../handbook/start/versions.md)。
+
 ```bash
 # 检查环境
 docker -v && docker compose version

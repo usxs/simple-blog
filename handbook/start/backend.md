@@ -39,12 +39,16 @@ docker compose -f docker-compose.hub.yml up -d
 ```bash
 git clone https://github.com/usxs/simple-blog.git
 cd simple-blog/backend
+git checkout v3-monolith            # V3 单体版；V2 用 v2-sqlite；V1 留 main
 mkdir -p data article Musings img file && touch config.json
 sudo chown -R 1000:1000 data article Musings img file config.json
 cp .env.example .env
 vim .env
 docker compose up -d --build
 ```
+
+!!! note "V2 / V3 的数据卷不一样"
+    V2 / V3 默认 `STORE=sqlite`，数据落在 `data/blog.db`（含 `-wal` / `-shm`），`article/`、`Musings/`、`config.json` 只有 `STORE=file` 时才用。V3 还会把 `backend/web/` 一起打进镜像，站点与后台由同一个容器提供。
 
 !!! warning "改了代码一定要 `--build`"
     `docker compose up -d` 不会重建镜像，新代码不会生效；必须加 `--build`。

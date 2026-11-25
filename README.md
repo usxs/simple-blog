@@ -3,7 +3,7 @@
 **简体中文** · [English](README.en.md)
 
 [![License](https://img.shields.io/badge/license-MIT-555?logo=opensourceinitiative&logoColor=white)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%E2%89%A520-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![Node](https://img.shields.io/badge/node-%E2%89%A520%20%C2%B7%20V2%2FV3%20%E2%89%A522.5-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![Cloudflare Pages](https://img.shields.io/badge/Cloudflare%20Pages-deployed-F38020?logo=cloudflare&logoColor=white)](https://pages.cloudflare.com)
 [![Docs](https://img.shields.io/badge/docs-usxs.github.io%2Fsimple--blog-555?logo=readthedocs&logoColor=white)](https://usxs.github.io/simple-blog/)
 
@@ -15,11 +15,29 @@
 
 **文档**：<https://usxs.github.io/simple-blog/>（部署教程、使用手册、常见问题）
 
-一套可以自己部署的极简个人博客系统：**Cloudflare Pages 静态前端 + 自托管 Node 后端**。
+一套可以自己部署的极简个人博客系统。仓库用三个分支提供三种形态，内容模型与接口完全一致，只是「谁渲染页面」和「数据存在哪」不同：
 
-前端是零构建的纯静态 SPA（HTML/CSS/原生 JS），由 Pages 的 Functions 在边缘做服务端渲染，保证搜索引擎能拿到每篇文章的完整正文；后端是零框架依赖的 Node 服务，负责账号登录、文章/动态管理、图片上传与评论，数据全部以 Markdown / JSON 文件形式落盘，换个机器拷走目录就能搬家。
+- **V1**（`main`）：Cloudflare Pages 静态前端 + 自托管 Node 后端，数据以 Markdown / JSON 文件落盘
+- **V2**（`v2-sqlite`）：同样的两段式部署，后端改用 SQLite（Node 内置 `node:sqlite`，没有第三方驱动）
+- **V3**（`v3-monolith`）：前后端合成一个进程，SQLite + 进程内 SSR，不再需要 Cloudflare Pages
 
-> 适合想要「自己的数据自己管」、又不想折腾数据库和构建工具链的人。整套系统单机 Docker 一条命令启动，前端免费托管在 Cloudflare。
+前端是零构建的纯静态 SPA（HTML/CSS/原生 JS）：V1/V2 由 Pages Functions 在边缘注入 SSR，V3 由 Node 进程自己渲染，两条路都保证搜索引擎拿到每篇文章的完整正文。后端是零框架依赖的 Node 服务，负责账号登录、文章/动态管理、图片上传与评论。
+
+> 适合想要「自己的数据自己管」、又不想折腾构建工具链的人：想要数据即文件选 V1，想要更稳的写入选 V2，想一台机器跑完选 V3。三者之间可以互相迁数据——V1 后台「设置 → 迁移」一键打包（下载或直推），V2/V3 用令牌接收；也可以用 `backend/scripts/` 下的脚本直接迁。
+
+### 三个版本怎么选
+
+同一套代码按分支发布三种形态，数据可以互相迁移：
+
+| 版本 | 分支 | 形态 | 存储 | 适合谁 |
+| --- | --- | --- | --- | --- |
+| **V1** | `main` | Pages 前端 + Node 后端（两段式） | Markdown 文件 + JSON | 想要数据即文件、拷走就能搬家 |
+| **V2** | `v2-sqlite` | Pages 前端 + Node 后端（两段式） | SQLite | 文章/评论很多，想要更稳的写入与查询 |
+| **V3** | `v3-monolith` | 前后端不分离单体（一个进程） | SQLite | 只想在一台 VPS 上跑完，不依赖 Cloudflare |
+
+- V1 后台「设置 → 迁移」可以**一键迁移到 V2 / V3**（下载或直推便携包 `.zip`），也能和 **Hugo / Hexo / Jekyll / Astro / Ghost / Obsidian** 互导 Markdown。
+- V2 的数据库结构与 V3 完全一致，`blog.db` 直接可用；从 V1 文件结构迁移时用 `node scripts/migrate-v1-to-v2.js`。
+- V3 的部署见 [部署 V3 单体版](https://usxs.github.io/simple-blog/start/monolith/)。
 
 ---
 
@@ -120,6 +138,10 @@
 
 ## 架构
 
+三个形态共用同一份内容模型、同一套接口，区别只在下面这两处。
+
+**V1 / V2：两段式**
+
 ```
 访客浏览器
    │  HTTPS
@@ -128,14 +150,30 @@ Cloudflare Pages（前端静态资源）
    │  /post/<id>、/posts 等由 Pages Functions 在边缘注入 SSR 内容与 meta
    │  /api/* 不在 Pages 上，直接跨域请求后端
    ▼
-你自己的服务器：Nginx → Docker 容器（Node 20 + sharp）
+你自己的服务器：Nginx → Docker 容器（Node 22 + sharp）
    │
-   └── data/ article/ img/ file/ … 全部为宿主机文件
+   ├─ V1：article/ Musings/ config.json img/ file/ … 全部为宿主机文件
+   └─ V2：data/blog.db（SQLite，WAL）+ img/ file/ … 图片仍以文件保存
 ```
 
-- **前端**：`frontend/`，无需构建，Pages 直接把目录当产物发布。
-- **后端**：`backend/`，Node 原生 `http` 模块，只依赖 `sharp` 一个包（图片转 WebP）。
-- **存储**：没有数据库。文章是 `article/<id>/<id>.md`，其它内容与评论是 JSON 文件，图片在 `img/<日期>/`。
+**V3：单体**
+
+```
+访客浏览器
+   │  HTTPS
+   ▼
+自己的服务器：Nginx → Docker 容器（Node 22）
+   │
+   ├─ /、/post/<id>、栏目页 → backend/web/ssr.js 在进程内渲染后直出 HTML
+   ├─ /app.js、/style.css   → backend/web/ 里的静态资源
+   ├─ /api/*、/admin*       → 同一个进程里的 Node 路由（同源，不需要跨域）
+   └─ 数据：data/blog.db（SQLite）+ img/ file/
+```
+
+- **前端**：V1/V2 在 `frontend/`（Pages 直接把该目录当产物发布）；V3 在 `backend/web/`，随服务一起跑。
+- **后端**：`backend/`，Node 原生 `http` 模块，只依赖 `sharp` 一个包（图片转 WebP）；SQLite 走 Node 内置模块，不引第三方驱动。
+- **存储**：V1 是文件（`article/<id>/<id>.md` + 各类 JSON）；V2/V3 是 SQLite（`data/blog.db`），正文仍以原始 Markdown 存表，设 `STORE=file` 可以切回文件存储。
+
 
 ## 目录结构
 
@@ -144,14 +182,26 @@ simple-blog/
 ├── README.md                 # 项目说明、界面预览、部署与注意事项
 ├── CHANGELOG.md              # 更新日志
 ├── LICENSE                   # MIT
-├── backend/                  # 后端服务
-│   ├── server.js             # 入口：路由、静态资源、公开 API
+├── backend/                  # 后端服务（三个版本共用同一份）
+│   ├── server.js             # 入口：路由、静态资源、SSR、公开 API
 │   ├── admin.html/css/js     # 后台管理界面（登录、编辑、上传、评论审核）
-│   ├── markdown.js           # 与服务端 SSR 共用的 Markdown 渲染器
+│   ├── markdown.js           # 前后台共用的 Markdown 渲染器
+│   ├── web/                  # V3 的前端（V1/V2 在根目录 frontend/）
+│   │   ├── index.html        # SPA 骨架，SSR 往里注入内容与 meta
+│   │   ├── app.js            # 路由、渲染、评论交互
+│   │   ├── style.css
+│   │   └── ssr.js            # 进程内 SSR：文章页 / 栏目页 / meta
 │   ├── backend/
-│   │   ├── auth.js           # 账密、会话、限流、CSRF
+│   │   ├── auth.js           # 账密、会话、限流、CSRF、两步验证、通行密钥
 │   │   ├── captcha.js        # 评论验证码
-│   │   ├── storage.js        # 文章/JSON 读写、文件名清洗
+│   │   ├── storage.js        # 存储分发：按 STORE 选 file / sqlite
+│   │   ├── storage-file.js   # V1 文件存储：Markdown + JSON
+│   │   ├── storage-db.js     # V2/V3 SQLite 存储（与文件版同一套函数签名）
+│   │   ├── db.js             # node:sqlite 连接、建表、WAL、事务
+│   │   ├── kvfile.js         # 配置类 JSON 在 DB 模式下落到 kv 表
+│   │   ├── mdparse.js        # Markdown 前言解析与生成
+│   │   ├── frontmatter.js    # YAML / TOML 前言解析
+│   │   ├── text.js           # 摘要、搜索排序、文件名清洗
 │   │   ├── image.js          # WebP 转换与压缩
 │   │   ├── sitemap.js        # 动态 sitemap
 │   │   ├── indexnow.js       # IndexNow 推送
@@ -159,14 +209,21 @@ simple-blog/
 │   │   ├── notify.js         # 邮件 / Bark 通知与模板
 │   │   ├── mailer.js         # 零依赖 SMTP 客户端
 │   │   ├── telegram.js       # 瞬间同步到 Telegram 频道
+│   │   ├── portable.js       # 便携迁移包（.zip）的打包与解包
+│   │   ├── transfer.js       # 后台「迁移」接口：打包、推送、导入导出
+│   │   ├── migrate-import.js # 接收端：校验令牌、把便携包写进库
+│   │   ├── mdimport.js       # 静态博客 → 文章
+│   │   ├── mdexport.js       # 文章 → 静态博客
+│   │   ├── zip.js            # 零依赖 ZIP 读写
 │   │   └── probe.js          # 站点可用性探测
-│   ├── Dockerfile                # 镜像：node:20-alpine + sharp，非 root，带 healthcheck
+│   ├── scripts/              # 命令行迁移与导入导出
+│   ├── Dockerfile                # 镜像：node:22-alpine + sharp，非 root，带 healthcheck
 │   ├── docker-compose.yml        # 从源码构建（docker compose up -d --build）
 │   ├── docker-compose.hub.yml    # 直接用 Docker Hub 镜像（无需源码）
 │   ├── .env.example
-│   ├── config.json           # 工具/状态/奇思妙想的初始空数据
-│   └── data/                 # 运行时生成：auth.json、sessions.json、验证码密钥等
-├── frontend/                 # 前端静态站（Cloudflare Pages）
+│   ├── config.json           # 工具/状态/奇思妙想的初始空数据（V1 / STORE=file 用）
+│   └── data/                 # 运行时生成：blog.db、auth.json、sessions.json、验证码密钥等
+├── frontend/                 # V1 / V2 的前端静态站（Cloudflare Pages）；V3 已并入 backend/web
 │   ├── index.html
 │   ├── app.js                # 路由、渲染、评论交互
 │   ├── style.css
@@ -189,8 +246,8 @@ simple-blog/
 | 需要 | 说明 |
 | --- | --- |
 | 一台服务器 | Linux（Debian/Ubuntu 均可），1 核 1G 起；VPS 或家里的机器都行，只要外网能访问 |
-| 域名 | 建议两个子域：`www.example.com` 给前端，`api.example.com` 给后端 |
-| Cloudflare 账号 | 前端用 Pages 免费托管，需要账号 |
+| 域名 | 建议两个子域：`www.example.com` 给前端，`api.example.com` 给后端；V3 只需要一个（站点与后台同域） |
+| Cloudflare 账号 | 只有 V1 / V2 需要：前端用 Pages 免费托管，V3 跳过这一步 |
 | Docker | 服务器上装 Docker Engine + Compose 插件（下面第 2 步会检查） |
 
 ### 1. 拉代码（需要先 Fork 吗？）
@@ -344,7 +401,9 @@ server {
 
 浏览器打开 `https://api.example.com/admin.html`，用 `.env` 里的账密登录，就进入后台了（文章、评论、图片、栏目开关都在这里）。建议登录后立刻在「管理 → 管理员账号」把密码换成新的。
 
-### 3. 部署前端（Cloudflare Pages）
+### 3. 部署前端（Cloudflare Pages，仅 V1 / V2）
+
+> **V3 没有这一步。** 前端资源在 `backend/web/`，由 Node 进程直接发出，第 2 步跑起来站点就能访问；V3 的完整流程、`SITE_VERSION` 等变量见 [部署 V3 单体版](https://usxs.github.io/simple-blog/start/monolith/)。
 
 前端是纯静态文件，不需要构建。两种方式任选：
 
@@ -440,6 +499,9 @@ Pages 项目 → **Custom domains** → 添加 `www.example.com`，按提示在 
 | `HOST_PORT` | 否 | 宿主机端口，默认 `33001` |
 | `ADMIN_PATH` | 否 | 后台入口初始路径，默认 `admin`；首次启动后可在后台修改 |
 | `AUTH_DATA_DIR` | 否 | 覆盖会话/凭据/友链/推送配置的存放目录（主要给测试用） |
+| `STORE` | 否 | 存储实现：`sqlite`（V2/V3 默认）或 `file`（V1 行为）；V1 分支只有文件存储 |
+| `DB_FILE` | 否 | SQLite 文件路径，默认 `data/blog.db` |
+| `SITE_VERSION` / `SITE_BRANCH` / `SITE_COMMIT` | 否 | V3 的 `/version` 与后台显示的构建信息，一般由 compose 注入 |
 
 ## 接口速查
 
@@ -526,10 +588,10 @@ GET  /api/admin/indexnow  POST /api/admin/indexnow  # IndexNow 密钥
 9. **站点配置会在浏览器本地缓存**：前台把最近一次 `/api/site`（栏目开关 / 名称 / 路径 / 顺序）存在 `localStorage` 的 `sp_site_cache_v1` 里，首屏直接按缓存渲染，所以不会先闪一下「本该隐藏的栏目」；后端不可达或很慢时也照常显示。改动会在下次打开页面时拉新并覆盖缓存（后端用 `updatedAt` 判断是否变化）。如果改完发现前台没更新，强制刷新（`Cmd/Ctrl + Shift + R`）或清掉这条缓存即可。
 10. **首屏不等后端**：首页、列表页、文章页都先用本地数据/SSR 内容渲染，侧边栏「节点 ONLINE」、探针数据、后台配置各自异步刷新；网络慢或后端挂了不会白屏，只是节点状态显示 OFFLINE。
 11. **SEO 与域名**：`canonical` 用的是 `SITE_URL`，如果站点同时存在 `example.com` 和 `www.example.com`，请固定一个并让另一个 301 过去，否则会被判重复内容。
-12. **备份**：只需备份 `backend/` 下的 `config.json`、`article/`、`Musings/`、`img/`、`file/`、`data/` 六个路径，建议 `tar` 打包后异地保存。
+12. **备份**：V1 备份 `backend/` 下的 `config.json`、`article/`、`Musings/`、`img/`、`file/`、`data/` 六个路径；V2/V3 备份 `data/`（含 `blog.db` 与 WAL 伴随文件）、`img/`、`file/` 即可，建议 `tar` 打包后异地保存。
 13. **两步验证的备用码**：启用 2FA 时生成的 10 个备用码只显示一次，请立刻保存；丢失验证器又没有备用码时，可在服务器上删除 `backend/data/auth.json` 里的 `totp` 字段后重启（会关闭 2FA）。
 14. **通行密钥需要 HTTPS**：`http://` 或直接用 IP 访问时浏览器不提供 Passkey 接口；后端会按 `X-Forwarded-Host` 推导 `rpId`，反代域名与后端域名不一致时用 `WEBAUTHN_RP_ID` / `WEBAUTHN_ORIGIN` 显式指定。注册的密钥与域名绑定，换域名后需要重新注册。
-15. **流程图依赖 CDN**：```` ```mermaid ```` 代码块由浏览器端按需从 jsDelivr 加载 `mermaid@11` 渲染，不在构建产物里；内网/离线环境不会报错，只是保留为一段源码文本。改 CDN 地址只需调整 `frontend/app.js` 与 `backend/admin.js` 里 `loadMermaid()` 的 `import()` 地址。
+15. **流程图依赖 CDN**：```` ```mermaid ```` 代码块由浏览器端按需从 jsDelivr 加载 `mermaid@11` 渲染，不在构建产物里；内网/离线环境不会报错，只是保留为一段源码文本。改 CDN 地址只需调整 `frontend/app.js`（V3 是 `backend/web/app.js`）与 `backend/admin.js` 里 `loadMermaid()` 的 `import()` 地址。
 16. **评论防刷**：同一 IP 两条评论至少间隔 30 秒，每小时最多 8 条、每天最多 30 条；验证码每 10 分钟最多签发 30 次。触发限制时接口返回 `429`（带 `Retry-After`），前台提交按钮会显示倒计时。需要给正常访客放宽，改 `backend/captcha.js` 的 `CAPTCHA_MAX` 与 `backend/server.js` 里的间隔/条数常量即可。
 17. **文章顺序**：后台列表与前台列表都以发布日期（`date`）从新到旧，日期相同再看修改时间。想调顺序直接改文章里的 `date`。
 
@@ -547,7 +609,10 @@ GET  /api/admin/indexnow  POST /api/admin/indexnow  # IndexNow 密钥
 | 图片上传后仍是 jpg | 构建时 `sharp` 没装上（看 `docker compose logs` 里的 warn），重新 `--build`；或设置了 `IMAGE_WEBP_DISABLE=1` |
 | sitemap 显示的是首页 | Pages Functions 未部署（目录名必须是 `functions/`），或用了 `_redirects` 但域名写错 |
 | 改了栏目配置但前台没变 | 前端用的是本地缓存的站点配置：强制刷新（`Cmd/Ctrl + Shift + R`），或在控制台执行 `localStorage.removeItem('sp_site_cache_v1')` 后刷新 |
-| 侧边栏第一个栏目上方多一行空白 | 旧版本的排版 bug（重排后残留空 `<li>`），更新 `frontend/app.js` 与 `frontend/style.css` 即可 |
+| 侧边栏第一个栏目上方多一行空白 | 旧版本的排版 bug（重排后残留空 `<li>`），更新 `frontend/app.js` 与 `frontend/style.css`（V3 在 `backend/web/`）即可 |
+| V2/V3 提示「数据目录不可写」 | `data/`（含 `blog.db`）属主必须是 `1000:1000`：`sudo chown -R 1000:1000 data img file` |
+| 评论提交报「目标文章不存在」 | 旧版本在 SQLite 模式下按目录判断文章是否存在，升级到带 `storage.postExists` 的版本 |
+| V3 首页返回 `{"code":200,...}` JSON | 跑的是 V1/V2 的后端代码；V3 需要 `backend/web/` 与 server.js 里的单体路由 |
 
 ## 更新日志
 
