@@ -570,10 +570,22 @@
               <div class="session-group">
                 <div class="session-group-head">历史会话（已离线） <span class="session-group-count" id="session-history-count"></span></div>
                 <ul class="session-list session-list--history" id="session-history"></ul>
+                <div class="session-more" id="session-history-more" hidden>
+                  <button class="session-more-btn" type="button" onclick="cms.openSessionArchive('history')">
+                    <span id="session-history-more-text">查看全部历史会话</span>
+                    <span class="session-more-arrow" aria-hidden="true">→</span>
+                  </button>
+                </div>
               </div>
               <div class="session-group">
                 <div class="session-group-head">黑名单 <span class="session-group-count" id="blocked-count"></span></div>
                 <ul class="session-list" id="blocked-list"></ul>
+                <div class="session-more" id="session-blocked-more" hidden>
+                  <button class="session-more-btn" type="button" onclick="cms.openSessionArchive('blocked')">
+                    <span id="session-blocked-more-text">查看全部黑名单</span>
+                    <span class="session-more-arrow" aria-hidden="true">→</span>
+                  </button>
+                </div>
               </div>
               <div class="settings-actions">
                 <button class="btn" type="button" id="revoke-others-btn">下线其它设备</button>
@@ -735,6 +747,36 @@
               </div>
               <div class="auth-error" id="backup-error"></div>
             </section>
+          </div>
+        </section>
+
+        <!-- 会话记录二级页：历史会话 / 黑名单的完整列表 -->
+        <section class="admin-session-archive" id="admin-session-archive" hidden>
+          <header class="session-archive-head">
+            <button class="btn editor-back" type="button" onclick="cms.backToSettings()" aria-label="返回管理">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+              <span>返回管理</span>
+            </button>
+            <div class="session-archive-copy">
+              <span class="editor-kicker">安全 · 登录记录</span>
+              <h2 class="settings-title" id="session-archive-title">历史会话</h2>
+              <p class="settings-desc" id="session-archive-desc">已离线的登录设备，按最近结束时间排序</p>
+            </div>
+            <span class="settings-badge" id="session-archive-count">0 条</span>
+          </header>
+
+          <div class="session-archive-tabs" role="tablist" aria-label="会话记录分类">
+            <button class="session-archive-tab is-active" type="button" role="tab" aria-selected="true" data-archive="history" onclick="cms.setSessionArchiveTab('history')">
+              历史会话 <span class="session-archive-tab-count" id="session-archive-history-count">0</span>
+            </button>
+            <button class="session-archive-tab" type="button" role="tab" aria-selected="false" data-archive="blocked" onclick="cms.setSessionArchiveTab('blocked')">
+              黑名单 <span class="session-archive-tab-count" id="session-archive-blocked-count">0</span>
+            </button>
+          </div>
+
+          <div class="session-archive-body">
+            <ul class="session-list session-archive-list" id="session-archive-list"></ul>
+            <div class="auth-error" id="session-archive-error"></div>
           </div>
         </section>
     <section class="admin-settings" id="admin-probe" hidden>
