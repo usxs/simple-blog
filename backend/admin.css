@@ -2124,3 +2124,623 @@ body.md-lightbox-locked {
   .admin-post-editor .editor-meta .field--wide { grid-column: auto; }
   .admin-post-editor .editor-head-actions { width: 100%; }
 }
+
+/* ==========================================================================
+   Unslop editorial pass · 文章编辑页
+   方向：克制、精确、编辑室感。稿纸、墨、校样线。
+   只改排版与细节，保留原有黑白主题和中性色。
+   ========================================================================== */
+
+/* ---- 1. 页面节奏：4px 网格 ---- */
+.admin-post-editor {
+  gap: 20px;
+  --editor-pad: 24px;
+}
+
+/* ---- 2. 头部：从工具条变成稿件抬头 ---- */
+.admin-post-editor .editor-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 0 0 20px;
+  border-bottom: 1px solid var(--border);
+}
+.admin-post-editor .editor-head-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+.editor-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  height: 32px;
+  padding: 0 10px 0 6px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.editor-back svg { width: 16px; height: 16px; }
+.editor-back:hover {
+  color: var(--text-primary);
+  background: var(--bg-subtle);
+  border-color: var(--border);
+  opacity: 1;
+}
+.editor-back:focus-visible,
+.admin-post-editor .btn:focus-visible,
+.md-btn:focus-visible,
+.post-mode-btn:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+}
+.editor-head-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding-top: 1px;
+}
+.editor-kicker {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.4;
+  letter-spacing: .04em;
+  color: var(--text-muted);
+}
+.admin-post-editor .editor-head-title {
+  font-size: 22px;
+  line-height: 1.3;
+  font-weight: 500;
+  letter-spacing: -.02em;
+  overflow-wrap: anywhere;
+}
+.admin-post-editor .editor-head .settings-tip {
+  display: flex;
+  align-items: center;
+  flex-basis: auto;
+  order: 0;
+  margin-top: 1px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+#post-editor-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex: 0 0 auto;
+}
+#post-editor-status[data-state="encrypted"]::before { background: var(--status-warn); }
+#post-editor-status[data-state="unlocked"]::before { background: var(--status-ok); }
+.admin-post-editor .editor-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding-top: 2px;
+}
+.admin-post-editor .editor-head-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.admin-post-editor .editor-head-actions .btn-danger {
+  color: var(--danger);
+  background: transparent;
+}
+.admin-post-editor .editor-head-actions .btn-danger:hover {
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  opacity: 1;
+}
+
+/* ---- 3. 元信息：标题独占一行，其余三项成组 ---- */
+.admin-post-editor .editor-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, .8fr) minmax(0, 1.1fr);
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-surface);
+  box-shadow: none;
+}
+.admin-post-editor .editor-meta-title { grid-column: 1 / -1; }
+.admin-post-editor .editor-meta .field { gap: 8px; }
+.admin-post-editor .editor-meta .field-label {
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+.admin-post-editor .editor-meta .field-input {
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: var(--bg-canvas);
+  font-size: 13.5px;
+}
+.admin-post-editor .editor-meta-title .field-input {
+  height: 44px;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -.01em;
+}
+.admin-post-editor .editor-meta-id .field-input,
+.admin-post-editor .editor-meta-date .field-input {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+.admin-post-editor .field-input:focus,
+.admin-post-editor .field-textarea:focus {
+  border-color: var(--text-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--text-primary) 7%, transparent);
+}
+
+/* ---- 4. 开关与口令：三张独立卡片，不再卡片套卡片 ---- */
+.admin-post-editor .editor-flags {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.editor-switch {
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-surface);
+}
+.editor-switch:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-surface);
+}
+.editor-switch-title { font-size: 13.5px; }
+.editor-switch-desc { font-size: 12px; line-height: 1.5; }
+.admin-post-editor .editor-password-field {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-surface);
+}
+.admin-post-editor .editor-password-field .field-label { font-size: 12px; }
+.admin-post-editor .editor-password-field .editor-password {
+  width: 100%;
+  height: 40px;
+  background: var(--bg-canvas);
+}
+.admin-post-editor .editor-password-field .field-hint {
+  grid-column: 2;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* ---- 5. 工具栏：一组一个语义，图标统一 16px / 1.5 stroke ---- */
+.admin-post-editor .md-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: nowrap;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.admin-post-editor .md-toolbar::-webkit-scrollbar { display: none; }
+.md-group { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+.admin-post-editor .md-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1;
+}
+.admin-post-editor .md-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-subtle);
+  border-color: var(--border);
+}
+.admin-post-editor .md-btn svg { width: 16px; height: 16px; flex: 0 0 auto; }
+.admin-post-editor .md-btn-text { font-family: var(--font-sans); font-weight: 500; }
+.admin-post-editor .md-btn-text[data-md="bold"] b { font-weight: 600; }
+.admin-post-editor .md-btn-text[data-md="italic"] i { font-style: italic; }
+.admin-post-editor .md-btn-text[data-md="strike"] s { text-decoration: line-through; }
+.admin-post-editor .md-sep { height: 20px; margin: 0 4px; background: var(--border); }
+.admin-post-editor .md-btn-lock,
+.admin-post-editor .md-btn-unlock {
+  padding: 0 10px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
+.admin-post-editor .md-btn-lock {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+.admin-post-editor .md-btn-unlock {
+  color: var(--text-secondary);
+  border-color: var(--border);
+}
+.admin-post-editor .md-toolbar-tip { display: none; }
+
+/* ---- 6. 视图切换：分段控件 + 键帽提示 ---- */
+.admin-post-editor .editor-mode-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  margin: 0;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-subtle);
+}
+.editor-mode-group { display: flex; align-items: center; gap: 2px; }
+.admin-post-editor .post-mode-btn {
+  min-width: 72px;
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+.admin-post-editor .post-mode-btn:hover {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--bg-surface) 55%, transparent);
+}
+.admin-post-editor .post-mode-btn.active {
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .07);
+  font-weight: 500;
+}
+.admin-post-editor .editor-mode-tabs .md-toolbar-tip {
+  display: inline;
+  margin: 0 8px 0 0;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.admin-post-editor kbd {
+  display: inline-block;
+  min-width: 17px;
+  padding: 2px 4px;
+  margin: 0 2px;
+  border: 1px solid var(--border);
+  border-bottom-color: var(--border-strong);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+/* ---- 7. 写作区：一张稿纸，两侧有自己的抬头 ---- */
+.admin-post-editor .post-workspace {
+  display: grid;
+  min-height: 520px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+.admin-post-editor .post-workspace[data-mode="compare"] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.admin-post-editor .markdown-source,
+.admin-post-editor .markdown-preview {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--bg-surface);
+}
+.admin-post-editor .markdown-preview { overflow: visible; }
+.admin-post-editor .post-workspace[data-mode="compare"] .markdown-preview {
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+}
+.pane-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  height: 40px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-subtle);
+}
+.pane-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: .04em;
+  color: var(--text-secondary);
+}
+.pane-hint {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+.admin-post-editor .markdown-source .dropzone-wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.admin-post-editor .post-workspace .field-textarea {
+  flex: 1;
+  width: 100%;
+  min-height: 480px;
+  padding: 20px 24px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.85;
+  resize: none;
+}
+.admin-post-editor .post-workspace .field-textarea:focus {
+  border-color: transparent;
+  box-shadow: none;
+}
+.admin-post-editor .post-workspace .drop-hint {
+  padding: 10px 24px 14px;
+  margin: 0;
+  border: 0;
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+.admin-post-editor .post-workspace .markdown-preview-content {
+  padding: 28px 32px 40px;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text-primary);
+}
+.admin-post-editor .post-workspace[data-mode="preview"] .markdown-preview-content {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 40px 40px 64px;
+}
+.admin-post-editor .post-workspace[data-mode="preview"] .markdown-preview {
+  min-height: 520px;
+}
+#post-workspace[data-mode="content"] .field-textarea { min-height: 520px; }
+
+/* ---- 8. 预览排版：把正文当成可读的稿件 ---- */
+.admin-post-editor .markdown-preview-content h1 {
+  margin: 0 0 20px;
+  font-size: 26px;
+  line-height: 1.3;
+  font-weight: 500;
+  letter-spacing: -.02em;
+}
+.admin-post-editor .markdown-preview-content h2 {
+  margin: 32px 0 12px;
+  font-size: 19px;
+  line-height: 1.4;
+  font-weight: 500;
+  letter-spacing: -.01em;
+}
+.admin-post-editor .markdown-preview-content h3 {
+  margin: 24px 0 8px;
+  font-size: 16px;
+  line-height: 1.5;
+  font-weight: 500;
+}
+.admin-post-editor .markdown-preview-content p {
+  margin: 0 0 16px;
+  color: var(--text-primary);
+}
+.admin-post-editor .markdown-preview-content ul,
+.admin-post-editor .markdown-preview-content ol {
+  margin: 0 0 18px;
+  padding-left: 22px;
+}
+.admin-post-editor .markdown-preview-content li { margin: 4px 0; }
+.admin-post-editor .markdown-preview-content blockquote {
+  margin: 22px 0;
+  padding: 12px 16px;
+  border-left: 2px solid var(--text-primary);
+  border-radius: 0 6px 6px 0;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+}
+.admin-post-editor .markdown-preview-content blockquote p { margin: 0; }
+.admin-post-editor .markdown-preview-content code,
+.admin-post-editor .markdown-preview-content pre {
+  font-family: var(--font-mono);
+}
+.admin-post-editor .markdown-preview-content code {
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: var(--bg-subtle);
+  font-size: 12.5px;
+}
+.admin-post-editor .markdown-preview-content pre {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-subtle);
+  line-height: 1.7;
+  overflow: auto;
+}
+.admin-post-editor .markdown-preview-content pre code {
+  padding: 0;
+  background: transparent;
+}
+.admin-post-editor .markdown-preview-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+.admin-post-editor .markdown-preview-content hr {
+  margin: 28px 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+#post-preview:empty::before {
+  content: "开始写作后，预览会出现在这里";
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+/* ---- 9. 响应式：让窄屏回到单列阅读 ---- */
+@media (max-width: 960px) {
+  .admin-post-editor .editor-meta { grid-template-columns: 1fr 1fr; }
+  .admin-post-editor .editor-meta-tags { grid-column: 1 / -1; }
+}
+@media (max-width: 720px) {
+  .admin-post-editor { gap: 16px; }
+  .admin-post-editor .editor-head {
+    flex-direction: column;
+    gap: 16px;
+    padding-bottom: 16px;
+  }
+  .admin-post-editor .editor-head-left {
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+  .editor-back { margin-left: -6px; }
+  .admin-post-editor .editor-head-title { font-size: 20px; }
+  .admin-post-editor .editor-head-actions { width: 100%; padding-top: 0; }
+  .admin-post-editor .editor-head-actions .btn { flex: 1; }
+  .admin-post-editor .editor-meta {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 16px;
+  }
+  .admin-post-editor .editor-meta-title,
+  .admin-post-editor .editor-meta-id,
+  .admin-post-editor .editor-meta-date,
+  .admin-post-editor .editor-meta-tags { grid-column: auto; }
+  .admin-post-editor .editor-flags { grid-template-columns: 1fr; }
+  .admin-post-editor .editor-password-field {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    padding: 14px;
+  }
+  .admin-post-editor .editor-password-field .field-label,
+  .admin-post-editor .editor-password-field .editor-password,
+  .admin-post-editor .editor-password-field .field-hint { grid-column: 1; }
+  .admin-post-editor .md-toolbar { position: static; }
+  .admin-post-editor .editor-mode-tabs {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 6px;
+  }
+  .editor-mode-group { width: 100%; }
+  .admin-post-editor .post-mode-btn { flex: 1; min-width: 0; }
+  .admin-post-editor .editor-mode-tabs .md-toolbar-tip { display: none; }
+  .admin-post-editor .post-workspace { min-height: 0; }
+  .admin-post-editor .post-workspace[data-mode="compare"] { grid-template-columns: 1fr; }
+  .admin-post-editor .post-workspace[data-mode="compare"] .markdown-preview {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+  .admin-post-editor .post-workspace .field-textarea {
+    min-height: 380px;
+    padding: 16px 18px;
+    font-size: 12.5px;
+    line-height: 1.8;
+  }
+  .admin-post-editor .post-workspace .drop-hint { padding: 8px 18px 12px; }
+  .pane-head { height: 36px; padding: 0 18px; }
+  .admin-post-editor .post-workspace .markdown-preview-content {
+    padding: 24px 18px 36px;
+    font-size: 14px;
+  }
+  .admin-post-editor .post-workspace[data-mode="preview"] .markdown-preview-content {
+    padding: 24px 18px 36px;
+  }
+  #post-workspace[data-mode="content"] .field-textarea,
+  .admin-post-editor .post-workspace[data-mode="preview"] .markdown-preview { min-height: 420px; }
+}
+
+.admin-post-editor .md-btn-quote span {
+  display: block;
+  font-family: Georgia, "Times New Roman", "Songti SC", serif;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1;
+  transform: translateY(4px);
+}
+
+/* 移动端工具栏：不把操作藏在横向滚动里，改为换行并给足触控高度 */
+@media (max-width: 720px) {
+  .admin-post-editor .md-toolbar {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+  .admin-post-editor .md-btn {
+    min-width: 36px;
+    height: 36px;
+  }
+  .admin-post-editor .post-mode-btn { height: 36px; }
+  .admin-post-editor .md-group-lock {
+    flex: 1 0 100%;
+    justify-content: flex-end;
+    margin-top: 2px;
+    padding-top: 5px;
+    border-top: 1px solid var(--border);
+  }
+}
+
+/* 平板及以下：工具栏换行，用组间距代替会在行尾悬空的分隔线 */
+@media (max-width: 920px) {
+  .admin-post-editor .md-toolbar {
+    flex-wrap: wrap;
+    overflow: visible;
+    column-gap: 8px;
+    row-gap: 2px;
+  }
+  .admin-post-editor .md-sep { display: none; }
+}

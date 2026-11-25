@@ -1216,7 +1216,7 @@ var cms = {
       }).join('');
       var badges = '';
       if (p.hidden) badges += '<span class="post-badge post-badge--hidden">已隐藏</span>';
-      if (p.locked) badges += '<span class="post-badge post-badge--lock">🔒 已加密</span>';
+      if (p.locked) badges += '<span class="post-badge post-badge--lock">已加密</span>';
       var pid = String(p.id || '');
       return '<li class="posts-item" data-post-id="' + cms.escape(pid) + '">' +
         '<div class="posts-item-main">' +
@@ -1275,13 +1275,16 @@ var cms = {
     document.getElementById('post-lock-bar').hidden = !locked;
     document.getElementById('post-unlock-input').value = '';
     document.getElementById('post-unlock-error').textContent = '';
-    document.getElementById('post-editor-title').textContent = p ? ('编辑文章 · ' + (p.title || p.id)) : '新建文章';
+    document.getElementById('post-editor-kicker').textContent = p ? '编辑稿件' : '新建稿件';
+    document.getElementById('post-editor-title').textContent = p ? (p.title || p.id) : '新建文章';
     document.getElementById('post-delete-btn').style.display = p ? '' : 'none';
-    document.getElementById('post-editor-status').textContent = locked
-      ? '已加密 · 输入口令解锁后可编辑正文'
-      : (encrypted && p && p.autoUnlocked ? '已加密 · 后端已自动解密，可直接编辑（前台仍需口令）' : (p ? ('ID: ' + p.id) : 'NEW'));
+    var statusEl = document.getElementById('post-editor-status');
+    statusEl.textContent = locked
+      ? '已加密 · 输入口令后解锁正文'
+      : (encrypted && p && p.autoUnlocked ? '后端已自动解密 · 前台仍需口令' : (p ? ('ID · ' + p.id) : '尚未保存'));
+    statusEl.dataset.state = locked ? 'locked' : (encrypted && p && p.autoUnlocked ? 'encrypted' : 'draft');
     document.getElementById('post-error').textContent = '';
-    document.getElementById('md-toolbar-tip').textContent = locked ? '请先解锁正文' : '选中文字后点按钮即可套用格式';
+    document.getElementById('md-toolbar-tip').textContent = locked ? '请先解锁正文' : '选中文字后套用格式';
     this.applyPostMode();
     this.renderPostPreview();
   },
@@ -1315,8 +1318,9 @@ var cms = {
       this.editorUnlocked = true;
       this.editorPassword = pwd;
       document.getElementById('post-lock-bar').hidden = true;
-      document.getElementById('post-editor-status').textContent = '已解锁 · 可编辑';
-      document.getElementById('md-toolbar-tip').textContent = '选中文字后点按钮即可套用格式';
+      document.getElementById('post-editor-status').textContent = '已解锁 · 可编辑正文';
+      document.getElementById('post-editor-status').dataset.state = 'unlocked';
+      document.getElementById('md-toolbar-tip').textContent = '选中文字后套用格式';
       this.renderPostPreview();
       this.notify('已解锁，可以编辑正文了');
     } catch (e) {
