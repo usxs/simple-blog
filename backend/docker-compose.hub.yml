@@ -1,4 +1,4 @@
-# 直接用 Docker Hub 上的镜像启动（不需要源码，也不需要 Dockerfile）
+# 直接用 GHCR 上的镜像启动（不需要源码，也不需要 Dockerfile）
 #
 #   mkdir -p data article Musings img file && touch config.json
 #   docker compose -f docker-compose.hub.yml up -d
@@ -10,7 +10,7 @@
 
 services:
   backend:
-    image: ${IMAGE_NAME:-starspacec/simple-blog-backend}:${IMAGE_TAG:-latest}
+    image: ${IMAGE_NAME:-ghcr.io/usxs/simple-blog-backend}:${IMAGE_TAG:-latest}
     container_name: simple-blog-backend
     restart: unless-stopped
     user: "1000:1000"

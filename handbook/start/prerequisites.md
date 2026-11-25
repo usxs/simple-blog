@@ -72,13 +72,13 @@ img/、file/           # 图片与附件仍是文件，按日期分目录
 
 === "现成镜像（最快）"
 
-    直接用 Docker Hub 上构建好的镜像，不需要源码。标签按版本分：
+    直接用 GHCR 上构建好的公开镜像，不需要源码。标签按版本分：
 
     | 版本 | 拉取 |
     | --- | --- |
-    | V1（两段式，文件存储） | `docker pull starspacec/simple-blog-backend:latest` |
-    | V2（两段式，SQLite） | `docker pull starspacec/simple-blog-backend:v2` |
-    | V3（单体，站点 + 后台） | `docker pull starspacec/simple-blog-backend:v3` |
+    | V1（两段式，文件存储） | `docker pull ghcr.io/usxs/simple-blog-backend:latest` |
+    | V2（两段式，SQLite） | `docker pull ghcr.io/usxs/simple-blog-backend:v2` |
+    | V3（单体，站点 + 后台） | `docker pull ghcr.io/usxs/simple-blog-backend:v3` |
 
     详见 [部署后端 → 方式 0](backend.md#方式-0用现成镜像) 与 [Docker 镜像](../ref/docker.md)。
 

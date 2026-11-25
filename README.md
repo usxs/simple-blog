@@ -7,8 +7,7 @@
 [![Cloudflare Pages](https://img.shields.io/badge/Cloudflare%20Pages-deployed-F38020?logo=cloudflare&logoColor=white)](https://pages.cloudflare.com)
 [![Docs](https://img.shields.io/badge/docs-usxs.github.io%2Fsimple--blog-555?logo=readthedocs&logoColor=white)](https://usxs.github.io/simple-blog/)
 
-[![Docker](https://img.shields.io/badge/docker-starspacec%2Fsimple--blog--backend-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/starspacec/simple-blog-backend)
-[![Docker pulls](https://img.shields.io/docker/pulls/starspacec/simple-blog-backend?logo=docker&logoColor=white)](https://hub.docker.com/r/starspacec/simple-blog-backend)
+[![GHCR](https://img.shields.io/badge/ghcr.io-usxs%2Fsimple--blog--backend-2496ED?logo=github&logoColor=white)](https://github.com/usxs/simple-blog/pkgs/container/simple-blog-backend)
 [![Version](https://img.shields.io/github/v/tag/usxs/simple-blog?logo=git&logoColor=white)](https://github.com/usxs/simple-blog/releases)
 [![Stars](https://img.shields.io/github/stars/usxs/simple-blog?logo=github&logoColor=white)](https://github.com/usxs/simple-blog/stargazers)
 [![Last commit](https://img.shields.io/github/last-commit/usxs/simple-blog?logo=git&logoColor=white)](https://github.com/usxs/simple-blog/commits/main)
@@ -133,7 +132,7 @@
 | 栏目排序 | 在「管理 → 前台栏目」拖动左侧 ⋮⋮ 调整顺序，桌面侧边栏、手机底栏、后台侧边栏三处同步生效（顺序存在 `data/site.json`） |
 | 自定义路径 | 栏目路径可改，`/posts`、`/diary` 之类都行；改名后旧地址仍可访问并自动跳转，导航链接、`sitemap.xml`、SSR 元信息同步更新 |
 | 后台界面 | 所有能替换的二值选项统一为 Switch 开关；文章编辑页采用校样式排版，工具栏不再用 emoji 当图标；顶部可切换内容 / 预览 / 对照，写作区带等宽 pane 标签与键帽提示 |
-| Docker 镜像 | V1 / V2 / V3 共用 `starspacec/simple-blog-backend`，稳定标签分别为 `latest`、`v2`、`v3`；多架构（`linux/amd64` + `linux/arm64`），GitHub Actions 按分支自动构建，V3 一个容器同时提供站点与后台 |
+| Docker 镜像 | V1 / V2 / V3 共用 `ghcr.io/usxs/simple-blog-backend`，稳定标签分别为 `latest`、`v2`、`v3`；多架构（`linux/amd64` + `linux/arm64`），GitHub Actions 按分支自动构建，V3 一个容器同时提供站点与后台 |
 | 部署版本 | 鼠标悬停侧边栏「节点 ONLINE」弹出小气泡，显示当前线上部署的短版本号、提交与分支，排查「线上到底是哪一版」很方便 |
 | 文章搜索 | 文章列表页搜索框：标题 / 摘要 / 标签模糊匹配，中文按子串、英文支持子序列；输入法组合结束后立即过滤，支持回车与 Esc 清空，列表只更新容器不重建输入框 |
 | 移动端 | ≤860px 自动切单列布局并显示底部悬浮导航；底栏是「液态玻璃」样式，除首页外向下滚动自动收起、向上滚动出现，320–430px 窄屏 8 个入口一屏放得下 |
@@ -222,7 +221,7 @@ simple-blog/
 │   ├── scripts/              # 命令行迁移与导入导出
 │   ├── Dockerfile                # 镜像：node:22-alpine + sharp，非 root，带 healthcheck
 │   ├── docker-compose.yml        # 从源码构建（docker compose up -d --build）
-│   ├── docker-compose.hub.yml    # 直接用 Docker Hub 镜像（无需源码）
+│   ├── docker-compose.hub.yml    # 直接用 GHCR 镜像（无需源码）
 │   ├── .env.example
 │   ├── config.json           # 工具/状态/奇思妙想的初始空数据（V1 / STORE=file 用）
 │   └── data/                 # 运行时生成：blog.db、auth.json、sessions.json、验证码密钥等
@@ -279,7 +278,7 @@ cd simple-blog
 
 #### 2.0 用现成镜像（推荐，不需要源码）
 
-镜像发布在 Docker Hub：<https://hub.docker.com/r/starspacec/simple-blog-backend>，覆盖 `linux/amd64` 与 `linux/arm64`。三个分支各有一个稳定标签：
+镜像发布在 GHCR（GitHub Container Registry）：<https://github.com/usxs/simple-blog/pkgs/container/simple-blog-backend>，公开可拉取，覆盖 `linux/amd64` 与 `linux/arm64`。三个分支各有一个稳定标签：
 
 | 标签 | 版本 | 启动后得到 |
 | --- | --- | --- |
@@ -301,7 +300,7 @@ docker run -d --name simple-blog --restart unless-stopped \
   -v "$PWD/data:/app/data" -v "$PWD/img:/app/img" -v "$PWD/file:/app/file" \
   -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD='换成你自己的强密码' \
   -e SITE_PUBLIC_URL='https://blog.example.com' \
-  starspacec/simple-blog-backend:v3
+  ghcr.io/usxs/simple-blog-backend:v3
 ```
 
 容器起来后，在服务器上访问 `http://127.0.0.1:33001/` 就是站点，后台在同域的 `/admin`；配好 Nginx 后对外即可。V3 不需要 `BACKEND_PUBLIC_URL`，也不用再部署前端。
@@ -323,7 +322,7 @@ docker run -d --name simple-blog-backend --restart unless-stopped \
   -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD='换成你自己的强密码' \
   -e SITE_PUBLIC_URL='https://www.example.com' \
   -e BACKEND_PUBLIC_URL='https://api.example.com' \
-  starspacec/simple-blog-backend:latest
+  ghcr.io/usxs/simple-blog-backend:latest
 ```
 
 V2 把镜像换成 `:v2`，SQLite 只需要 `data`（数据库在 `data/blog.db`）、`img`、`file` 三个卷；`config.json`、`article`、`Musings` 只在 `STORE=file` 时才需要。

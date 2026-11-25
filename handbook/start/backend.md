@@ -4,7 +4,7 @@
 
 ## 方式 0：用现成镜像
 
-镜像：`starspacec/simple-blog-backend`（Docker Hub，`linux/amd64` + `linux/arm64`）。三个分支各有稳定标签：
+镜像：`ghcr.io/usxs/simple-blog-backend`（GHCR，`linux/amd64` + `linux/arm64`）。三个分支各有稳定标签：
 
 | 标签 | 版本 | 形态 |
 | --- | --- | --- |
@@ -23,7 +23,7 @@ docker run -d --name simple-blog --restart unless-stopped \
   -v "$PWD/data:/app/data" -v "$PWD/img:/app/img" -v "$PWD/file:/app/file" \
   -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD='换成你自己的强密码' \
   -e SITE_PUBLIC_URL='https://blog.example.com' \
-  starspacec/simple-blog-backend:v3
+  ghcr.io/usxs/simple-blog-backend:v3
 ```
 
 打开 `http://服务器IP:33001/` 是站点，`/admin` 是后台。V2 / V3 的完整说明见 [Docker 镜像](../ref/docker.md) 与 [部署 V3 单体版](monolith.md)。
@@ -44,7 +44,7 @@ docker run -d --name simple-blog-backend --restart unless-stopped \
   -e ADMIN_PASSWORD='换成你自己的强密码' \
   -e SITE_PUBLIC_URL='https://www.example.com' \
   -e BACKEND_PUBLIC_URL='https://api.example.com' \
-  starspacec/simple-blog-backend:latest
+  ghcr.io/usxs/simple-blog-backend:latest
 ```
 
 用 compose 的话，从对应分支取这两个文件，改名 `.env` 后启动（V1 示例；V2 / V3 换 URL 里的分支和 `IMAGE_TAG`）：
