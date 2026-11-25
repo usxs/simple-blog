@@ -307,10 +307,12 @@ function render(pathname, opts) {
     }
     const post = findPost(id);
     if (!post) return null;
-    if (post.hidden || post.enc) return null;   // 隐藏/加密文章交给前端按登录态处理
+    if (post.hidden) return null;               // 隐藏文章：SSR 不直出，交给前端拿 404
+    if (post.enc) return { status: 200, html: indexHtml, cache: 'no-store' }; // 加密文章：只发骨架，正文由前端解锁
     const html = buildArticleHtml(indexHtml, post, base + '/post/' + encodeURIComponent(String(post.id)), info);
     if (!html) return null;
-    return { status: 200, html: html, cache: 'public, max-age=60' };
+    // 文章状态随时可能改为隐藏/加密，不做浏览器或中间层缓存
+    return { status: 200, html: html, cache: 'no-store' };
   }
 
   // 栏目页：/posts、/moment、/links……（含后台改过的自定义路径）

@@ -6,6 +6,7 @@ var SITE_CONFIG = {
   homeBio: '这里是我的个人博客，记录技术、折腾与生活。',
   // V3 前后端不分离：接口就在同一个域名下，留空即同源
   apiBaseUrl: '',
+  whitelistEnabled: true,
   probeUrl: '',
   icpText: '',
   siteStartDate: '2026-01-01',
@@ -286,6 +287,7 @@ function applySitePayload(site) {
   if (!site) return;
   var ssrTitled = Boolean(window.__SSR_META__ && window.__SSR_META__.title);
 
+  SITE_CONFIG.whitelistEnabled = site.whitelistEnabled !== false;
   if (site.name) {
     SITE_CONFIG.name = String(site.name);
     var nameEl = document.getElementById('site-name');
@@ -520,6 +522,7 @@ function sortOldestFirst(arr) {
 var linkGuard = {
   pendingUrl: '',
   isWhitelisted: function (urlString) {
+    if (SITE_CONFIG.whitelistEnabled === false) return true;
     try {
       if (urlString.indexOf('mailto:') === 0) return true;
       var targetUrl = new URL(urlString, window.location.origin);
@@ -654,7 +657,11 @@ var syncClient = {
   fetchPost: async function (id) {
     var base = SITE_CONFIG.apiBaseUrl.replace(/\/+$/, '');
     var res = await fetch(base + '/api/public/post/' + encodeURIComponent(String(id)) + '?_t=' + Date.now(), { method: 'GET', cache: 'no-store' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (!res.ok) {
+      var err = new Error('HTTP ' + res.status);
+      err.status = res.status;
+      throw err;
+    }
     var payload = await res.json();
     if (!payload || !payload.post) throw new Error('empty post');
     return payload.post;
@@ -1133,17 +1140,42 @@ var router = {
   },
 
   renderPostRoute: async function (id) {
-    var pre = window.__PRERENDERED_POST__;
-    var container = document.getElementById('page-content');
-    if (pre && String(pre.id) === String(id) && container && container.querySelector('.article-reader')) {
-      this.current = 'post';
-      this.syncDock('post');
-      container.classList.add('is-reading');
-      window.scrollTo(0, 0);
-      commentBox.loadSection(pre.id);
-      return;
-    }
+    // 不再直接信任 SSR 直出的正文：隐藏/加密状态必须每次回源确认，
+    // 否则边缘缓存里的一份旧 HTML 会让已隐藏的文章继续可读。
     await this.renderPost(id);
+  },
+
+  // 主题一致的状态页：SPA 内遇到 404/401/403/500 时复用 status.css
+  renderStatusPage: function (code, message) {
+    var codeNum = Number(code) || 500;
+    var map = {
+      401: { title: '需要验证身份', text: '这个页面需要验证身份后才能访问。', note: '如果你是从旧链接进入，请先回到首页重新打开。' },
+      403: { title: '没有访问权限', text: '当前身份没有访问这个页面的权限。', note: '如果这是你自己的内容，请确认链接是否仍然有效。' },
+      404: { title: '页面走丢了', text: '这条链接指向的内容不存在，或者已经被作者隐藏。', note: '它可能已经被移动、删除，或者从来就没有存在过。' },
+      500: { title: '服务暂时不可用', text: '服务暂时不可用，请稍后再试。', note: '你的网络看起来正常，问题出在站点这一侧。' }
+    };
+    var info = map[codeNum] || map[500];
+    var desc = message ? String(message) : info.text;
+    this.current = 'status';
+    this.syncDock('');
+    var container = document.getElementById('page-content');
+    if (!container) return;
+    container.classList.remove('is-reading');
+    container.innerHTML =
+      '<section class="status-page status-screen" role="alert">' +
+        '<div class="status-card">' +
+          '<p class="status-kicker">ERROR ' + codeNum + '</p>' +
+          '<h1 class="status-title">' + escapeHtml(info.title) + '</h1>' +
+          '<p class="status-desc">' + escapeHtml(desc) + '</p>' +
+          '<div class="status-actions">' +
+            '<a class="status-btn status-btn--primary" href="/">回到首页</a>' +
+            '<button class="status-btn" type="button" onclick="if (history.length > 1) history.back(); else location.href=\'/\';">返回上一页</button>' +
+          '</div>' +
+          '<p class="status-note">' + escapeHtml(info.note) + '</p>' +
+        '</div>' +
+      '</section>';
+    document.title = codeNum + ' · ' + SITE_CONFIG.name;
+    window.scrollTo(0, 0);
   },
 
   // 栏目被站长关闭时的占位页（不报 404，保持地址可访问）
@@ -1554,13 +1586,7 @@ var router = {
 
   // 渲染单篇文章：支持列表点击与直接通过 #/post/<id> 深链进入（如搜索引擎、分享链接）
   renderPost: async function (id) {
-    if (!this.cachedPosts || !this.cachedPosts.length) {
-      try {
-        this.cachedPosts = sortNewestFirst(await syncClient.fetchModule('posts'));
-      } catch (e) {
-        this.cachedPosts = [];
-      }
-    }
+    if (!this.cachedPosts) this.cachedPosts = [];
     var post = null;
     for (var i = 0; i < this.cachedPosts.length; i++) {
       if (String(this.cachedPosts[i].id) === String(id)) {
@@ -1568,30 +1594,47 @@ var router = {
         break;
       }
     }
-    if (!post) {
-      this.go('posts');
+
+    // 不再因为本地缓存里有正文就跳过请求：隐藏文章必须每次回源确认。
+    var fullPost;
+    try {
+      fullPost = await syncClient.fetchPost(id);
+    } catch (e) {
+      var status = Number(e && e.status) || 0;
+      if (status === 404 || (!status && e && e.message === 'empty post')) {
+        this.cachedPosts = this.cachedPosts.filter(function (p) { return String(p.id) !== String(id); });
+        try { localStorage.removeItem('cache_v1_posts'); } catch (err) {}
+        this.renderStatusPage(404, '这篇文章不存在，或者已经被作者隐藏。');
+        return;
+      }
+      if (status === 401 || status === 403) {
+        this.renderStatusPage(status);
+        return;
+      }
+      this.renderStatusPage(500, '文章加载失败，请稍后再试。');
       return;
     }
-    // /api/sync 匿名只回摘要（无 content），正文单独取，否则文章页只剩标题
-    // 加密文章先取一次：命中口令缓存时服务端会直接回正文，否则只回 locked + enchint
-    if (!post.content) {
-      try {
-        var fullPost = await syncClient.fetchPost(post.id);
-        if (fullPost && (fullPost.content || fullPost.locked)) {
-          var patch = fullPost;
-          if (fullPost.locked) patch = Object.assign({}, fullPost, { content: '' });
-          post = Object.assign({}, post, patch);
-          for (var c = 0; c < this.cachedPosts.length; c++) {
-            if (String(this.cachedPosts[c].id) === String(post.id)) {
-              var rowPatch = { locked: !!fullPost.locked, enchint: fullPost.enchint || '' };
-              if (fullPost.content) rowPatch.content = fullPost.content;
-              this.cachedPosts[c] = Object.assign({}, this.cachedPosts[c], rowPatch);
-              break;
-            }
-          }
-        }
-      } catch (e) {}
+    if (!fullPost || !fullPost.id) {
+      this.renderStatusPage(404, '这篇文章不存在，或者已经被作者隐藏。');
+      return;
     }
+
+    // 加密文章的正文永远不会随公开接口返回；只保留锁定态，避免复用上次解锁的明文。
+    if (fullPost.locked) {
+      fullPost = Object.assign({}, fullPost, { content: '', unlocked: false });
+    }
+    post = Object.assign({}, post || {}, fullPost);
+    var summary = Object.assign({}, post, { content: '', unlocked: false });
+    var found = false;
+    for (var c = 0; c < this.cachedPosts.length; c++) {
+      if (String(this.cachedPosts[c].id) === String(post.id)) {
+        this.cachedPosts[c] = Object.assign({}, this.cachedPosts[c], summary);
+        found = true;
+        break;
+      }
+    }
+    if (!found) this.cachedPosts.unshift(summary);
+
     var isLocked = !!post.locked && !post.unlocked;
     var lockedHtml =
       '<div class="article-lock-card" id="article-lock-card">' +

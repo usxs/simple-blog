@@ -105,6 +105,7 @@ function rowToItem(row) {
     enciv: row.enciv || '',
     enctag: row.enctag || '',
     enchint: row.enchint || '',
+    encpwd: row.encpwd || '',
     mtime: Number(row.mtime) || 0,
     content: row.content || ''
   };
@@ -123,6 +124,7 @@ function itemToRow(item, table) {
     String(item.enciv || ''),
     String(item.enctag || ''),
     String(item.enchint || ''),
+    String(item.encpwd || ''),
     Number(item.mtime) || 0,
     String(item.content || ''),
     Date.now(),
@@ -131,11 +133,11 @@ function itemToRow(item, table) {
 }
 
 const UPSERT_SQL = (table) =>
-  'INSERT INTO ' + table + ' (id, title, date, tag, tags, hidden, enc, encsalt, enciv, enctag, enchint, mtime, content, created_at, updated_at) ' +
-  'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ' +
+  'INSERT INTO ' + table + ' (id, title, date, tag, tags, hidden, enc, encsalt, enciv, enctag, enchint, encpwd, mtime, content, created_at, updated_at) ' +
+  'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ' +
   'ON CONFLICT(id) DO UPDATE SET title = excluded.title, date = excluded.date, tag = excluded.tag, tags = excluded.tags, ' +
   'hidden = excluded.hidden, enc = excluded.enc, encsalt = excluded.encsalt, enciv = excluded.enciv, enctag = excluded.enctag, ' +
-  'enchint = excluded.enchint, mtime = excluded.mtime, content = excluded.content, updated_at = excluded.updated_at';
+  'enchint = excluded.enchint, encpwd = excluded.encpwd, mtime = excluded.mtime, content = excluded.content, updated_at = excluded.updated_at';
 
 // ---- 读 ----
 // 文章是否存在：给路由层用，避免它们直接摸文件路径

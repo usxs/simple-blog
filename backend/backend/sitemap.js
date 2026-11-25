@@ -79,7 +79,7 @@ function buildSitemap() {
     posts = []; // 文章目录异常时仍输出固定页面
   }
   for (const post of posts) {
-    if (!post || !post.id) continue;
+    if (!post || !post.id || post.hidden) continue;
     lines.push('  <url>');
     lines.push(`    <loc>${esc(PUBLIC_SITE_URL + '/post/' + encodeURIComponent(String(post.id)))}</loc>`);
     lines.push(`    <lastmod>${lastmodOf(post.mtime)}</lastmod>`);
