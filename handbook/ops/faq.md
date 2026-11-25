@@ -67,10 +67,18 @@
 ## 数据类
 
 ??? question "备份要备哪些"
-    `config.json`、`article/`、`Musings/`、`img/`、`file/`、`data/`。详见 [备份与升级](backup.md)。
+    V1：`config.json`、`article/`、`Musings/`、`img/`、`file/`、`data/`。
+    V2 / V3：`data/`（含 `blog.db` 与 `-wal` / `-shm`）、`img/`、`file/`。
+    三个版本的后台都能导出便携包（设置 → 迁移），跨版本搬家优先用它。详见 [备份与升级](backup.md)。
 
 ??? question "能直接用 SQLite/MySQL 吗"
-    当前版本不支持，所有数据是文件。文章量上千、评论每天上百时建议评估换存储（见 [安全说明](../security.md)）。
+    能。V2（`v2-sqlite`）与 V3（`v3-monolith`）就是 SQLite 存储，用的是 Node 内置的 `node:sqlite`，不需要额外驱动，也不需要起数据库服务；V1 只有文件存储。MySQL 没有内置实现，要接需要自己写一层存储模块（`backend/backend/storage*.js` 就是那层接口）。
+
+??? question "三个版本有什么区别，能不能换"
+    区别只有「前端在哪」和「数据存哪」，功能与接口一致，数据可以互迁：V1 后台「设置 → 迁移」可一键打包推到 V2 / V3，也可以用 `backend/scripts/migrate-v1-to-v2.js` 直接读旧目录。详见 [版本选择](../start/versions.md)。
+
+??? question "升级后评论提交报「目标文章不存在」"
+    旧版本在 SQLite 模式下用 `article/<id>` 目录判断文章是否存在，换库之后恒为 false。更新到包含 `storage.postExists` 的版本即可（V2 的 `d0d76e5`、V3 的 `8ccc74d` 之后）。
 
 ??? question "忘记管理员密码"
     删掉 `data/auth.json` 重新初始化（会清空两步验证与通行密钥，内容不受影响）。

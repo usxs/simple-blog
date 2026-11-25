@@ -1,5 +1,7 @@
 # 部署前端
 
+> **只适用于 V1 / V2。** V3 是前后端不分离的单体版，前端资源在 `backend/web/` 里由 Node 进程直接发出，不需要 Cloudflare Pages，也就不需要这一步——详见 [部署 V3 单体版](monolith.md)。
+
 前端是纯静态资源（HTML/CSS/JS），外加 `functions/` 里的几个 Cloudflare Pages Functions —— 它们负责把文章页、列表页的 HTML 和 meta 在边缘渲染出来，这样搜索引擎拿到的是完整页面。
 
 ## 1. 把仓库放到自己的账号下
