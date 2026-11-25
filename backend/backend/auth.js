@@ -416,6 +416,8 @@ function archiveSession(store, rec, reason) {
     ip: rec.ip || '',
     ua: rec.ua || '',
     label: rec.label || '',
+    deviceId: rec.deviceId || '',
+    deviceFp: rec.deviceFp || '',
     createdAt: rec.createdAt || 0,
     lastSeenAt: seen,
     endedAt: Date.now(),
@@ -469,6 +471,40 @@ function parseDevice(uaRaw) {
 
 function deviceKey(uaRaw) {
   return sha256hex('ua:' + String(uaRaw || '').slice(0, 200));
+}
+
+// 浏览器侧生成的设备标识：随机 id 用于跨会话识别同一浏览器，指纹哈希作为兜底。
+// 这两个头只用于会话记录归并，不参与鉴权；格式不合法时直接忽略。
+function readDeviceFromRequest(req) {
+  const id = String(req.headers['x-device-id'] || '').trim().toLowerCase();
+  const fp = String(req.headers['x-device-fp'] || '').trim().toLowerCase();
+  return {
+    deviceId: /^[a-f0-9]{32}$/.test(id) ? id : '',
+    deviceFp: /^[a-f0-9]{16,64}$/.test(fp) ? fp : ''
+  };
+}
+
+function tagSessionDevice(req, rec) {
+  if (!rec) return false;
+  const device = readDeviceFromRequest(req);
+  let dirty = false;
+  if (device.deviceId && rec.deviceId !== device.deviceId) {
+    rec.deviceId = device.deviceId;
+    dirty = true;
+  }
+  // 有稳定 id 时仍保留指纹，方便旧记录（无 id）在后续请求中补齐。
+  if (device.deviceFp && rec.deviceFp !== device.deviceFp) {
+    rec.deviceFp = device.deviceFp;
+    dirty = true;
+  }
+  return dirty;
+}
+
+function sessionDeviceKey(rec) {
+  if (!rec) return '';
+  if (rec.deviceId) return 'd:' + rec.deviceId;
+  if (rec.deviceFp) return 'f:' + rec.deviceFp;
+  return '';
 }
 
 // ---------------- IP 归属地（带内存缓存，失败静默） ----------------
@@ -577,7 +613,7 @@ function createSession(req, username) {
   const token = crypto.randomBytes(32).toString('hex');
   const now = Date.now();
   const list = loadSessions();
-  list.push({
+  const rec = {
     id: sha256hex(token),
     username: String(username),
     createdAt: now,
@@ -586,7 +622,9 @@ function createSession(req, username) {
     ip: String(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim(),
     ua: String(req.headers['user-agent'] || '').slice(0, 200),
     label: ''
-  });
+  };
+  tagSessionDevice(req, rec);
+  list.push(rec);
   if (!saveSessions(list)) {
     // 会话无法持久化（数据目录只读等）：按不可用处理，避免"看似登录成功、重启即失效"
     throw new Error('SESSION_PERSIST_FAILED');
@@ -623,6 +661,8 @@ function getSession(req) {
     rec.ip = currentIp;
     dirty = true;
   }
+  // 旧会话没有设备标记时，用当前请求补齐；同一浏览器换 IP 仍归并到同一条设备记录
+  if (tagSessionDevice(req, rec)) dirty = true;
 
   if (now - rec.lastSeenAt > SESSION_RENEW_GAP_MS) {
     rec.lastSeenAt = now;
@@ -1282,15 +1322,37 @@ function sessionOverview(req) {
   const currentId = token ? sha256hex(token) : '';
   const now = Date.now();
   const store = loadStore();
-  const active = store.sessions
+  const activeRecs = store.sessions
     .filter(s => s.expiresAt > now)
-    .sort((a, b) => (Math.max(b.lastSeenAt || 0, lastSeenMem.get(b.id) || 0)) - (Math.max(a.lastSeenAt || 0, lastSeenMem.get(a.id) || 0)))
-    .map(s => sessionView(s, currentId, now, false));
-  const history = store.history
+    .sort((a, b) => (Math.max(b.lastSeenAt || 0, lastSeenMem.get(b.id) || 0)) - (Math.max(a.lastSeenAt || 0, lastSeenMem.get(a.id) || 0)));
+  const active = activeRecs.map(s => sessionView(s, currentId, now, false));
+
+  // 历史会话只展示「已经不在线、且不是当前设备」的记录：
+  // 同一设备退出后重新登录时，旧记录会被当前在线会话覆盖，不再出现在历史里。
+  const activeDeviceKeys = new Set(activeRecs.map(sessionDeviceKey).filter(Boolean));
+  const activeUaKeys = new Set(activeRecs.map(rec => rec.ua ? 'ua:' + deviceKey(rec.ua) : '').filter(Boolean));
+  const seenHistoryKeys = new Set();
+  const historyRecs = [];
+  store.history
     .slice()
     .sort((a, b) => (b.endedAt || 0) - (a.endedAt || 0))
-    .slice(0, 40)
-    .map(h => sessionView(h, currentId, now, true));
+    .forEach(h => {
+      const key = sessionDeviceKey(h);
+      if (key) {
+        if (activeDeviceKeys.has(key)) return;
+        if (seenHistoryKeys.has(key)) return;
+        seenHistoryKeys.add(key);
+        historyRecs.push(h);
+        return;
+      }
+      // 旧记录没有设备标记，用 UA 近似归并；只用于隐藏「同 UA 设备仍在线」的旧记录。
+      const uaKey = h.ua ? 'ua:' + deviceKey(h.ua) : '';
+      if (uaKey && activeUaKeys.has(uaKey)) return;
+      if (uaKey && seenHistoryKeys.has(uaKey)) return;
+      if (uaKey) seenHistoryKeys.add(uaKey);
+      historyRecs.push(h);
+    });
+  const history = historyRecs.slice(0, 40).map(h => sessionView(h, currentId, now, true));
   return { sessions: active, history, blocked: listBlocked() };
 }
 

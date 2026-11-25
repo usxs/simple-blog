@@ -1389,8 +1389,134 @@ body.md-lightbox-locked {
   padding: 9px 11px;
 }
 
+/* 「查看全部」入口：设置页只露出前 3 条，完整记录进入会话档案二级页 */
+.session-more { margin-top: 7px; }
+.session-more-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 11px;
+  border: 1px dashed var(--border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: color .16s ease, border-color .16s ease, background .16s ease;
+}
+.session-more-btn:hover {
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--text-primary) 28%, var(--border));
+  background: color-mix(in srgb, var(--text-primary) 3%, transparent);
+}
+.session-more-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.session-more-arrow {
+  flex: none;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  transition: transform .16s ease;
+}
+.session-more-btn:hover .session-more-arrow { transform: translateX(3px); }
+
+/* 会话档案：历史会话 / 黑名单完整列表 */
+.admin-session-archive {
+  display: block;
+  padding: 4px 2px 40px;
+  max-width: 1080px;
+}
+.admin-session-archive[hidden] { display: none; }
+.session-archive-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 6px 2px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.session-archive-head .editor-back { margin-top: 1px; }
+.session-archive-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.session-archive-copy .settings-title { font-size: 20px; }
+.session-archive-copy .settings-desc { margin-top: 2px; }
+.session-archive-head .settings-badge {
+  margin-top: 2px;
+  white-space: nowrap;
+}
+.session-archive-tabs {
+  display: flex;
+  gap: 2px;
+  margin: 18px 0 0;
+  border-bottom: 1px solid var(--border);
+}
+.session-archive-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: -1px;
+  padding: 9px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color .16s ease, border-color .16s ease;
+}
+.session-archive-tab:hover { color: var(--text-primary); }
+.session-archive-tab.is-active {
+  color: var(--text-primary);
+  border-bottom-color: var(--text-primary);
+}
+.session-archive-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.session-archive-tab-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 16px;
+  text-align: center;
+}
+.session-archive-tab.is-active .session-archive-tab-count {
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--text-primary) 25%, var(--border));
+}
+.session-archive-body {
+  margin-top: 14px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+}
+.session-archive-list { gap: 6px; }
+.session-archive-list .empty-tip {
+  padding: 18px 10px;
+  text-align: center;
+}
+
 @media (max-width: 720px) {
   .ss-fields { grid-template-columns: 1fr; }
+  .session-archive-head { flex-wrap: wrap; }
+  .session-archive-head .editor-back { order: 1; }
+  .session-archive-head .settings-badge { order: 2; margin-left: auto; }
+  .session-archive-copy { order: 3; width: 100%; }
+  .session-archive-tabs { overflow-x: auto; }
 }
 
 /* 跳到卡片时的短暂高亮 */
