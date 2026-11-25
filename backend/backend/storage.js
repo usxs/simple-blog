@@ -536,6 +536,90 @@ function getModuleData(mod) {
   return Array.isArray(cfg[mod]) ? cfg[mod] : [];
 }
 
+// ---- 统一的写入 / 删除入口 ----
+// 文件版直接落盘；数据库版（V2 / V3）实现同样的签名，server.js 无需区分存储形态。
+
+function saveItem(mod, input) {
+  const item = Object.assign({}, input || {});
+  if (mod === 'posts') {
+    item.id = sanitizeId(item.id || item.title || ('post-' + Date.now()));
+    const subDir = path.join(ARTICLE_DIR, item.id);
+    const mdPath = path.join(subDir, item.id + '.md');
+    const isNew = !fs.existsSync(mdPath);
+    if (!fs.existsSync(subDir)) fs.mkdirSync(subDir, { recursive: true });
+    item.date = item.date || cnDateOf(new Date());
+    if (isNew || !item.mtime) item.mtime = Date.now();
+    writeFileAtomic(mdPath, buildMdContent(item, 'posts'));
+    const cmtPath = path.join(subDir, 'comments.json');
+    if (!fs.existsSync(cmtPath)) writeFileAtomic(cmtPath, '[]');
+    return { ok: true, item: item, list: readArticles() };
+  }
+
+  if (mod === 'moments') {
+    item.id = sanitizeId(item.id || ('musing-' + Date.now()));
+    const filePath = path.join(MUSINGS_DIR, item.id + '.md');
+    const isNew = !fs.existsSync(filePath);
+    item.date = item.date || cnNowStamp();
+    if (isNew || !item.mtime) item.mtime = Date.now();
+    writeFileAtomic(filePath, buildMdContent(item, 'moments'));
+    return { ok: true, item: item, list: readMusings() };
+  }
+
+  const cfg = getConfig();
+  if (!Array.isArray(cfg[mod])) cfg[mod] = [];
+  item.id = item.id ? String(item.id) : String(Date.now());
+  const idx = cfg[mod].findIndex(i => String(i.id) === String(item.id));
+  if (idx !== -1) cfg[mod][idx] = Object.assign({}, cfg[mod][idx], item);
+  else cfg[mod].unshift(item);
+  saveConfig(cfg);
+  const list = getConfig()[mod] || [];
+  return { ok: true, item: list.find(i => String(i.id) === String(item.id)) || item, list: list };
+}
+
+function deleteItem(mod, id, options) {
+  const opts = options || {};
+  if (mod === 'posts') {
+    const subDir = path.join(ARTICLE_DIR, sanitizeId(id));
+    if (fs.existsSync(subDir)) fs.rmSync(subDir, { recursive: true, force: true });
+    return { ok: true, list: readArticles() };
+  }
+  if (mod === 'moments') {
+    const filePath = path.join(MUSINGS_DIR, sanitizeId(id) + '.md');
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    return { ok: true, list: readMusings() };
+  }
+  if (mod === 'comments') {
+    const postId = opts.postId ? sanitizeId(opts.postId) : '';
+    if (postId) {
+      const list = readPostComments(postId);
+      const cascade = collectCascadeIds(list, id);
+      savePostComments(postId, list.filter(c => !cascade.has(String(c.id))));
+    } else if (fs.existsSync(ARTICLE_DIR)) {
+      fs.readdirSync(ARTICLE_DIR, { withFileTypes: true }).forEach((ent) => {
+        if (!ent.isDirectory()) return;
+        const list = readPostComments(ent.name);
+        const cascade = collectCascadeIds(list, id);
+        const next = list.filter(c => !cascade.has(String(c.id)));
+        if (next.length !== list.length) savePostComments(ent.name, next);
+      });
+    }
+    return { ok: true, list: readAllCommentsAcrossArticles() };
+  }
+  const cfg = getConfig();
+  if (Array.isArray(cfg[mod])) {
+    cfg[mod] = cfg[mod].filter(i => String(i.id) !== String(id));
+    saveConfig(cfg);
+  }
+  return { ok: true, list: (getConfig()[mod] || []) };
+}
+
+function cnNowStamp() {
+  const t = new Date(Date.now() + 8 * 3600 * 1000);
+  const p = v => String(v).padStart(2, '0');
+  return t.getUTCFullYear() + '-' + p(t.getUTCMonth() + 1) + '-' + p(t.getUTCDate()) +
+    ' ' + p(t.getUTCHours()) + ':' + p(t.getUTCMinutes());
+}
+
 module.exports = {
   ROOT_DIR,
   ARTICLE_DIR,
@@ -562,5 +646,7 @@ module.exports = {
   summarizeItem,
   excerptOf,
   searchArticles,
-  normalizeTags
+  normalizeTags,
+  saveItem,
+  deleteItem
 };

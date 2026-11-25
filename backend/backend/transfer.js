@@ -179,9 +179,8 @@ function writeImported(posts, assets) {
     const id = uniqueId(storage.sanitizeId(post.id || post.title || ('imported-' + Date.now())), taken);
     taken.add(id);
     idMap[post.id] = id;
-    const dir = path.join(storage.ARTICLE_DIR, id);
-    ensureDir(dir);
     const item = {
+      id: id,
       title: post.title,
       date: post.date,
       tags: post.tags,
@@ -190,9 +189,9 @@ function writeImported(posts, assets) {
       mtime: mtimeOf(post.date),
       content: post.content || ''
     };
-    fs.writeFileSync(path.join(dir, id + '.md'), storage.buildMdContent(item, 'posts'), 'utf8');
-    const cmt = path.join(dir, 'comments.json');
-    if (!fs.existsSync(cmt)) fs.writeFileSync(cmt, '[]', 'utf8');
+    // 走存储层：文件版写 article/<id>/<id>.md + comments.json，数据库版写表
+    storage.saveItem('posts', item);
+    storage.savePostComments(id, []);
     created.push({ id, title: post.title, date: post.date });
   });
 

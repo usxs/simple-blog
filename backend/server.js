@@ -89,6 +89,9 @@ const {
   getModuleData
 } = require('./backend/storage');
 
+// 存储层的完整命名空间：V2 / V3 分支换成 SQLite 实现时，这里不需要改动
+const storage = require('./backend/storage');
+
 const {
   runAllProbes,
   startProbeScheduler
@@ -1027,51 +1030,9 @@ const server = http.createServer((req, res) => {
       try {
         const parsed = JSON.parse(body);
         const mod = parsed.module;
-        const item = parsed.item || {};
+        let item = parsed.item || {};
 
-        if (mod === 'posts') {
-          item.id = sanitizeId(item.id || item.title || ('post-' + Date.now()));
-          const postSubDir = path.join(ARTICLE_DIR, item.id);
-          const mdFilePath = path.join(postSubDir, item.id + '.md');
-          const isNew = !fs.existsSync(mdFilePath);
-
-          if (!fs.existsSync(postSubDir)) {
-            fs.mkdirSync(postSubDir, { recursive: true });
-          }
-
-          item.date = item.date || cnTodayStamp();
-          if (isNew || !item.mtime) item.mtime = Date.now();
-          fs.writeFileSync(mdFilePath, buildMdContent(item, 'posts'), 'utf8');
-
-          const cmtPath = path.join(postSubDir, 'comments.json');
-          if (!fs.existsSync(cmtPath)) {
-            fs.writeFileSync(cmtPath, JSON.stringify([], null, 2), 'utf8');
-          }
-
-          // IndexNow 即时推送（Bing 等），fire-and-forget
-          notifyIndexNow(PUBLIC_SITE_URL + '/post/' + encodeURIComponent(String(item.id)));
-
-          const list = readArticles();
-          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-          return res.end(JSON.stringify({ ok: true, item: item, data: list, version: getHash(list) }));
-        }
-
-        if (mod === 'moments') {
-          const isNew = !item.id || !fs.existsSync(path.join(MUSINGS_DIR, sanitizeId(item.id) + '.md'));
-          item.id = sanitizeId(item.id || ('musing-' + Date.now()));
-          item.date = item.date || cnNowStamp();
-          if (isNew || !item.mtime) item.mtime = Date.now();
-          fs.writeFileSync(path.join(MUSINGS_DIR, item.id + '.md'), buildMdContent(item, 'moments'), 'utf8');
-          // 瞬间同步到 Telegram（后台异步，失败不影响保存）
-          telegram.syncMoment(item).then(function (r) {
-            if (r && r.ok) console.log('[telegram] 已同步瞬间 ' + item.id);
-            else if (r && r.error) console.warn('[telegram] 同步失败：' + r.error);
-          }).catch(function (e) { console.warn('[telegram] 同步异常：' + (e.message || e)); });
-          const list = readMusings();
-          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-          return res.end(JSON.stringify({ ok: true, item: item, data: list, version: getHash(list) }));
-        }
-
+        // 评论：改某篇文章的评论数组（落盘 / 落库由存储层决定）
         if (mod === 'comments') {
           const postId = sanitizeId(item.postId || '');
           if (!postId || !item.id) {
@@ -1090,9 +1051,7 @@ const server = http.createServer((req, res) => {
           if (item.replyContent !== undefined) {
             target.replyContent = String(item.replyContent || '').trim();
             target.replyAuthor = String(item.replyAuthor || '简单博客').trim() || '简单博客';
-            target.replyDate = target.replyContent
-              ? (cnNowStamp())
-              : '';
+            target.replyDate = target.replyContent ? cnNowStamp() : '';
           }
 
           const previousReply = String(target.replyContent || '');
@@ -1113,22 +1072,26 @@ const server = http.createServer((req, res) => {
           return res.end(JSON.stringify({ ok: true, item: updatedTarget, data: all, version: getHash(all) }));
         }
 
-        const cfg = getConfig();
-        if (!Array.isArray(cfg[mod])) cfg[mod] = [];
-        item.id = item.id ? String(item.id) : String(Date.now());
+        const saved = storage.saveItem(mod, item);
+        item = saved.item;
 
-        const idx = cfg[mod].findIndex(i => String(i.id) === String(item.id));
-        if (idx !== -1) {
-          cfg[mod][idx] = Object.assign({}, cfg[mod][idx], item);
-        } else {
-          cfg[mod].unshift(item);
+        if (mod === 'posts') {
+          // IndexNow 即时推送（Bing 等），fire-and-forget
+          notifyIndexNow(PUBLIC_SITE_URL + '/post/' + encodeURIComponent(String(item.id)));
         }
-        saveConfig(cfg);
+
+        if (mod === 'moments') {
+          // 瞬间同步到 Telegram（后台异步，失败不影响保存）
+          telegram.syncMoment(item).then(function (r) {
+            if (r && r.ok) console.log('[telegram] 已同步瞬间 ' + item.id);
+            else if (r && r.error) console.warn('[telegram] 同步失败：' + r.error);
+          }).catch(function (e) { console.warn('[telegram] 同步异常：' + (e.message || e)); });
+        }
 
         if (mod === 'status') await runAllProbes();
 
-        const updatedCfg = getConfig();
-        const list = updatedCfg[mod] || [];
+        // status 等模块保存后可能被探测结果改写，统一以最新读取结果为准
+        const list = (mod === 'posts' || mod === 'moments') ? saved.list : storage.getModuleData(mod);
         const savedItem = list.find(i => String(i.id) === String(item.id)) || item;
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ ok: true, item: savedItem, data: list, version: getHash(list) }));
@@ -1153,57 +1116,33 @@ const server = http.createServer((req, res) => {
         const id = parsed.id;
 
         if (mod === 'posts') {
-          const postSubDir = path.join(ARTICLE_DIR, sanitizeId(id));
-          if (fs.existsSync(postSubDir)) {
-            fs.rmSync(postSubDir, { recursive: true, force: true });
-          }
+          const postId = sanitizeId(id);
+          storage.deleteItem('posts', postId);
           // 通知 IndexNow 该文章地址已移除（fire-and-forget）
-          notifyIndexNow(PUBLIC_SITE_URL + '/post/' + encodeURIComponent(String(sanitizeId(id))));
+          notifyIndexNow(PUBLIC_SITE_URL + '/post/' + encodeURIComponent(String(postId)));
           const list = readArticles();
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
           return res.end(JSON.stringify({ ok: true, data: list, version: getHash(list) }));
         }
 
         if (mod === 'moments') {
-          const filePath = path.join(MUSINGS_DIR, sanitizeId(id) + '.md');
-          if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+          storage.deleteItem('moments', sanitizeId(id));
           telegram.forgetMoment(sanitizeId(id)).catch(function (e) { console.warn('[telegram] 撤回失败：' + (e.message || e)); });
           const list = readMusings();
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
           return res.end(JSON.stringify({ ok: true, data: list, version: getHash(list) }));
         }
 
+        // 删除父评论时会级联清理其下属的楼中楼
         if (mod === 'comments') {
-          const postId = sanitizeId(parsed.postId || '');
-          if (postId) {
-            const list = readPostComments(postId);
-            const cascadeSet = collectCascadeIds(list, id);
-            const filtered = list.filter(c => !cascadeSet.has(String(c.id)));
-            savePostComments(postId, filtered);
-          } else {
-            const entries = fs.readdirSync(ARTICLE_DIR, { withFileTypes: true });
-            entries.forEach(ent => {
-              if (ent.isDirectory()) {
-                const list = readPostComments(ent.name);
-                const cascadeSet = collectCascadeIds(list, id);
-                const next = list.filter(c => !cascadeSet.has(String(c.id)));
-                if (next.length !== list.length) savePostComments(ent.name, next);
-              }
-            });
-          }
-          const all = readAllCommentsAcrossArticles();
+          const result = storage.deleteItem('comments', id, { postId: parsed.postId });
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-          return res.end(JSON.stringify({ ok: true, data: all, version: getHash(all) }));
+          return res.end(JSON.stringify({ ok: true, data: result.list, version: getHash(result.list) }));
         }
 
-        const cfg = getConfig();
-        if (Array.isArray(cfg[mod])) {
-          cfg[mod] = cfg[mod].filter(i => String(i.id) !== String(id));
-          saveConfig(cfg);
-        }
-        const list = cfg[mod] || [];
+        const result = storage.deleteItem(mod, id);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ ok: true, data: list, version: getHash(list) }));
+        res.end(JSON.stringify({ ok: true, data: result.list, version: getHash(result.list) }));
       } catch (e) {
         res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ error: 'Invalid JSON' }));
