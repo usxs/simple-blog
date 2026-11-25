@@ -1932,6 +1932,9 @@ body.md-lightbox-locked {
   border-radius: 8px;
   background: var(--bg-subtle);
 }
+.transfer-block[hidden] {
+  display: none;
+}
 .transfer-block {
   margin-top: 16px;
   padding-top: 14px;

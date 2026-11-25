@@ -19,6 +19,7 @@
  */
 
 const fs = require('fs');
+const kvfile = require('./kvfile');
 const path = require('path');
 const { ROOT_DIR } = require('./storage');
 
@@ -191,12 +192,8 @@ function normalizeWhitelist(value) {
 }
 
 function readStored() {
-  try {
-    const raw = JSON.parse(fs.readFileSync(SITE_FILE, 'utf8'));
-    return raw && typeof raw === 'object' ? raw : {};
-  } catch (e) {
-    return {};
-  }
+  const raw = kvfile.readJson(SITE_FILE, null);
+  return raw && typeof raw === 'object' ? raw : {};
 }
 
 function pickText(value, fallback, max) {
@@ -363,10 +360,7 @@ function saveSite(patch) {
     adminPath: p.adminPath === undefined ? current.adminPath : normalizeAdminPath(p.adminPath),
     updatedAt: Date.now()
   };
-  ensureDataDir();
-  const tmp = SITE_FILE + '.' + process.pid + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(next, null, 2), { encoding: 'utf8', mode: 0o644 });
-  fs.renameSync(tmp, SITE_FILE);
+  kvfile.writeJson(SITE_FILE, next, { mode: 0o644 });
   return next;
 }
 

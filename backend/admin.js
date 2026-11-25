@@ -3288,6 +3288,20 @@ var cms = {
     if (transferImport) transferImport.addEventListener('click', function () { self.runMarkdownImport(false); });
     var transferExport = document.getElementById('transfer-export-btn');
     if (transferExport) transferExport.addEventListener('click', function () { self.exportMarkdown(); });
+    var bundleImport = document.getElementById('migrate-import-btn');
+    if (bundleImport) bundleImport.addEventListener('click', function () { self.importPortableBundle(); });
+    var tokenReset = document.getElementById('migrate-token-reset');
+    if (tokenReset) tokenReset.addEventListener('click', function () { self.resetMigrateToken(); });
+    var tokenCopy = document.getElementById('migrate-token-copy');
+    if (tokenCopy) {
+      tokenCopy.addEventListener('click', function () {
+        var tokenEl = document.getElementById('migrate-token');
+        var state = document.getElementById('migrate-token-state');
+        if (!tokenEl || !tokenEl.value) return;
+        self.copy(tokenEl.value, '令牌已复制');
+        if (state) state.textContent = '已复制';
+      });
+    }
 
     var backupList = document.getElementById('backup-history');
     if (backupList) {
@@ -3531,7 +3545,9 @@ var cms = {
     }
     this.transferInfo = info;
     var setText = function (id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
-    setText('transfer-version', 'V1 · 文件存储 · v' + (info.version || '?'));
+    var variant = String(info.variant || 'file');
+    var variantLabel = variant === 'sqlite' ? 'SQLite 存储' : '文件存储';
+    setText('transfer-version', (variant === 'sqlite' ? 'V2/V3' : 'V1') + ' · ' + variantLabel + ' · v' + (info.version || '?'));
     var stats = info.stats || {};
     setText('transfer-stat-posts', (stats.posts || 0) + ' 篇');
     setText('transfer-stat-moments', (stats.moments || 0) + ' 条');
@@ -3539,6 +3555,89 @@ var cms = {
     setText('transfer-stat-uploads', (stats.uploads || 0) + ' 个 / ' + this.fmtBytes(stats.uploadBytes || 0));
     this.fillTransferSelect('transfer-import-source', info.sources, 'auto');
     this.fillTransferSelect('transfer-export-target', info.targets, 'hugo');
+
+    // 只有数据库版才有迁移令牌（V1 是推送方，不接收）
+    var receive = document.getElementById('transfer-receive');
+    if (receive) receive.hidden = variant !== 'sqlite';
+    if (variant === 'sqlite') this.loadMigrateToken();
+  },
+
+  loadMigrateToken: async function () {
+    var tokenEl = document.getElementById('migrate-token');
+    if (!tokenEl) return;
+    try {
+      var data = await this.api('/api/admin/migrate/token?_t=' + Date.now());
+      tokenEl.value = (data && data.token) || '';
+      var endpoint = document.getElementById('migrate-endpoint');
+      if (endpoint) endpoint.value = location.origin + '/api/migrate/import';
+    } catch (e) {
+      if (String(e && e.message) === 'unauthorized') return;
+      var state = document.getElementById('migrate-token-state');
+      if (state) state.textContent = '令牌读取失败：' + (e && e.message ? e.message : '未知错误');
+    }
+  },
+
+  importPortableBundle: async function () {
+    var fileEl = document.getElementById('migrate-import-file');
+    var state = document.getElementById('migrate-import-state');
+    var report = document.getElementById('migrate-import-report');
+    if (!fileEl || !fileEl.files || !fileEl.files.length) {
+      if (state) state.textContent = '先选一个迁移包（zip）';
+      return;
+    }
+    var file = fileEl.files[0];
+    var modeEl = document.getElementById('migrate-import-mode');
+    var mode = modeEl ? modeEl.value : 'merge';
+    if (mode === 'replace' && !confirm('覆盖模式会先清空本站现有的文章、瞬间与列表配置，只保留这个包里的内容。继续？')) return;
+    if (state) state.textContent = '导入中…（' + this.fmtBytes(file.size) + '）';
+    if (report) report.innerHTML = '';
+    var push = function (text, warn) {
+      if (!report) return;
+      var li = document.createElement('li');
+      li.textContent = text;
+      if (warn) li.classList.add('is-warn');
+      report.appendChild(li);
+    };
+    try {
+      var res = await fetch(this.getApiUrl('/api/migrate/import?mode=' + encodeURIComponent(mode)), {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/zip' },
+        body: file
+      });
+      var data = await res.json().catch(function () { return null; });
+      if (!res.ok || !data || data.ok === false) {
+        throw new Error((data && data.error) || ('HTTP ' + res.status));
+      }
+      var stats = data.stats || {};
+      push('来源：' + ((data.source && data.source.format) || '便携包') +
+        ' · v' + ((data.source && data.source.version) || '?') +
+        ' · 方式 ' + (stats.mode === 'replace' ? '覆盖' : '合并'));
+      push('导入文章 ' + (stats.posts || 0) + ' 篇、评论 ' + (stats.comments || 0) + ' 条、瞬间 ' +
+        (stats.moments || 0) + ' 条、附件 ' + (stats.uploads || 0) + ' 个');
+      if (stats.modules && stats.modules.length) push('模块设置：' + stats.modules.join('、'));
+      (data.warnings || []).forEach(function (w) { push('提示：' + w, true); });
+      if (state) state.textContent = '导入完成';
+      fileEl.value = '';
+      this.loadTransfer();
+    } catch (e) {
+      if (state) state.textContent = '导入失败';
+      push('导入失败：' + (e && e.message ? e.message : '未知错误'), true);
+    }
+  },
+
+  resetMigrateToken: async function () {
+    var state = document.getElementById('migrate-token-state');
+    if (!confirm('重置后旧令牌立刻失效，已经填在 V1 里的令牌需要重新填写。继续？')) return;
+    if (state) state.textContent = '处理中…';
+    try {
+      var data = await this.api('/api/admin/migrate/token', { method: 'POST', body: {} });
+      var tokenEl = document.getElementById('migrate-token');
+      if (tokenEl) tokenEl.value = (data && data.token) || '';
+      if (state) state.textContent = '已重置';
+    } catch (e) {
+      if (state) state.textContent = '重置失败：' + (e && e.message ? e.message : '未知错误');
+    }
   },
 
   transferOptions: function () {

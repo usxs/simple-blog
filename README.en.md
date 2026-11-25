@@ -126,7 +126,7 @@ Cloudflare Pages (static frontend)
    │  /post/<id>, /posts etc. are SSR-injected by Pages Functions at the edge
    │  /api/* is not on Pages — it calls the backend cross-origin
    ▼
-Your server: Nginx → Docker container (Node 20 + sharp)
+Your server: Nginx → Docker container (Node 22 + SQLite + sharp)
    │
    └── data/ article/ img/ file/ … all plain files on the host
 ```

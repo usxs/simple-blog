@@ -75,6 +75,24 @@
 | POST | `/api/admin/transfer/import-md` | 请求体是 ZIP / `.md` 二进制，query `source` / `name` / `dryRun` |
 | POST | `/api/admin/transfer/export-md` | `{target,ids?}` → `application/zip` 静态博客目录结构 |
 
+### 接收端（V2 / V3）
+
+| 方法 | 路径 | 鉴权 | 说明 |
+| --- | --- | --- | --- |
+| POST | `/api/migrate/import?mode=replace\|merge` | `X-Migrate-Token` 或登录态 | 请求体是 V1 导出的便携包 zip，返回导入统计 |
+| GET | `/api/admin/migrate/token` | 登录态 | 查看当前迁移令牌 |
+| POST | `/api/admin/migrate/token` | 登录态 | 重置令牌（旧令牌立即失效） |
+
+```bash
+# 用令牌导入（不需要 Cookie）
+curl -X POST --data-binary @simple-blog-portable-20261125.zip \
+  -H "X-Migrate-Token: <后台看到的令牌>" \
+  "https://v2.example.com/api/migrate/import?mode=replace"
+```
+
+`mode=replace` 会先清空目标站的文章 / 瞬间 / 列表型模块再导入；`mode=merge`（默认）按 id 覆盖，
+目标站独有的内容原样保留。返回体里的 `stats` 与 `warnings` 会说明每类数据的条数以及被跳过的项。
+
 ## 约定
 
 - 写操作需要 `Content-Type: application/json`（否则 415），以及同源 `Origin`。

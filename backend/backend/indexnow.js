@@ -7,6 +7,7 @@
 //   INDEXNOW_KEY_LOCATION=https://example.com/<KEY>.txt（默认按主站域名拼出）
 // 部署前端时需把与密钥同名、内容为密钥的文本文件 <INDEXNOW_KEY>.txt 放到前端根目录一起部署。
 const fs = require('fs');
+const kvfile = require('./kvfile');
 const path = require('path');
 const { PUBLIC_SITE_URL } = require('./sitemap');
 
@@ -23,13 +24,7 @@ function envConfig() {
 }
 
 function readStored() {
-  try {
-    const raw = fs.readFileSync(CONFIG_FILE, 'utf8');
-    const data = JSON.parse(raw);
-    return data && typeof data === 'object' ? data : {};
-  } catch (err) {
-    return {};
-  }
+  return kvfile.readJson(CONFIG_FILE, {});
 }
 
 // 当前生效的配置（后台可读）
@@ -66,12 +61,9 @@ function saveIndexNowConfig(patch) {
   }
   const next = { key, keyLocation, updatedAt: new Date().toISOString() };
   try {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    const tmp = CONFIG_FILE + '.' + process.pid + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(next, null, 2), { encoding: 'utf8', mode: 0o600 });
-    fs.renameSync(tmp, CONFIG_FILE);
+    kvfile.writeJson(CONFIG_FILE, next, { mode: 0o600 });
   } catch (err) {
-    return { ok: false, error: '保存失败：数据目录不可写（检查容器 data 挂载与权限）' };
+    return { ok: false, error: '保存失败：数据库写入异常（' + (err.message || err) + '）' };
   }
   return { ok: true, config: getIndexNowConfig() };
 }

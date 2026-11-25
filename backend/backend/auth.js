@@ -16,6 +16,7 @@
  */
 
 const crypto = require('crypto');
+const kvfile = require('./kvfile');
 const fs = require('fs');
 const path = require('path');
 const { ROOT_DIR } = require('./storage');
@@ -74,19 +75,13 @@ function ensureDataDir() {
 }
 
 function readJsonSafe(file, fallback) {
-  try {
-    return JSON.parse(fs.readFileSync(file, 'utf8'));
-  } catch (e) {
-    return fallback;
-  }
+  return kvfile.readJson(file, fallback);
 }
 
 function writeJsonAtomic(file, obj) {
   ensureDataDir();
-  const tmp = file + '.tmp';
   try {
-    fs.writeFileSync(tmp, JSON.stringify(obj, null, 2), { encoding: 'utf8', mode: 0o600 });
-    fs.renameSync(tmp, file);
+    kvfile.writeJson(file, obj, { mode: 0o600 });
   } catch (e) {
     warnDataDirBroken(e);
     throw e; // 由调用方决定如何降级
@@ -146,7 +141,7 @@ function normalizeTotp(raw) {
 
 function getCreds() {
   // 凭据文件存在但损坏 → 返回 null 但 setupNeeded 也为 false（fail-closed，拒绝一切登录）
-  if (fs.existsSync(AUTH_FILE)) {
+  if (kvfile.existsJson(AUTH_FILE)) {
     const raw = readJsonSafe(AUTH_FILE, null);
     if (raw && raw.username && raw.hash) {
       return {

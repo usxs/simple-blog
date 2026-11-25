@@ -50,6 +50,18 @@
 | `TZ` | `Asia/Shanghai` | 影响日志时间 |
 | `HOST_PORT` | `33001` | compose 里映射到宿主机的端口 |
 
+## 存储（V2 新增）
+
+| 变量 | 默认 | 说明 |
+| --- | --- | --- |
+| `STORE` | `sqlite` | 存储模式。`sqlite` = 数据库版（V2/V3 默认）；`file` = 回退到 V1 的 Markdown 文件存储 |
+| `DB_FILE` | `data/blog.db` | SQLite 文件路径，容器里一般写 `/app/data/blog.db` |
+| `DB_DIR` | `data` | 数据库所在目录（`DB_FILE` 没给时用来拼默认路径） |
+| `AUTH_DATA_DIR` | `data` | 文件型配置（站点、友链、凭据…）的位置；数据库模式下这些也会走 kv 表 |
+
+数据库版要求 **Node ≥ 22.5**（`node:sqlite` 是内置模块，不需要装任何数据库驱动）。用 `STORE=file`
+可以在同一个代码基线上跑回文件存储，方便迁移前后逐篇对比内容。
+
 ## 前端（Cloudflare Pages）
 
 | 变量 | 说明 |

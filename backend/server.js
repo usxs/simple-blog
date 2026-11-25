@@ -17,6 +17,7 @@ const { buildSitemap, PUBLIC_SITE_URL } = require('./backend/sitemap');
 const site = require('./backend/site');
 const { fetchProbeServers } = require('./backend/probe-source');
 const transfer = require('./backend/transfer');
+const migrateImport = require('./backend/migrate-import');
 
 // 评论提交的全局并发闸门：同一时刻最多处理 20 条，超出的直接快速失败，避免写队列堆到超时
 let pendingSubmits = 0;
@@ -384,6 +385,32 @@ const server = http.createServer((req, res) => {
   if (pathname.indexOf('/api/admin/transfer/') === 0) {
     if (!guardAuth(req, res)) return;
     return transfer.handleRequest(req, res, pathname, reqUrl);
+  }
+
+  // 3.7.3 接收 V1 推来的迁移包（令牌 or 会话）: POST /api/migrate/import?mode=replace|merge
+  if (pathname === '/api/migrate/import') {
+    if (req.method !== 'POST') {
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+      return res.end(JSON.stringify({
+        ok: true,
+        endpoint: '/api/migrate/import',
+        method: 'POST',
+        format: 'simple-blog-portable/1',
+        auth: 'X-Migrate-Token 或管理员会话',
+        mode: 'replace | merge'
+      }));
+    }
+    return migrateImport.handleHttpImport(req, res, reqUrl, auth);
+  }
+
+  // 3.7.4 迁移令牌查看 / 重置（需登录）: GET|POST /api/admin/migrate/token
+  if (pathname === '/api/admin/migrate/token') {
+    if (!guardAuth(req, res)) return;
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+    if (req.method === 'POST') {
+      return res.end(JSON.stringify({ ok: true, token: migrateImport.resetToken() }));
+    }
+    return res.end(JSON.stringify({ ok: true, token: migrateImport.getToken() }));
   }
 
   // 3.8 保存站点信息（需登录）: POST /api/admin/site

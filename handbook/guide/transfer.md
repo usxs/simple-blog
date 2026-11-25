@@ -59,6 +59,47 @@ node scripts/import-portable.js --db ./data/blog.db --zip ./simple-blog-portable
 
 命令行方式适合把数据塞进容器卷里的数据库文件，不需要先起服务。
 
+### 目标站点（V2 / V3）这一侧
+
+数据库版的后台「管理 → 迁移」顶部多一块「接收其它站点的推送」：
+
+- **迁移令牌**：每个实例首次启动自动生成，存在数据库的 `kv` 表里，重置后旧令牌立刻失效。
+- **接收地址**：`<你的后端地址>/api/migrate/import`，填到 V1 的推送框里。
+- **直接上传迁移包**：不想开两个浏览器也行，选 zip、选覆盖/合并，点「导入迁移包」直接在本站落库。
+
+命令行（容器内执行，不经过网络）：
+
+```bash
+# 推荐：先看只看统计（--db 指向容器卷里的库）
+docker compose exec backend node scripts/import-portable.js --file /tmp/bundle.zip --mode replace
+```
+
+### 从 V1 的数据目录直接迁移（不打包）
+
+服务器上同时有 V1 的目录和 V2 的代码时，可以直接读文件写库，省掉打包/上传：
+
+```bash
+cd backend
+# --v1-dir 指 V1 的仓库根目录或 backend 目录（自动识别 article/ 在哪一层）
+node scripts/migrate-v1-to-v2.js --v1-dir /srv/simple-blog --db ./data/blog.db
+
+# 先空跑看看会搬多少东西
+node scripts/migrate-v1-to-v2.js --v1-dir /srv/simple-blog --dry-run
+
+# 不要图片附件 / 不要管理员凭据
+node scripts/migrate-v1-to-v2.js --v1-dir /srv/simple-blog --no-uploads --no-auth
+```
+
+它会解析 `article/<id>/<id>.md`、`Musings/*.md`、`article/*/comments.json`、`config.json`、`data/*.json`，
+把文章/瞬间/评论/列表配置写进 `posts`、`moments`、`comments`、`module_items` 表，站点设置与凭据写进 `kv` 表，
+图片附件按原相对路径复制到 `img/`、`file/`。脚本结束会打印一份 JSON 统计（搬了多少篇、哪些文件被跳过）。
+
+搬完想核对内容，可以临时用文件存储启动同一个镜像：
+
+```bash
+STORE=file node server.js   # 读的仍是 V1 的 Markdown 文件
+```
+
 ---
 
 ## 从静态博客导入

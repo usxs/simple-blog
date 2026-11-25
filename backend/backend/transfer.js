@@ -125,7 +125,8 @@ function buildInfo() {
   const uploads = countUploads();
   return {
     ok: true,
-    variant: 'file',
+    variant: storage.variant || 'file',
+    storage: storage.variant === 'sqlite' ? 'sqlite' : 'file',
     version: portable.appVersion(),
     portableFormat: portable.PORTABLE_FORMAT,
     limits: { maxUploadBytes: MAX_UPLOAD_BYTES, maxFileBytes: portable.MAX_FILE_BYTES },

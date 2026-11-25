@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const kvfile = require('./kvfile');
 const { ROOT_DIR } = require('./storage');
 
 // 验证码签名密钥：优先 CAPTCHA_SECRET 环境变量；否则在 data/ 中生成并持久化随机密钥，
@@ -15,16 +16,13 @@ let CAPTCHA_SECRET = '';
   }
   try {
     const secFile = path.join(DATA_DIR, 'captcha-secret.json');
-    if (fs.existsSync(secFile)) {
-      const raw = JSON.parse(fs.readFileSync(secFile, 'utf8'));
-      if (raw && raw.secret) {
-        CAPTCHA_SECRET = String(raw.secret);
-        return;
-      }
+    const stored = kvfile.readJson(secFile, null);
+    if (stored && stored.secret) {
+      CAPTCHA_SECRET = String(stored.secret);
+      return;
     }
-    fs.mkdirSync(DATA_DIR, { recursive: true });
     CAPTCHA_SECRET = crypto.randomBytes(32).toString('hex');
-    fs.writeFileSync(secFile, JSON.stringify({ secret: CAPTCHA_SECRET }, null, 2), { encoding: 'utf8', mode: 0o600 });
+    kvfile.writeJson(secFile, { secret: CAPTCHA_SECRET }, { mode: 0o600 });
   } catch (e) {
     // data 目录不可写时的兜底：用进程内随机密钥（重启后已签发的验证码会失效，但功能可用）
     CAPTCHA_SECRET = crypto.randomBytes(32).toString('hex');

@@ -128,7 +128,7 @@ Cloudflare Pages（前端静态资源）
    │  /post/<id>、/posts 等由 Pages Functions 在边缘注入 SSR 内容与 meta
    │  /api/* 不在 Pages 上，直接跨域请求后端
    ▼
-你自己的服务器：Nginx → Docker 容器（Node 20 + sharp）
+你自己的服务器：Nginx → Docker 容器（Node 22 + SQLite + sharp）
    │
    └── data/ article/ img/ file/ … 全部为宿主机文件
 ```
@@ -160,7 +160,7 @@ simple-blog/
 │   │   ├── mailer.js         # 零依赖 SMTP 客户端
 │   │   ├── telegram.js       # 瞬间同步到 Telegram 频道
 │   │   └── probe.js          # 站点可用性探测
-│   ├── Dockerfile                # 镜像：node:20-alpine + sharp，非 root，带 healthcheck
+│   ├── Dockerfile                # 镜像：node:22-alpine + SQLite + sharp，非 root，带 healthcheck
 │   ├── docker-compose.yml        # 从源码构建（docker compose up -d --build）
 │   ├── docker-compose.hub.yml    # 直接用 Docker Hub 镜像（无需源码）
 │   ├── .env.example

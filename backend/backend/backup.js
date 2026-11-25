@@ -15,6 +15,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const kvfile = require('./kvfile');
 const os = require('os');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
@@ -77,22 +78,14 @@ function ensureDirs() {
 }
 
 function readHistory() {
-  try {
-    const raw = JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf8'));
-    return Array.isArray(raw) ? raw : [];
-  } catch (e) {
-    return [];
-  }
+  const raw = kvfile.readJson(HISTORY_FILE, []);
+  return Array.isArray(raw) ? raw : [];
 }
 
 function writeHistory(list) {
-  const tmp = HISTORY_FILE + '.tmp';
   try {
-    fs.writeFileSync(tmp, JSON.stringify(list, null, 2), 'utf8');
-    fs.renameSync(tmp, HISTORY_FILE);
-  } catch (e) {
-    try { fs.writeFileSync(HISTORY_FILE, JSON.stringify(list, null, 2), 'utf8'); } catch (ignored) {}
-  }
+    kvfile.writeJson(HISTORY_FILE, list, { mode: 0o600 });
+  } catch (ignored) { /* 历史记录写失败不影响备份本体 */ }
 }
 
 function walk(dir) {
@@ -1019,19 +1012,12 @@ function mergeSettings(raw) {
 }
 
 function readSettings() {
-  try {
-    return mergeSettings(JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')));
-  } catch (e) {
-    return mergeSettings(null);
-  }
+  return mergeSettings(kvfile.readJson(SETTINGS_FILE, null));
 }
 
 function writeSettings(settings) {
   try {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    const tmp = SETTINGS_FILE + '.' + process.pid + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(mergeSettings(settings), null, 2), 'utf8');
-    fs.renameSync(tmp, SETTINGS_FILE);
+    kvfile.writeJson(SETTINGS_FILE, mergeSettings(settings), { mode: 0o600 });
   } catch (e) {
     console.warn('[backup] 保存备份设置失败：', e.message);
   }

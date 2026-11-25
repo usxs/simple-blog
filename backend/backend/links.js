@@ -10,6 +10,7 @@
  */
 
 const fs = require('fs');
+const kvfile = require('./kvfile');
 const path = require('path');
 const crypto = require('crypto');
 const { ROOT_DIR } = require('./storage');
@@ -28,30 +29,18 @@ const EMAIL_MAX = 120;
 const RATE = { hourMs: 60 * 60 * 1000, hourMax: 5, burstMs: 10 * 60 * 1000, burstMax: 2 };
 
 function readStore() {
-  try {
-    const raw = fs.readFileSync(LINKS_FILE, 'utf8');
-    const data = JSON.parse(raw);
-    const items = Array.isArray(data) ? data : (data && Array.isArray(data.items) ? data.items : []);
-    return { items: items.map(normalizeStored).filter(Boolean) };
-  } catch (e) {
-    return { items: [] };
-  }
+  const data = kvfile.readJson(LINKS_FILE, null);
+  if (!data) return { items: [] };
+  const items = Array.isArray(data) ? data : (data && Array.isArray(data.items) ? data.items : []);
+  return { items: items.map(normalizeStored).filter(Boolean) };
 }
 
 function writeStore(store) {
-  const dir = path.dirname(LINKS_FILE);
-  try { fs.mkdirSync(dir, { recursive: true, mode: 0o755 }); } catch (e) {}
   const items = (store.items || []).slice(0, MAX_ITEMS);
-  const tmp = LINKS_FILE + '.' + process.pid + '.' + crypto.randomBytes(4).toString('hex') + '.tmp';
-  const body = JSON.stringify({ items: items }, null, 2) + '\n';
   try {
-    fs.writeFileSync(tmp, body, { encoding: 'utf8', mode: 0o644 });
-    fs.renameSync(tmp, LINKS_FILE);
+    kvfile.writeJson(LINKS_FILE, { items: items }, { mode: 0o644 });
   } catch (e) {
-    try { fs.unlinkSync(tmp); } catch (e2) {}
-    try { fs.writeFileSync(LINKS_FILE, body, { encoding: 'utf8', mode: 0o644 }); } catch (e3) {
-      throw new Error('友链数据写入失败：' + (e3.message || e3));
-    }
+    throw new Error('友链数据写入失败：' + (e.message || e));
   }
 }
 

@@ -3,6 +3,33 @@
 本项目的所有重要变更记录在此文件中，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.0.0-v2] - 2026-11-25
+
+V2：把后端从「Markdown 文件 + JSON」换成 SQLite，前端仍然部署在 Cloudflare Pages。
+
+### 新增
+
+- 存储层可切换：`STORE=sqlite`（默认，文章/评论/瞬间/站点配置都进 `data/blog.db`）与 `STORE=file`（V1 的文件存储），两条实现共享同一套接口，页面行为完全一致
+- 内置 `node:sqlite`：不加任何 npm 依赖，Node ≥ 22.5 自带；WAL + `busy_timeout`，写操作串行化，读不受影响
+- 数据库结构：`posts` / `moments` / `comments` / `module_items` / `kv` / `meta`，正文仍存原始 Markdown，`schema_version=2`
+- 一键接收迁移：`POST /api/migrate/import?mode=replace|merge`，令牌鉴权（`X-Migrate-Token`）或管理员会话均可；后台「迁移」页显示令牌、接收地址，并支持直接上传便携包
+- 迁移令牌管理：`GET|POST /api/admin/migrate/token`，存在 `kv` 表里，重置后旧令牌立即失效
+- V1 → V2 脚本迁移：`scripts/migrate-v1-to-v2.js --v1-dir <V1 目录> [--db] [--dry-run] [--no-uploads] [--no-auth]`，直接读 V1 的 Markdown 与 JSON 写进库，打印逐项统计
+- 命令行导入便携包：`scripts/import-portable.js --file bundle.zip [--mode replace|merge]`
+- 后台「迁移」页显示当前存储形态（V1 文件 / V2 数据库），令牌区块只在数据库版出现
+
+### 变更
+
+- 存储实现拆成 `storage-file.js`（原 `storage.js`）+ `storage-db.js`，由 `backend/storage.js` 按 `STORE` 选择；纯函数（id 清洗、摘要、搜索排序、日期）抽到 `backend/text.js`，前言解析抽到 `backend/mdparse.js`
+- 站点配置、友链、通知、IndexNow、Telegram、备份设置、管理员凭据、会话改由 `backend/kvfile.js` 统一读写：数据库模式下进 `kv` 表，文件模式下仍是 `data/*.json`
+- `package.json`：`engines.node` 提到 `>=22.5`（`node:sqlite` 要求），新增 `migrate` / `import-portable` / `check` 脚本
+- 镜像基础从 `node:20-alpine` 升到 `node:22-alpine`；compose 增加 `STORE`、`DB_FILE`，`data/` 卷即数据库所在目录
+
+### 文档
+
+- 新增「存储（V2 新增）」环境变量表、数据库表结构说明、迁移令牌与接收端接口
+- 《迁移与导入导出》补充目标站点侧的操作与两个命令行脚本的用法
+
 ## [1.17.0] - 2026-11-25
 
 ### 新增

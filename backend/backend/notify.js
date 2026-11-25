@@ -11,6 +11,7 @@
  */
 
 const fs = require('fs');
+const kvfile = require('./kvfile');
 const path = require('path');
 const crypto = require('crypto');
 const mailer = require('./mailer');
@@ -146,27 +147,15 @@ const DEFAULT_CHANNELS = { adminMail: true, adminBark: true };
 const LIMITS = { host: 120, user: 120, pass: 200, from: 160, fromName: 40, server: 200, key: 200, group: 60, subject: 160, text: 4000, title: 80 };
 
 function readJson() {
-  try {
-    const data = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-    return data && typeof data === 'object' ? data : {};
-  } catch (e) {
-    return {};
-  }
+  const data = kvfile.readJson(CONFIG_FILE, null);
+  return data && typeof data === 'object' ? data : {};
 }
 
 function writeJson(data) {
-  const dir = path.dirname(CONFIG_FILE);
-  try { fs.mkdirSync(dir, { recursive: true, mode: 0o755 }); } catch (e) {}
-  const tmp = CONFIG_FILE + '.' + process.pid + '.' + crypto.randomBytes(4).toString('hex') + '.tmp';
-  const body = JSON.stringify(data, null, 2) + '\n';
   try {
-    fs.writeFileSync(tmp, body, { encoding: 'utf8', mode: 0o600 });
-    fs.renameSync(tmp, CONFIG_FILE);
+    kvfile.writeJson(CONFIG_FILE, data, { mode: 0o600 });
   } catch (e) {
-    try { fs.unlinkSync(tmp); } catch (e2) {}
-    try { fs.writeFileSync(CONFIG_FILE, body, { encoding: 'utf8', mode: 0o600 }); } catch (e3) {
-      throw new Error('通知配置写入失败：' + (e3.message || e3));
-    }
+    throw new Error('通知配置写入失败：' + (e.message || e));
   }
 }
 

@@ -554,6 +554,44 @@
                 <div class="backup-meta"><span>附件</span><b id="transfer-stat-uploads">—</b></div>
               </div>
 
+              <div class="transfer-block" id="transfer-receive">
+                <div class="transfer-block-head">接收其它站点的推送</div>
+                <p class="settings-desc">在 V1 后台「推送到目标站点」时填这里的令牌即可把整站推过来。令牌保存在数据库里，重置后需要重新填写。</p>
+                <div class="field-grid">
+                  <div class="field field--wide">
+                    <label class="field-label" for="migrate-token">迁移令牌</label>
+                    <input class="field-input" id="migrate-token" type="text" readonly placeholder="—" />
+                  </div>
+                  <div class="field">
+                    <label class="field-label" for="migrate-endpoint">接收地址</label>
+                    <input class="field-input" id="migrate-endpoint" type="text" readonly placeholder="/api/migrate/import" />
+                  </div>
+                </div>
+                <div class="settings-actions">
+                  <button class="btn" type="button" id="migrate-token-copy">复制令牌</button>
+                  <button class="btn" type="button" id="migrate-token-reset">重置令牌</button>
+                  <span class="settings-tip" id="migrate-token-state"></span>
+                </div>
+                <div class="field-grid">
+                  <div class="field field--wide">
+                    <label class="field-label" for="migrate-import-file">直接上传迁移包（zip）</label>
+                    <input class="field-input" type="file" id="migrate-import-file" accept=".zip" />
+                  </div>
+                  <div class="field">
+                    <label class="field-label" for="migrate-import-mode">导入方式</label>
+                    <select class="field-input" id="migrate-import-mode">
+                      <option value="replace">覆盖：先清空再导入</option>
+                      <option value="merge">合并：保留现有内容，同 ID 覆盖</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="settings-actions">
+                  <button class="btn btn-primary" type="button" id="migrate-import-btn">导入迁移包</button>
+                  <span class="settings-tip" id="migrate-import-state"></span>
+                </div>
+                <ul class="transfer-report" id="migrate-import-report"></ul>
+              </div>
+
               <div class="transfer-block">
                 <div class="transfer-block-head">① 一键迁移到 V2 / V3</div>
                 <p class="settings-desc">迁移包是 ZIP，里面是 manifest.json + data.json + 原始图片附件。目标站点后台「迁移」页可以直接导入，或者用它自带的 <code>scripts/import-portable.js</code> 从命令行导入。</p>

@@ -7,6 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
+const kvfile = require('./kvfile');
 
 const DATA_DIR = process.env.AUTH_DATA_DIR || path.join(__dirname, '..', 'data');
 const CONFIG_FILE = path.join(DATA_DIR, 'telegram.json');
@@ -24,22 +25,12 @@ function ensureDataDir() {
 }
 
 function readJson(file, fallback) {
-  try {
-    if (!fs.existsSync(file)) return fallback;
-    const raw = fs.readFileSync(file, 'utf8');
-    if (!raw.trim()) return fallback;
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : fallback;
-  } catch (e) {
-    return fallback;
-  }
+  const parsed = kvfile.readJson(file, fallback);
+  return parsed && typeof parsed === 'object' ? parsed : fallback;
 }
 
 function writeJson(file, data) {
-  ensureDataDir();
-  const tmp = file + '.' + process.pid + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2), { encoding: 'utf8', mode: 0o600 });
-  fs.renameSync(tmp, file);
+  kvfile.writeJson(file, data, { mode: 0o600 });
 }
 
 function normalizeConfig(raw) {
