@@ -1,16 +1,15 @@
-# 直接用 Docker Hub 上的镜像启动（不需要源码，也不需要 Dockerfile）
+# 博客（V3 单体版）—— 直接用 Docker Hub 镜像启动，一个容器提供站点与后台
 #
-#   mkdir -p data article Musings img file && touch config.json
+#   mkdir -p data img file
 #   docker compose -f docker-compose.hub.yml up -d
 #
-# 数据仍然落在当前目录的 config.json / article / Musings / img / file / data，
-# 升级方式：改 IMAGE_TAG 后 `docker compose -f docker-compose.hub.yml up -d`。
-#
-# 环境变量与 docker-compose.yml 完全一致，可直接复用同一个 .env。
-
+# 默认镜像标签是 v3；要固定某次构建，在 .env 里写短 SHA 或版本标签（如 IMAGE_TAG=3.0.0）。
+# 打开 http://服务器IP:33001/ 即是站点，/admin 是后台；生产环境请用 Nginx 反代并配置 HTTPS。
+# 数据落在当前目录的 data/（含 blog.db）、img/、file/，升级镜像不丢数据。
+# 完整说明：https://usxs.github.io/simple-blog/ref/docker/
 services:
   backend:
-    image: ${IMAGE_NAME:-starspacec/simple-blog-backend}:${IMAGE_TAG:-latest}
+    image: ${IMAGE_NAME:-starspacec/simple-blog-backend}:${IMAGE_TAG:-v3}
     container_name: simple-blog-backend
     restart: unless-stopped
     user: "1000:1000"
@@ -20,10 +19,15 @@ services:
       TZ: Asia/Shanghai
       NODE_ENV: production
       PORT: "33001"
+      STORE: ${STORE:-sqlite}
+      DB_FILE: ${DB_FILE:-/app/data/blog.db}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       SITE_PUBLIC_URL: ${SITE_PUBLIC_URL:-https://www.example.com}
-      BACKEND_PUBLIC_URL: ${BACKEND_PUBLIC_URL:-https://api.example.com}
+      BACKEND_PUBLIC_URL: ${BACKEND_PUBLIC_URL:-}
+      SITE_VERSION: ${SITE_VERSION:-}
+      SITE_BRANCH: ${SITE_BRANCH:-}
+      SITE_COMMIT: ${SITE_COMMIT:-}
       CAPTCHA_SECRET: ${CAPTCHA_SECRET:-}
       INDEXNOW_KEY: ${INDEXNOW_KEY:-}
       INDEXNOW_KEY_LOCATION: ${INDEXNOW_KEY_LOCATION:-}
@@ -46,12 +50,15 @@ services:
       WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-}
       WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:-}
     volumes:
-      - ./config.json:/app/config.json
-      - ./article:/app/article
-      - ./Musings:/app/Musings
       - ./img:/app/img
       - ./file:/app/file
       - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:33001/api/auth/status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     logging:
       driver: json-file
       options:

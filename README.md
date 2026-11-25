@@ -15,6 +15,8 @@
 
 **文档**：<https://usxs.github.io/simple-blog/>（部署教程、使用手册、常见问题）
 
+**简单博客，并不“简单”。**
+
 一套可以自己部署的极简个人博客系统。仓库用三个分支提供三种形态，内容模型与接口完全一致，只是「谁渲染页面」和「数据存在哪」不同：
 
 - **V1**（`main`）：Cloudflare Pages 静态前端 + 自托管 Node 后端，数据以 Markdown / JSON 文件落盘
@@ -29,11 +31,11 @@
 
 同一套代码按分支发布三种形态，数据可以互相迁移：
 
-| 版本 | 分支 | 形态 | 存储 | 适合谁 |
-| --- | --- | --- | --- | --- |
-| **V1** | `main` | Pages 前端 + Node 后端（两段式） | Markdown 文件 + JSON | 想要数据即文件、拷走就能搬家 |
-| **V2** | `v2-sqlite` | Pages 前端 + Node 后端（两段式） | SQLite | 文章/评论很多，想要更稳的写入与查询 |
-| **V3** | `v3-monolith` | 前后端不分离单体（一个进程） | SQLite | 只想在一台 VPS 上跑完，不依赖 Cloudflare |
+| 版本 | 分支 | 形态 | 存储 | Docker 标签 | 适合谁 |
+| --- | --- | --- | --- | --- | --- |
+| **V1** | `main` | Pages 前端 + Node 后端（两段式） | Markdown 文件 + JSON | `latest` | 想要数据即文件、拷走就能搬家 |
+| **V2** | `v2-sqlite` | Pages 前端 + Node 后端（两段式） | SQLite | `v2` | 文章/评论很多，想要更稳的写入与查询 |
+| **V3** | `v3-monolith` | 前后端不分离单体（一个进程） | SQLite | `v3` | 只想在一台 VPS 上跑完，不依赖 Cloudflare |
 
 - V1 后台「设置 → 迁移」可以**一键迁移到 V2 / V3**（下载或直推便携包 `.zip`），也能和 **Hugo / Hexo / Jekyll / Astro / Ghost / Obsidian** 互导 Markdown。
 - V2 的数据库结构与 V3 完全一致，`blog.db` 直接可用；从 V1 文件结构迁移时用 `node scripts/migrate-v1-to-v2.js`。
@@ -72,7 +74,7 @@
 | 登录 | 文章管理 |
 | --- | --- |
 | ![后台登录](docs/screenshots/admin-login.png) | ![后台](docs/screenshots/admin.png) |
-| <sub>登录：账密 + 服务端会话，可开启两步验证与通行密钥</sub> | <sub>文章管理：Markdown 编辑与预览、图片上传、评论审核</sub> |
+| <sub>登录：账密 + 服务端会话，可开启两步验证与通行密钥</sub> | <sub>文章管理：内容 / 预览 / 对照三视图、加密文章自动解密、图片上传与评论审核</sub> |
 
 | 友链审核 | 通知推送 |
 | --- | --- |
@@ -108,29 +110,30 @@
 | 模块 | 说明 |
 | --- | --- |
 | 账号登录 | 账密登录 + `scrypt` 加盐哈希 + 服务端会话 Cookie（HttpOnly / SameSite=Strict），带登录失败限流与 CSRF 防护 |
-| 管理页 | 后台「管理」页按重要程度排布：站点信息、前台栏目、页脚与备案、社交链接在前，账号安全在后；点击侧边栏「管理」会在右侧弹出二级菜单，可直接跳到对应卡片。除管理员账号 / 两步验证 / 通行密钥外，改完前台立即生效，无需重新部署 |
+| 管理页 | 后台「管理」页按重要程度排布：站点信息、前台栏目、页脚与备案、社交链接在前，账号安全在后；页面顶部是「常规 / 安全 / 集成 / 备份」横向 tab，切换只显示该组卡片。除管理员账号 / 两步验证 / 通行密钥外，改完前台立即生效，无需重新部署 |
 | 登录会话 | 区分在线 / 离线 / 历史会话，显示设备与浏览器；点开可看 IP、归属地、设备详情、在线时长和完整 UA，并支持改备注、踢下线、封禁 IP 或设备（黑名单可解除） |
 | 页脚与备案 | ICP、公安网备案、萌 ICP 备案均可后台填写（留空即隐藏）；前台只显示图标徽章，悬停弹出备案号、点击跳到官方查询页。版权声明（`© 年份 站名 · All Rights Reserved.`）可在后台一键开关。整块显示在侧边栏底部，移动端不显示，单色图标跟随黑白主题 |
 | 社交链接 | 首页标题下方的 GitHub / X / Telegram / 邮箱由后台维护，留空即隐藏该项 |
 | 友链 | 前台独立「友链」页，访客自助提交（网站地址 / 名称 / 图标地址 / 可选邮箱），提交后进入后台审核；无图标时用站名首字当图标。后台「友链」可按待审核 / 已通过 / 已驳回分组，支持通过、驳回、编辑、删除，也可直接新增（图标支持上传图片，自动转 WebP） |
 | 通知推送 | 后台「推送」页可配 SMTP 邮件与 Bark 手机推送。**发给访客的**（评论回复、友链审核结果）固定走邮件；**发给站长的**（新评论、友链申请、安全提醒）可勾选邮件 / Bark / 两者都要。8 个模板分三组在线编辑并恢复默认，邮件为深色外框 + 浅灰正文卡片的黑白版式 |
-| 可改后台入口 | 后台入口默认 `/admin`，可在「管理 → 站点信息」改成任意 2–24 位短路径；旧地址会自动 302 到新地址 |
+| 可改后台入口 | 后台入口默认 `/admin`，可在「管理 → 站点信息」改成任意 2–24 位短路径；旧地址返回 401 而不是跳转，不暴露新入口 |
 | 瞬间同步 | 「管理 → 瞬间同步」开启后，新建或编辑瞬间会自动发到 Telegram 频道（图片一起发，最多 4 张），删除时同步撤回；可以先「发送测试消息」验证 Bot 与频道是否配对 |
 | 两步验证（2FA） | 标准 TOTP（RFC 6238），用 Google Authenticator / 1Password 等扫码绑定；登录需再输 6 位动态码；提供 10 个一次性备用码，用掉即作废 |
 | 通行密钥（Passkey） | WebAuthn 指纹 / 面容 / 安全密钥登录，服务端只存公钥，支持多设备注册与逐个删除；也可作为免密码登录入口 |
-| 文章管理 | Markdown 写作、前台实时预览、日期归档、按日期排序 |
+| 文章管理 | Markdown 写作；内容 / 预览 / 对照三种视图随时切换（<kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd>）；日期归档、按日期排序 |
 | Markdown 渲染 | 标题 / 列表（多级嵌套）/ 引用（可嵌套）/ 分隔线 / 表格（对齐）/ 任务清单 / 行内样式；围栏代码带语言标签、行号、一键复制与放大灯箱；```` ```mermaid ```` 流程图在浏览器端渲染 |
 | 动态 / 工具 / 状态 / 奇思妙想 | 多个可独立维护的内容板块，共用同一套增删改查接口 |
 | 图片上传 | 后台粘贴或选择图片，服务端自动转 WebP 并压缩到 2560px 内，原图不落盘 |
 | 评论 | 访客评论 + 验证码 + 后台审核 + 楼中楼回复，支持邮件/站点联系方式（不公开） |
 | SEO | 真实路径路由、文章页 SSR、动态 `sitemap.xml`、`robots.txt`、Open Graph、JSON-LD 结构化数据、IndexNow 即时推送（后台可配） |
-| 细节体验 | 内容超过一屏时右下角出现「回到顶部」按钮；管理页侧边栏悬停即展开二级菜单，点右侧箭头可固定 |
+| 细节体验 | 内容超过一屏时右下角出现「回到顶部」按钮；管理页用顶部 tab 切换分组，侧边栏「管理 → 备份」这类快捷入口会直接切到对应 tab |
 | 服务器探针 | 后台侧边栏「探针」可切换数据源：CF-Server-Monitor（`/api/servers`）或极简探针 monitor（`/api/nodes`），两种节点统一成同一套卡片 |
 | 栏目开关 | 在「管理 → 前台栏目」一键决定前台是否显示；关闭后前台导航隐藏，直接访问该地址会显示「栏目已关闭」占位页 |
 | 栏目自定义 | 栏目可改名（最多 12 字）、改访问路径（如把 `/moment` 改成 `/diary`）、换图标：16 个内置图标任选，或自行上传 PNG / JPG / SVG / WebP |
 | 栏目排序 | 在「管理 → 前台栏目」拖动左侧 ⋮⋮ 调整顺序，桌面侧边栏、手机底栏、后台侧边栏三处同步生效（顺序存在 `data/site.json`） |
 | 自定义路径 | 栏目路径可改，`/posts`、`/diary` 之类都行；改名后旧地址仍可访问并自动跳转，导航链接、`sitemap.xml`、SSR 元信息同步更新 |
-| Docker 镜像 | 后端镜像已发布到 Docker Hub（`starspacec/simple-blog-backend`），`docker pull` 即可启动；仓库内附 `docker-compose.hub.yml`，也可以用 GitHub Actions 自动构建多架构镜像 |
+| 后台界面 | 所有能替换的二值选项统一为 Switch 开关；文章编辑页采用校样式排版，工具栏不再用 emoji 当图标；顶部可切换内容 / 预览 / 对照，写作区带等宽 pane 标签与键帽提示 |
+| Docker 镜像 | V1 / V2 / V3 共用 `starspacec/simple-blog-backend`，稳定标签分别为 `latest`、`v2`、`v3`；多架构（`linux/amd64` + `linux/arm64`），GitHub Actions 按分支自动构建，V3 一个容器同时提供站点与后台 |
 | 部署版本 | 鼠标悬停侧边栏「节点 ONLINE」弹出小气泡，显示当前线上部署的短版本号、提交与分支，排查「线上到底是哪一版」很方便 |
 | 文章搜索 | 文章列表页搜索框：标题 / 摘要 / 标签模糊匹配，中文按子串、英文支持子序列；输入法组合结束后立即过滤，支持回车与 Esc 清空，列表只更新容器不重建输入框 |
 | 移动端 | ≤860px 自动切单列布局并显示底部悬浮导航；底栏是「液态玻璃」样式，除首页外向下滚动自动收起、向上滚动出现，320–430px 窄屏 8 个入口一屏放得下 |
@@ -274,9 +277,38 @@ cd simple-blog
 
 ### 2. 部署后端（服务器上）
 
-#### 2.0 用现成镜像（可选，不需要源码）
+#### 2.0 用现成镜像（推荐，不需要源码）
 
-已经构建好的镜像发布在 Docker Hub：<https://hub.docker.com/r/starspacec/simple-blog-backend>（`linux/amd64`，支持 `latest` 与版本号标签）。
+镜像发布在 Docker Hub：<https://hub.docker.com/r/starspacec/simple-blog-backend>，覆盖 `linux/amd64` 与 `linux/arm64`。三个分支各有一个稳定标签：
+
+| 标签 | 版本 | 启动后得到 |
+| --- | --- | --- |
+| `latest` | V1 | Node 后端（文件存储），前端另发 Cloudflare Pages |
+| `v2` | V2 | Node 后端（SQLite），前端另发 Cloudflare Pages |
+| `v3` | V3 | **站点 + 后台同一个容器**，不需要 Pages |
+
+稳定标签会跟着分支更新；想固定到某一次构建，用 CI 生成的短 SHA 标签（如 `3a1b2c4`），或给仓库打 `v3.0.0` 这类 tag 让它额外产出 `3.0.0` / `3.0` / `3`。回滚同理。
+
+**V3 最短路径：一个容器跑完**
+
+```bash
+mkdir -p blog && cd blog
+mkdir -p data img file
+sudo chown -R 1000:1000 data img file
+
+docker run -d --name simple-blog --restart unless-stopped \
+  -p 127.0.0.1:33001:33001 \
+  -v "$PWD/data:/app/data" -v "$PWD/img:/app/img" -v "$PWD/file:/app/file" \
+  -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD='换成你自己的强密码' \
+  -e SITE_PUBLIC_URL='https://blog.example.com' \
+  starspacec/simple-blog-backend:v3
+```
+
+容器起来后，在服务器上访问 `http://127.0.0.1:33001/` 就是站点，后台在同域的 `/admin`；配好 Nginx 后对外即可。V3 不需要 `BACKEND_PUBLIC_URL`，也不用再部署前端。
+
+**V1 / V2：镜像只跑后端**
+
+V1（文件存储）的完整命令：
 
 ```bash
 mkdir -p blog-backend && cd blog-backend
@@ -294,18 +326,20 @@ docker run -d --name simple-blog-backend --restart unless-stopped \
   starspacec/simple-blog-backend:latest
 ```
 
-或者用仓库里的 `docker-compose.hub.yml`（复用同一个 `.env`，数据同样落在当前目录）：
+V2 把镜像换成 `:v2`，SQLite 只需要 `data`（数据库在 `data/blog.db`）、`img`、`file` 三个卷；`config.json`、`article`、`Musings` 只在 `STORE=file` 时才需要。
+
+或者用仓库里的 `docker-compose.hub.yml`（复用同一个 `.env`，数据同样落在当前目录）。下面是 V3；V1 / V2 把 URL 里的分支换成 `main` / `v2-sqlite`，并确认 `IMAGE_TAG` 对应即可：
 
 ```bash
-curl -O https://raw.githubusercontent.com/usxs/simple-blog/main/backend/docker-compose.hub.yml
-curl -o .env https://raw.githubusercontent.com/usxs/simple-blog/main/backend/.env.example
+curl -O https://raw.githubusercontent.com/usxs/simple-blog/v3-monolith/backend/docker-compose.hub.yml
+curl -o .env https://raw.githubusercontent.com/usxs/simple-blog/v3-monolith/backend/.env.example
 vim .env
 docker compose -f docker-compose.hub.yml up -d
 ```
 
-升级只需改 `IMAGE_TAG`（或 `docker compose -f docker-compose.hub.yml pull && ... up -d`），数据在卷里不受影响。
+compose 文件已内置 `STORE=sqlite`、`DB_FILE` 与健康检查；V3 的 `BACKEND_PUBLIC_URL` 默认留空（同域），V2 仍填 API 地址。升级只需改 `IMAGE_TAG`（或 `docker compose -f docker-compose.hub.yml pull && docker compose -f docker-compose.hub.yml up -d`），数据在卷里不受影响。
 
-如果镜像架构不匹配（例如 ARM 服务器），第 2 节下面的「从源码构建」方式可以本地构建任意架构。
+镜像已覆盖 amd64 / arm64；其它架构可以在对应分支的 `backend/` 里从源码构建。
 
 
 #### 2.1 检查 Docker
@@ -399,7 +433,7 @@ server {
 
 #### 2.7 登录后台
 
-浏览器打开 `https://api.example.com/admin.html`，用 `.env` 里的账密登录，就进入后台了（文章、评论、图片、栏目开关都在这里）。建议登录后立刻在「管理 → 管理员账号」把密码换成新的。
+浏览器打开 `https://api.example.com/admin`，用 `.env` 里的账密登录，就进入后台了（文章、评论、图片、栏目开关都在这里）。建议登录后立刻在「管理 → 管理员账号」把密码换成新的。
 
 ### 3. 部署前端（Cloudflare Pages，仅 V1 / V2）
 
@@ -464,7 +498,7 @@ Pages 项目 → **Custom domains** → 添加 `www.example.com`，按提示在 
 | 打开 `https://www.example.com/` | 首页正常，侧边栏「节点」显示 ONLINE |
 | 打开任一文章 `/post/<id>` | 正文完整；查看网页源码，`<title>` 是文章标题，`reader-content` 里有正文（SSR 生效） |
 | `https://www.example.com/sitemap.xml` | 返回 XML，URL 都是真实路径（没有 `#/`） |
-| `https://api.example.com/admin.html` | 能登录后台 |
+| `https://api.example.com/admin` | 能登录后台 |
 | 后台上传一张图 | 返回的 Markdown 里是 `.webp`，前台显示正常 |
 | 前台提交一条评论 | 提示「待审核」，后台评论审核里能看到 |
 | 后台「管理 → 前台栏目」关掉一个栏目 | 前台侧边栏立即消失，直接访问该地址显示「栏目已关闭」 |

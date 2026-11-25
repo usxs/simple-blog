@@ -390,7 +390,7 @@ IndexNow 配置优先读取 `data/indexnow.json`（后台写入），没有再�
 ```
 GET /img/<日期>/<文件名>    # 图片（长缓存）
 GET /file/<日期>/<文件名>   # 附件
-GET /                       # 管理后台（admin.html）
+GET /<adminPath>            # 管理后台（admin.html，默认 /admin）
 ```
 
 ---
@@ -546,6 +546,6 @@ GET /                       # 管理后台（admin.html）
 `GET /api/site` 返回 `adminPath`；`POST /api/admin/site {"adminPath":"console"}` 修改后：
 
 - `/console` 直接返回管理台页面；
-- `/admin`、`/admin.html` 自动 302 到新入口；
+- `/admin`、`/admin.html` 直接返回 401，不跳转、不暴露新入口；
 - 可选值 2–24 位小写字母 / 数字 / 短横线，`api`、`login`、`post` 等保留字会被拒绝并回退 `admin`；
 - 环境变量 `ADMIN_PATH` 只决定首次初始化时的默认值。

@@ -2,8 +2,8 @@ name: docker
 
 on:
   push:
-    branches: [main]
-    tags: ["v*"]
+    branches: [v3-monolith]
+    tags: ["v3*", "3.*"]
     paths:
       - "backend/**"
       - ".github/workflows/docker.yml"
@@ -39,9 +39,10 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=v3,enable=${{ github.ref == 'refs/heads/v3-monolith' }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
             type=sha,format=short
 
       - name: Build & push
@@ -77,9 +78,10 @@ jobs:
         with:
           images: ${{ vars.DOCKERHUB_USERNAME }}/${{ env.IMAGE }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=v3,enable=${{ github.ref == 'refs/heads/v3-monolith' }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
             type=sha,format=short
 
       - name: Build & push

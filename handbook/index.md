@@ -7,7 +7,7 @@ hide:
 <div class="sb-hero">
   <img class="sb-hero__logo" src="images/logo.svg" alt="简单博客" width="84" height="84" />
   <h1 class="sb-hero__title">简单博客</h1>
-  <p class="sb-hero__tagline">一套可以自己部署的极简个人博客系统</p>
+  <p class="sb-hero__tagline">简单博客，并不“简单”</p>
   <p class="sb-hero__desc">
     一套代码，三种形态：V1 用 Cloudflare Pages + 文件存储，V2 换成 SQLite，V3 把前后端合成一个进程。
     内容模型与接口完全一致，数据还能互相迁移，挑一个分支部署就行。
@@ -55,7 +55,7 @@ hide:
 <div class="sb-feature">
 <div class="sb-feature__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="6" rx="1.5"/><rect x="2" y="14" width="20" height="6" rx="1.5"/><path d="M6 7h.01M6 17h.01"/></svg></div>
 <h3>Docker 部署</h3>
-<p>镜像已发布到 Docker Hub，<code>docker run</code> 或 <code>compose up</code> 即可；升级只换标签。</p>
+<p>V1 / V2 / V3 都已发布镜像，标签分别是 <code>latest</code> / <code>v2</code> / <code>v3</code>；V3 一个容器跑完站点与后台。</p>
 </div>
 
 </div>
@@ -80,11 +80,11 @@ hide:
 
 ## 三种形态
 
-| | 分支 | 前端 | 后端 | 存储 | 适合 |
-| --- | --- | --- | --- | --- | --- |
-| **V1** | `main` | Cloudflare Pages | Node（自托管） | Markdown + JSON 文件 | 数据即文件，拷走就能搬家 |
-| **V2** | `v2-sqlite` | Cloudflare Pages | Node（自托管） | SQLite（`node:sqlite`） | 文章 / 评论很多，想要更稳的写入与查询 |
-| **V3** | `v3-monolith` | 同进程 SSR | 同一个进程 | SQLite | 一台 VPS 跑完，不依赖 Cloudflare |
+| | 分支 | Docker 标签 | 前端 | 后端 | 存储 | 适合 |
+| --- | --- | --- | --- | --- | --- | --- |
+| **V1** | `main` | `latest` | Cloudflare Pages | Node（自托管） | Markdown + JSON 文件 | 数据即文件，拷走就能搬家 |
+| **V2** | `v2-sqlite` | `v2` | Cloudflare Pages | Node（自托管） | SQLite（`node:sqlite`） | 文章 / 评论很多，想要更稳的写入与查询 |
+| **V3** | `v3-monolith` | `v3` | 同进程 SSR | 同一个进程 | SQLite | 一台 VPS 跑完，不依赖 Cloudflare |
 
 三个版本之间可以互相迁移：V1 后台「设置 → 迁移」能把整站打成便携包（下载或直推目标站点），V2 / V3 用令牌接收；也支持和 **Hugo / Hexo / Jekyll / Astro / Ghost / Obsidian** 的 Markdown 互相导入导出。
 

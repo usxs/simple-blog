@@ -1,5 +1,5 @@
 site_name: 简单博客
-site_description: Cloudflare Pages + 自托管 Node 后端的极简个人博客系统
+site_description: 三种形态的极简个人博客系统：Cloudflare Pages + 自托管 Node，或单容器单体版
 site_url: https://usxs.github.io/simple-blog/
 repo_url: https://github.com/usxs/simple-blog
 repo_name: usxs/simple-blog
