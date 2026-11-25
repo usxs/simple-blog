@@ -1,10 +1,10 @@
 # Docker 镜像
 
-三个版本共用同一个镜像仓库：<https://hub.docker.com/r/starspacec/simple-blog-backend>。镜像里已经包含运行所需的一切，**V3 的一个容器同时提供站点和后台**，不需要再部署 Cloudflare Pages。
+三个版本共用同一个镜像仓库：<https://github.com/usxs/simple-blog/pkgs/container/simple-blog-backend>（GHCR，公开可拉取）。镜像里已经包含运行所需的一切，**V3 的一个容器同时提供站点和后台**，不需要再部署 Cloudflare Pages。
 
 | 项 | 值 |
 | --- | --- |
-| 镜像 | `starspacec/simple-blog-backend` |
+| 镜像 | `ghcr.io/usxs/simple-blog-backend` |
 | 稳定标签 | `latest`（V1）、`v2`（V2）、`v3`（V3） |
 | 版本 / SHA 标签 | 打 `v3.0.0` 这类 tag 时产出 `3.0.0`、`3.0`、`3`；每次构建另有短 SHA 标签 |
 | 架构 | `linux/amd64`、`linux/arm64` |
@@ -12,6 +12,9 @@
 | 用户 | `1000:1000`（非 root） |
 | 端口 | `33001` |
 | 健康检查 | 每 30s 请求 `/api/auth/status` |
+
+!!! note "Docker Hub 旧仓库"
+    早期的 `starspacec/simple-blog-backend` 只保留 1.14.0（V1）及更早的镜像，不再更新；V2 / V3 与后续构建都在 GHCR。
 
 ## 一、先选标签
 
@@ -37,7 +40,7 @@ docker run -d --name simple-blog --restart unless-stopped \
   -v "$PWD/data:/app/data" -v "$PWD/img:/app/img" -v "$PWD/file:/app/file" \
   -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD='换成你自己的强密码' \
   -e SITE_PUBLIC_URL='https://blog.example.com' \
-  starspacec/simple-blog-backend:v3
+  ghcr.io/usxs/simple-blog-backend:v3
 ```
 
 - 打开 `http://服务器IP:33001/` 是站点，后台在同域 `/admin`；
@@ -58,7 +61,7 @@ docker run -d --name simple-blog-backend --restart unless-stopped \
   -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD='换成你自己的强密码' \
   -e SITE_PUBLIC_URL='https://www.example.com' \
   -e BACKEND_PUBLIC_URL='https://api.example.com' \
-  starspacec/simple-blog-backend:v2
+  ghcr.io/usxs/simple-blog-backend:v2
 ```
 
 V2 默认 `STORE=sqlite`，数据库是 `data/blog.db`。要沿用文件存储时加 `-e STORE=file`，并补上 `config.json`、`article/`、`Musings/` 三个挂载。
@@ -78,7 +81,7 @@ docker run -d --name simple-blog-backend --restart unless-stopped \
   -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD='换成你自己的强密码' \
   -e SITE_PUBLIC_URL='https://www.example.com' \
   -e BACKEND_PUBLIC_URL='https://api.example.com' \
-  starspacec/simple-blog-backend:latest
+  ghcr.io/usxs/simple-blog-backend:latest
 ```
 
 三个版本的完整环境变量见 [环境变量](env.md)；V1 / V2 还要部署前端，见 [部署前端](../start/frontend.md)。

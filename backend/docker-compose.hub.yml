@@ -1,4 +1,4 @@
-# 博客后端（V2：SQLite 存储）—— 直接用 Docker Hub 镜像启动，不需要源码或 Dockerfile
+# 博客后端（V2：SQLite 存储）—— 直接用 GHCR 镜像启动，不需要源码或 Dockerfile
 #
 #   mkdir -p data img file
 #   docker compose -f docker-compose.hub.yml up -d
@@ -8,7 +8,7 @@
 # 完整说明：https://usxs.github.io/simple-blog/ref/docker/
 services:
   backend:
-    image: ${IMAGE_NAME:-starspacec/simple-blog-backend}:${IMAGE_TAG:-v2}
+    image: ${IMAGE_NAME:-ghcr.io/usxs/simple-blog-backend}:${IMAGE_TAG:-v2}
     container_name: simple-blog-backend
     restart: unless-stopped
     user: "1000:1000"

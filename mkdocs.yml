@@ -16,9 +16,9 @@ extra:
     - icon: fontawesome/brands/github
       link: https://github.com/usxs/simple-blog
       name: GitHub
-    - icon: fontawesome/brands/docker
-      link: https://hub.docker.com/r/starspacec/simple-blog-backend
-      name: Docker Hub
+    - icon: fontawesome/brands/github
+      link: https://github.com/usxs/simple-blog/pkgs/container/simple-blog-backend
+      name: GHCR 镜像
 
 theme:
   name: material
