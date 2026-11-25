@@ -186,10 +186,19 @@ export async function onRequestGet(context) {
     const segs = Array.isArray(context.params.slug) ? context.params.slug : [context.params.slug];
     const rawId = segs.map(s => decodeURIComponent(String(s))).join('/');
 
+    // 隐藏/加密状态必须每次回源确认：不能命中边缘缓存里的旧正文。
     const apiRes = await fetch(cfg.apiBase + '/api/public/post/' + encodeURIComponent(rawId), {
       headers: { 'Accept': 'application/json' },
-      cf: { cacheTtl: 300, cacheEverything: true }
+      cache: 'no-store',
+      cf: { cacheTtl: 0, cacheEverything: false }
     });
+    if (apiRes.status === 404) {
+      const pageRes = await context.env.ASSETS.fetch(new Request('https://assets.local/404.html'));
+      return new Response(await pageRes.text(), {
+        status: 404,
+        headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }
+      });
+    }
     if (!apiRes.ok) return context.next();
     const data = await apiRes.json();
     const post = data && data.post;
@@ -204,7 +213,7 @@ export async function onRequestGet(context) {
     return new Response(html, {
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
-        'Cache-Control': 'public, max-age=300, s-maxage=300'
+        'Cache-Control': 'no-store'
       }
     });
   } catch (err) {

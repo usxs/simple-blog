@@ -716,7 +716,9 @@ var cms = {
     return arr.map(function (p) {
       if (!p || typeof p !== 'object') return p;
       var enc = p.enc;
-      p.locked = !!(p.locked || enc === true || enc === 1 || enc === '1' || enc === 'true');
+      var encrypted = !!(enc === true || enc === 1 || enc === '1' || enc === 'true' || p.encrypted || p.locked);
+      p.encrypted = encrypted;
+      p.locked = p.autoUnlocked ? false : !!(p.locked || encrypted);
       return p;
     });
   },
@@ -1257,6 +1259,7 @@ var cms = {
     this.showPage('admin-post-editor');
 
     var locked = !!(p && p.locked);
+    var encrypted = !!(p && (p.encrypted || p.locked));
     document.getElementById('post-title').value = p ? (p.title || '') : '';
     document.getElementById('post-id').value = p ? (p.id || '') : '';
     document.getElementById('post-id').readOnly = !!p;
@@ -1264,9 +1267,9 @@ var cms = {
     document.getElementById('post-date').value = p ? (p.date || '') : this.today();
     document.getElementById('post-tags').value = ((p && p.tags) || []).join(', ');
     document.getElementById('post-hidden').checked = !!(p && p.hidden);
-    document.getElementById('post-enc').checked = locked;
+    document.getElementById('post-enc').checked = encrypted;
     document.getElementById('post-password').value = '';
-    document.getElementById('post-password').placeholder = locked ? '设置新口令（留空表示沿用原口令）' : '设置访问口令（启用加密时必填）';
+    document.getElementById('post-password').placeholder = encrypted ? '设置新口令（留空表示沿用原口令）' : '设置访问口令（启用加密时必填）';
     document.getElementById('post-content').value = p && !locked ? (p.content || '') : '';
     document.getElementById('post-content').readOnly = locked;
     document.getElementById('post-lock-bar').hidden = !locked;
@@ -1274,7 +1277,9 @@ var cms = {
     document.getElementById('post-unlock-error').textContent = '';
     document.getElementById('post-editor-title').textContent = p ? ('编辑文章 · ' + (p.title || p.id)) : '新建文章';
     document.getElementById('post-delete-btn').style.display = p ? '' : 'none';
-    document.getElementById('post-editor-status').textContent = locked ? '已加密 · 解锁后可编辑正文' : (p ? ('ID: ' + p.id) : 'NEW');
+    document.getElementById('post-editor-status').textContent = locked
+      ? '已加密 · 输入口令解锁后可编辑正文'
+      : (encrypted && p && p.autoUnlocked ? '已加密 · 后端已自动解密，可直接编辑（前台仍需口令）' : (p ? ('ID: ' + p.id) : 'NEW'));
     document.getElementById('post-error').textContent = '';
     document.getElementById('md-toolbar-tip').textContent = locked ? '请先解锁正文' : '选中文字后点按钮即可套用格式';
     this.applyPostMode();
@@ -1330,7 +1335,7 @@ var cms = {
     if (p.locked && !this.editorUnlocked) { err.textContent = '请先输入口令解锁后再保存'; return; }
     var encOn = document.getElementById('post-enc').checked;
     var pwd = document.getElementById('post-password').value;
-    if (encOn && !pwd && !(p.locked && this.editorPassword)) { err.textContent = '启用加密需要设置访问口令'; return; }
+    if (encOn && !pwd && !this.editorPassword && !p.encrypted) { err.textContent = '启用加密需要设置访问口令'; return; }
     if (encOn && pwd && pwd.length < 4) { err.textContent = '口令至少 4 位'; return; }
 
     var item = {
@@ -1386,7 +1391,7 @@ var cms = {
     menu.id = 'posts-menu';
     menu.innerHTML =
       '<button type="button" data-post-act="edit">编辑</button>' +
-      '<button type="button" data-post-act="encrypt">' + (p.locked ? '取消加密' : '加密文章') + '</button>' +
+      '<button type="button" data-post-act="encrypt">' + ((p.encrypted || p.locked) ? '取消加密' : '加密文章') + '</button>' +
       '<button type="button" data-post-act="hidden">' + (p.hidden ? '取消隐藏' : '隐藏文章') + '</button>' +
       '<button type="button" class="danger" data-post-act="delete">删除</button>';
     document.body.appendChild(menu);
@@ -1424,9 +1429,10 @@ var cms = {
       date: p.date || '',
       tags: p.tags || [],
       hidden: !!p.hidden,
-      enc: !!p.locked,
+      enc: !!(p.encrypted || p.locked),
       content: p.content || ''
     };
+    if (p.locked) item.preserveContent = true;
     Object.keys(patch || {}).forEach(function (k) { item[k] = patch[k]; });
     var out = await this.api('/api/save', { method: 'POST', body: { module: 'posts', item: item } });
     if (Array.isArray(out.data)) {
@@ -1468,12 +1474,16 @@ var cms = {
   encryptPostFromList: async function (id) {
     var p = this.findPost(id);
     if (!p) return;
-    if (p.locked) {
-      var pwd = window.prompt('取消加密需要验证口令，请输入这篇文章当前的访问口令：');
-      if (!pwd) return;
-      try {
+    if (p.encrypted || p.locked) {
+      var content = p.content || '';
+      if (p.locked) {
+        var pwd = window.prompt('取消加密需要验证口令，请输入这篇文章当前的访问口令：');
+        if (!pwd) return;
         var out = await this.api('/api/admin/post/unlock', { method: 'POST', body: { id: id, password: pwd } });
-        await this.savePostPatch(p, { content: out.content || '', enc: false });
+        content = out.content || '';
+      }
+      try {
+        await this.savePostPatch(p, { content: content, enc: false });
         this.notify('已取消加密，文章恢复公开阅读');
       } catch (e) {
         if (e && e.message === 'unauthorized') return;
@@ -1568,7 +1578,52 @@ var cms = {
         break;
       }
       case 'lock': this.mdInsertLock(); break;
+      case 'unlock': this.mdUnlockFragments(); break;
     }
+  },
+
+  // 解除正文里已经保存的加密片段：逐个调用后端解密，成功后把密文行替换回明文。
+  mdUnlockFragments: async function () {
+    var ta = document.getElementById('post-content');
+    if (!ta || ta.readOnly) return;
+    var lines = String(ta.value || '').split('\n');
+    var payloads = [];
+    for (var i = 0; i < lines.length; i++) {
+      var m = lines[i].trim().match(/^:::locked\s+([A-Za-z0-9+/=]+)\s*$/);
+      if (m) payloads.push(m[1]);
+    }
+    if (!payloads.length) { this.notify('正文里没有已保存的加密片段'); return; }
+    var pwd = window.prompt('输入这些加密片段的口令（相同口令会一次解除；不同口令的片段会保留）：');
+    if (!pwd) return;
+
+    var unlocked = 0;
+    var failed = 0;
+    var authFailed = false;
+    for (var j = 0; j < lines.length; j++) {
+      var match = lines[j].trim().match(/^:::locked\s+([A-Za-z0-9+/=]+)\s*$/);
+      if (!match) continue;
+      try {
+        var out = await this.api('/api/admin/unlock-fragment', { method: 'POST', body: { payload: match[1], password: pwd } });
+        var plain = String((out && out.content) || '');
+        var end = j + 1;
+        if (end < lines.length && lines[end].trim() === ':::') end++;
+        var plainLines = plain.split('\n');
+        lines.splice.apply(lines, [j, end - j].concat(plainLines));
+        j += plainLines.length - 1;
+        unlocked++;
+      } catch (e) {
+        failed++;
+        if (e && e.message === 'unauthorized') { authFailed = true; break; }
+      }
+    }
+    if (unlocked) {
+      ta.value = lines.join('\n');
+      this.renderPostPreview();
+    }
+    if (authFailed) return;
+    if (unlocked && failed) this.notify('已解除 ' + unlocked + ' 个片段，另有 ' + failed + ' 个口令不匹配，已保留');
+    else if (unlocked) this.notify('已解除 ' + unlocked + ' 个加密片段，保存后生效');
+    else this.notify('解除失败：口令不匹配或片段已损坏');
   },
 
   mdInsertLock: function () {
@@ -1862,6 +1917,9 @@ var cms = {
       this.renderSessions(data.sessions || [], data.history || [], data.blocked || []);
 
       this.whitelist = Array.isArray(site.whitelist) ? site.whitelist.slice() : [];
+      this.whitelistEnabled = site.whitelistEnabled !== false;
+      var whitelistEnabledEl = document.getElementById('whitelist-enabled');
+      if (whitelistEnabledEl) whitelistEnabledEl.checked = this.whitelistEnabled;
       this.renderWhitelist();
       this.setSettingsTab(this.settingsTab || 'general');
 
@@ -2475,7 +2533,7 @@ var cms = {
     if (!ul) return;
     var list = this.whitelist || [];
     if (!list.length) {
-      ul.innerHTML = '<li class="whitelist-empty">白名单为空：前台所有外部链接都会弹确认框</li>';
+      ul.innerHTML = '<li class="whitelist-empty">白名单为空：未关闭确认时，前台所有外部链接都会弹确认框</li>';
       return;
     }
     ul.innerHTML = list.map(function (d) {
@@ -2528,12 +2586,16 @@ var cms = {
     var err = document.getElementById('whitelist-error');
     var state = document.getElementById('whitelist-state');
     if (err) err.textContent = '';
+    var enabledEl = document.getElementById('whitelist-enabled');
+    var enabled = enabledEl ? !!enabledEl.checked : this.whitelistEnabled !== false;
     try {
-      var out = await this.api('/api/admin/site', { method: 'POST', body: { whitelist: this.whitelist } });
+      var out = await this.api('/api/admin/site', { method: 'POST', body: { whitelist: this.whitelist, whitelistEnabled: enabled } });
       var saved = (out && out.site && out.site.whitelist) || [];
       this.whitelist = saved.slice();
+      this.whitelistEnabled = !(out && out.site && out.site.whitelistEnabled === false);
+      if (enabledEl) enabledEl.checked = this.whitelistEnabled;
       this.renderWhitelist();
-      if (state) state.textContent = '已保存 · ' + saved.length + ' 个域名';
+      if (state) state.textContent = '已保存 · ' + saved.length + ' 个域名 · 跳转确认' + (this.whitelistEnabled ? '已开启' : '已关闭');
       this.notify('白名单已保存');
     } catch (e) {
       if (e && e.message === 'unauthorized') return;

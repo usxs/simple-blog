@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS posts (
   enciv TEXT NOT NULL DEFAULT '',
   enctag TEXT NOT NULL DEFAULT '',
   enchint TEXT NOT NULL DEFAULT '',
+  encpwd TEXT NOT NULL DEFAULT '',
   mtime INTEGER NOT NULL DEFAULT 0,
   content TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL DEFAULT 0,
@@ -73,6 +74,7 @@ CREATE TABLE IF NOT EXISTS moments (
   enciv TEXT NOT NULL DEFAULT '',
   enctag TEXT NOT NULL DEFAULT '',
   enchint TEXT NOT NULL DEFAULT '',
+  encpwd TEXT NOT NULL DEFAULT '',
   mtime INTEGER NOT NULL DEFAULT 0,
   content TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL DEFAULT 0,
@@ -105,6 +107,14 @@ CREATE TABLE IF NOT EXISTS kv (
 `;
 
 db.exec(SCHEMA);
+// 兼容已有数据库：老库没有 encpwd 列时补上（文章加密后后台自动解密用）
+for (const table of ['posts', 'moments']) {
+  const cols = all('PRAGMA table_info(' + table + ')');
+  if (!cols.some((c) => c.name === 'encpwd')) {
+    db.exec('ALTER TABLE ' + table + " ADD COLUMN encpwd TEXT NOT NULL DEFAULT ''");
+  }
+}
+
 db.prepare('INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)').run('schema_version', '2');
 
 function all(sql, ...params) {

@@ -1883,6 +1883,7 @@ body.md-lightbox-locked {
 .md-btn:hover { background: var(--bg-subtle); color: var(--text-primary); border-color: var(--border); }
 .md-sep { width: 1px; height: 18px; background: var(--border); margin: 0 4px; }
 .md-btn-lock { color: var(--text-primary); border-color: var(--border-strong); }
+.md-btn-unlock { color: var(--text-secondary); border-color: var(--border); }
 .md-toolbar-tip { margin-left: auto; font-size: 11px; color: var(--text-muted); }
 .post-workspace { min-height: 420px; }
 .post-workspace .markdown-source textarea { min-height: 420px; }
@@ -1900,6 +1901,7 @@ body.md-lightbox-locked {
 /* ===== 白名单 ===== */
 .whitelist-add { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 .whitelist-add .field-input { flex: 1; min-width: 200px; }
+.whitelist-toggle { margin: 0 0 12px; }
 .whitelist-list { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 .whitelist-empty { color: var(--text-muted); font-size: 12px; }
 .whitelist-chip {

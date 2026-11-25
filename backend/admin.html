@@ -194,6 +194,7 @@
             <button type="button" class="md-btn" data-md="hr" title="分隔线">—</button>
             <span class="md-sep"></span>
             <button type="button" class="md-btn md-btn-lock" data-md="lock" title="插入加密片段">🔒 加密片段</button>
+            <button type="button" class="md-btn md-btn-unlock" data-md="unlock" title="把已保存的加密片段还原为明文">🔓 解除片段</button>
             <span class="md-toolbar-tip" id="md-toolbar-tip">选中文字后点按钮即可套用格式</span>
           </div>
 
@@ -432,6 +433,7 @@
                 <span class="settings-tip">前台点外链时，只有名单内的域名会直接跳转</span>
               </div>
               <p class="settings-desc">默认包含代码内置的几个域名。这里增删的域名保存在后端，前台刷新后立即生效。只填域名即可（如 <code>example.com</code>），不要带 https:// 与路径；子域名无需单独添加。</p>
+              <label class="check-row whitelist-toggle"><input type="checkbox" id="whitelist-enabled" /> 启用外部链接跳转确认（关闭后所有外链直接跳转，不再弹窗）</label>
               <div class="whitelist-add">
                 <input class="field-input" id="whitelist-input" placeholder="example.com" autocomplete="off" />
                 <button class="btn" type="button" id="whitelist-add-btn">添加</button>

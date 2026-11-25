@@ -5,7 +5,7 @@
  * Markdown 拆成「字段 + 正文」，拆法必须完全一致，所以统一放在这里。
  *
  * 前言字段（与 buildMdContent 对应）：
- *   title / date / mtime / tags / tag / hidden / enc / encsalt / enciv / enctag / enchint
+ *   title / date / mtime / tags / tag / hidden / enc / encsalt / enciv / enctag / enchint / encpwd
  */
 
 'use strict';
@@ -40,6 +40,16 @@ function normalizeTags(value) {
  * @param {{ id?: string, fallbackDate?: string, fallbackMtime?: number }} opts
  * @returns {{ id, title, date, tag, tags, hidden, enc, encsalt, enciv, enctag, enchint, mtime, content }}
  */
+function decodeEncPassword(value) {
+  try {
+    const text = String(value == null ? '' : value).trim();
+    if (!text) return '';
+    return Buffer.from(text, 'base64').toString('utf8');
+  } catch (err) {
+    return '';
+  }
+}
+
 function parseMdText(raw, opts) {
   const o = opts || {};
   const text = String(raw == null ? '' : raw).replace(/^\uFEFF/, '');
@@ -71,6 +81,7 @@ function parseMdText(raw, opts) {
     enciv: String(meta.enciv || ''),
     enctag: String(meta.enctag || ''),
     enchint: String(meta.enchint || ''),
+    encpwd: decodeEncPassword(meta.encpwd), // 仅服务端 / 后台使用；公开接口永远不会返回
     mtime: Math.round(Number(meta.mtime) || fallbackMtime),
     content: String(body || '')
   };
@@ -106,6 +117,7 @@ function buildMdText(item, type) {
       lines.push('enciv: ' + String(item.enciv || ''));
       lines.push('enctag: ' + String(item.enctag || ''));
       if (item.enchint) lines.push('enchint: ' + String(item.enchint).replace(/[\r\n]+/g, ' ').slice(0, 60));
+      if (item.encpwd) lines.push('encpwd: ' + Buffer.from(String(item.encpwd), 'utf8').toString('base64'));
     }
   } else {
     lines.push('date: ' + cleanDate);
