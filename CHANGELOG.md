@@ -21,6 +21,7 @@
 - 文章编辑页默认进入「内容」视图，三视图选择记住在浏览器；快捷键仍为 <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd>
 - `docker-compose.hub.yml` 的 V2 / V3 版本只挂载 SQLite 与上传目录，默认标签改为 `v2` / `v3`；V3 的 `BACKEND_PUBLIC_URL` 默认留空
 - 后台静态资源继续使用 `no-store`，改版后不需要额外加版本号
+- 默认分支由 `main` 调整为 `v1`，README、文档站与 CI 触发分支同步；V1 多架构镜像改为在构建机架构安装依赖并按目标架构选择 sharp 二进制，避免 arm64 下 QEMU 执行 npm 触发 SIGILL
 
 ## [3.0.0-v3] - 2026-11-25
 
