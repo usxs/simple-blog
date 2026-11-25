@@ -1,8 +1,8 @@
 {
   "name": "simple-blog-backend",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "private": true,
-  "description": "简单博客 V2 · Cloudflare Pages 前端 + Node 后端（SQLite 存储）：登录、文章/瞬间管理、评论、图片上传",
+  "description": "简单博客 V3 · 前后端不分离单体（Node + SQLite + SSR，类似 Typecho）：一个进程同时提供站点与后台",
   "main": "server.js",
   "engines": {
     "node": ">=22.5"
@@ -11,7 +11,7 @@
     "start": "node server.js",
     "migrate": "node scripts/migrate-v1-to-v2.js",
     "import-portable": "node scripts/import-portable.js",
-    "check": "node --check server.js && node --check backend/auth.js && node --check backend/captcha.js && node --check backend/storage.js && node --check backend/storage-db.js && node --check backend/storage-file.js && node --check backend/db.js && node --check backend/kvfile.js && node --check backend/mdparse.js && node --check backend/text.js && node --check backend/migrate-import.js && node --check backend/transfer.js && node --check backend/probe.js && node --check backend/sitemap.js && node --check backend/indexnow.js && node --check backend/image.js && node --check admin.js && node --check scripts/migrate-v1-to-v2.js && node --check scripts/import-portable.js"
+    "check": "node --check server.js && node --check backend/auth.js && node --check backend/captcha.js && node --check backend/storage.js && node --check backend/storage-db.js && node --check backend/storage-file.js && node --check backend/db.js && node --check backend/kvfile.js && node --check backend/mdparse.js && node --check backend/text.js && node --check backend/migrate-import.js && node --check backend/transfer.js && node --check backend/probe.js && node --check backend/sitemap.js && node --check backend/indexnow.js && node --check backend/image.js && node --check admin.js && node --check web/ssr.js && node --check scripts/migrate-v1-to-v2.js && node --check scripts/import-portable.js"
   },
   "dependencies": {
     "sharp": "^0.35.5"

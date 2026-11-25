@@ -138,6 +138,14 @@ const UPSERT_SQL = (table) =>
   'enchint = excluded.enchint, mtime = excluded.mtime, content = excluded.content, updated_at = excluded.updated_at';
 
 // ---- 读 ----
+// 文章是否存在：给路由层用，避免它们直接摸文件路径
+function postExists(id) {
+  const safe = String(id || '').trim();
+  if (!safe) return false;
+  const row = db.get('SELECT 1 AS ok FROM posts WHERE id = ?', safe);
+  return Boolean(row && row.ok);
+}
+
 function readArticles() {
   const rows = db.all('SELECT * FROM posts ORDER BY mtime DESC');
   return sortNewestFirst(rows.map(rowToItem));
@@ -359,6 +367,7 @@ module.exports = {
   sanitizeId,
   buildMdContent,
   readArticles,
+  postExists,
   readPostComments,
   savePostComments,
   collectCascadeIds,

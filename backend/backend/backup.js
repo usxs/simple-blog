@@ -202,6 +202,8 @@ function findFrontendSourceDir() {
   candidates.push(path.resolve(ROOT_DIR, '..', 'frontend'));
   candidates.push(path.join(ROOT_DIR, '前端'));
   candidates.push(path.join(ROOT_DIR, 'frontend'));
+  // V3 单体版：前端就在 backend/web 里，与后端一起备份即可
+  candidates.push(path.join(ROOT_DIR, 'web'));
   for (const dir of candidates) {
     try {
       if (fs.statSync(dir).isDirectory() && fs.existsSync(path.join(dir, 'index.html'))) return dir;

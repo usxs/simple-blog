@@ -4,7 +4,8 @@ var SITE_CONFIG = {
   avatarText: '简',
   homeTitle: 'Hi, I am here.',
   homeBio: '这里是我的个人博客，记录技术、折腾与生活。',
-  apiBaseUrl: 'https://api.example.com',
+  // V3 前后端不分离：接口就在同一个域名下，留空即同源
+  apiBaseUrl: '',
   probeUrl: '',
   icpText: '',
   siteStartDate: '2026-01-01',

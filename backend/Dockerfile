@@ -1,4 +1,5 @@
-# 后端镜像（V2）：Node 22 Alpine + 内置 node:sqlite + sharp（上传图片自动转 WebP）
+# 镜像（V3 单体版）：Node 22 Alpine + 内置 node:sqlite + sharp（上传图片自动转 WebP）
+# 一个容器同时提供前台站点（backend/web，SSR 直出）与后台管理，不再需要 Cloudflare Pages。
 # node:sqlite 是 Node 22.5 起内置的模块，所以这个版本不再需要装数据库驱动。
 # sharp 自带各平台预编译二进制（含 Alpine musl），无需安装编译工具链。
 FROM node:22-alpine
@@ -12,6 +13,7 @@ RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
 # 再拷代码（数据目录 config.json/article/Musings/img/file/data 由 compose 卷挂载，不进镜像）
 COPY server.js admin.js admin.html admin.css markdown.js ./
 COPY backend ./backend
+COPY web ./web
 COPY scripts ./scripts
 
 # SQLite 数据目录（compose 会把这个目录挂到宿主机，升级镜像不丢数据）

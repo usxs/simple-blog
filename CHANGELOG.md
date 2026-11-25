@@ -3,6 +3,32 @@
 本项目的所有重要变更记录在此文件中，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [3.0.0-v3] - 2026-11-25
+
+V3：前后端不分离单体版——同一个 Node 进程既输出页面又输出接口，SQLite 存储，部署形态类似 Typecho。
+
+### 新增
+
+- 前端并入后端：`frontend/` 迁到 `backend/web/`（`index.html`、`app.js`、`style.css`、`markdown.js`），删除 Cloudflare 专用文件（Functions、`_headers`、`_redirects`）
+- 进程内 SSR：新增 `backend/web/ssr.js`，接管原先 Pages Functions 的职责——`/post/<id>` 直出完整正文并注入 title / description / canonical / og / `BlogPosting`，栏目页注入栏目元信息，渲染不了时回退 SPA 骨架
+- 同源接口：`app.js` 的 `apiBaseUrl` 置空，不再需要 CORS、跨域 Cookie 与第二个域名
+- 页面与静态资源路由：`/`、`/post/*`、单段栏目路径、`/app.js`、`/style.css`、`/markdown.js`（前后台共用一份实现）
+- `/version` 改为进程内返回（`SITE_VERSION` / `SITE_BRANCH` / `SITE_COMMIT`），`/api/deploy-version` 在单体模式下直接读本地版本，不再抓取远端
+- `robots.txt` 改为放行站点、只挡后台与 `/api/`、`/file/`，`Sitemap` 行使用 `SITE_PUBLIC_URL`
+- 备份会把 `backend/web` 一并快照（前后端同仓后不再有 `frontend/` 目录可找）
+
+### 变更
+
+- `package.json` 升到 3.0.0，描述改为单体版；`check` 脚本增加 `web/ssr.js`
+- `Dockerfile` 复制 `web/`，镜像同时提供站点与后台；`docker-compose.yml` 注释与变量更新（新增 `SITE_VERSION` / `SITE_BRANCH` / `SITE_COMMIT`，`BACKEND_PUBLIC_URL` 留空即复用 `SITE_PUBLIC_URL`）
+- 数据库结构与 V2 完全一致，V2 的 `data/blog.db` 可以直接给 V3 用
+
+### 文档
+
+- 新增 `handbook/start/monolith.md`：V3 部署（Docker / 直接跑 Node）、静态资源与缓存、robots 与 sitemap、从 V1/V2 迁入、常见问题
+- `README.md` 增加「三个版本怎么选」对照表
+- `mkdocs.yml` 新增 nav 条目「部署 V3 单体版」
+
 ## [2.0.0-v2] - 2026-11-25
 
 V2：把后端从「Markdown 文件 + JSON」换成 SQLite，前端仍然部署在 Cloudflare Pages。

@@ -81,6 +81,7 @@ nav:
       - 部署前准备: start/prerequisites.md
       - 部署后端: start/backend.md
       - 部署前端: start/frontend.md
+      - 部署 V3 单体版: start/monolith.md
       - 域名与 HTTPS: start/https.md
       - 搜索引擎与 SEO: start/seo.md
   - 使用手册:

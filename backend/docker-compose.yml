@@ -1,10 +1,15 @@
-# 博客后端（V2：SQLite 存储）：Node 22 + 内置 node:sqlite + sharp（上传图片自动转 WebP）
+# 博客（V3 单体版）：前后端不分离 + SQLite，一个容器搞定站点与后台，类似 Typecho
+#   Node 22 + 内置 node:sqlite + sharp（上传图片自动转 WebP）+ 自写 SSR
 #
 # 使用方式：
 #   1. cp .env.example .env && vim .env      # 至少填 ADMIN_PASSWORD 或首次用后台初始化向导
 #   2. docker compose up -d --build          # 从源码构建（首次或改动代码后必须带 --build）
 #      或 docker compose pull && docker compose up -d --no-build   # 直接用 Docker Hub 上的镜像
-#   3. 浏览器打开 http://127.0.0.1:33001/    # 若在服务器上，建议用 Nginx/Cloudflare 反代到该端口
+#   3. 浏览器打开 http://127.0.0.1:33001/    # 前台与后台（/admin）都在这个地址下
+#      若在服务器上，建议用 Nginx/Cloudflare 反代到该端口
+#
+# 与 V2 的区别：V2 的前端在 Cloudflare Pages 上、后端只提供 /api；V3 由本进程同时输出
+# HTML（/、/post/<id>、/posts 等直出）与接口，因此 SITE_PUBLIC_URL 要填这个站点的公网地址。
 #
 # 数据卷：data/（含 blog.db）与 img/、file/ 以相对路径挂载到宿主机，升级镜像不丢数据；
 # 容器以 UID 1000 运行，宿主机这些目录需 chown 1000:1000。
@@ -37,7 +42,12 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       # 站点对外地址（用于 sitemap 与 IndexNow 推送的绝对 URL）
       SITE_PUBLIC_URL: ${SITE_PUBLIC_URL:-https://www.example.com}
-      BACKEND_PUBLIC_URL: ${BACKEND_PUBLIC_URL:-https://api.example.com}
+      # 单体版前后端同域，BACKEND_PUBLIC_URL 只影响 robots 里的 Sitemap 行，留空即用 SITE_PUBLIC_URL
+      BACKEND_PUBLIC_URL: ${BACKEND_PUBLIC_URL:-}
+      # 站点版本信息（后台「概览」与 /version 展示），一般由 CI 注入
+      SITE_VERSION: ${SITE_VERSION:-}
+      SITE_BRANCH: ${SITE_BRANCH:-}
+      SITE_COMMIT: ${SITE_COMMIT:-}
       # 验证码签名密钥，留空则首次启动自动生成并持久化到 data/captcha-secret.json
       CAPTCHA_SECRET: ${CAPTCHA_SECRET:-}
       # IndexNow：填了 key 才会在发布/删除文章后向 Bing/Yandex 等推送收录

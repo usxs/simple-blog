@@ -21,6 +21,20 @@
 
 > 适合想要「自己的数据自己管」、又不想折腾数据库和构建工具链的人。整套系统单机 Docker 一条命令启动，前端免费托管在 Cloudflare。
 
+### 三个版本怎么选
+
+同一套代码按分支发布三种形态，数据可以互相迁移：
+
+| 版本 | 分支 | 形态 | 存储 | 适合谁 |
+| --- | --- | --- | --- | --- |
+| **V1** | `main` | Pages 前端 + Node 后端（两段式） | Markdown 文件 + JSON | 想要数据即文件、拷走就能搬家 |
+| **V2** | `v2-sqlite` | Pages 前端 + Node 后端（两段式） | SQLite | 文章/评论很多，想要更稳的写入与查询 |
+| **V3** | `v3-monolith` | 前后端不分离单体（一个进程） | SQLite | 只想在一台 VPS 上跑完，不依赖 Cloudflare |
+
+- V1 后台「设置 → 迁移」可以**一键迁移到 V2 / V3**（下载或直推便携包 `.zip`），也能和 **Hugo / Hexo / Jekyll / Astro / Ghost / Obsidian** 互导 Markdown。
+- V2 的数据库结构与 V3 完全一致，`blog.db` 直接可用；从 V1 文件结构迁移时用 `node scripts/migrate-v1-to-v2.js`。
+- V3 的部署见 [部署 V3 单体版](https://usxs.github.io/simple-blog/start/monolith/)。
+
 ---
 
 ## 界面预览

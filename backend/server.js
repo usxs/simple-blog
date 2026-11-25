@@ -18,6 +18,7 @@ const site = require('./backend/site');
 const { fetchProbeServers } = require('./backend/probe-source');
 const transfer = require('./backend/transfer');
 const migrateImport = require('./backend/migrate-import');
+const ssr = require('./web/ssr');
 
 // 评论提交的全局并发闸门：同一时刻最多处理 20 条，超出的直接快速失败，避免写队列堆到超时
 let pendingSubmits = 0;
@@ -143,6 +144,33 @@ const MIME_MAP = {
   '.mp3': 'audio/mpeg'
 };
 
+// V3 前后端不分离：主站模板与静态资源就放在 backend/web 下，由这个进程一起发出去
+const WEB_DIR = path.join(__dirname, 'web');
+// 有 web/index.html 说明本进程同时托管前端（V3 单体版）；V1/V2 的前端在 Cloudflare Pages 上
+const MONOLITH = fs.existsSync(path.join(WEB_DIR, 'index.html'));
+const OWN_VERSION = (function () {
+  try {
+    return String(JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version || '');
+  } catch (e) {
+    return '';
+  }
+})();
+
+// 主站页面统一入口：HTML 不做长缓存，改版后刷新即生效
+function serveHtml(res, html, status, cache) {
+  if (!html) {
+    res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+    return res.end('页面模板缺失');
+  }
+  res.writeHead(status || 200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': cache || 'no-cache' });
+  res.end(html);
+}
+
+// 静态资源带指纹参数（?v=）时给长缓存，否则短缓存
+function assetCacheOf(reqUrl) {
+  return reqUrl.searchParams.get('v') ? 'public, max-age=31536000, immutable' : 'public, max-age=3600';
+}
+
 startProbeScheduler();
 
 /**
@@ -248,14 +276,29 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && pathname === '/admin.js') {
     return serveSingleFile(res, path.join(ROOT_DIR, 'admin.js'), MIME_MAP['.js']);
   }
+  // /markdown.js 前后台共用同一份实现（两边文件完全一致），无需拆分路径
   if (req.method === 'GET' && pathname === '/markdown.js') {
     return serveSingleFile(res, path.join(ROOT_DIR, 'markdown.js'), MIME_MAP['.js']);
   }
 
-  // 2. 根路径返回 200 状态
-  if (req.method === 'GET' && pathname === '/') {
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-    return res.end(JSON.stringify({ code: 200, message: 'API Server is running correctly.' }));
+  // 1.8 主站静态资源（V3 前后端不分离：index.html 引用的 /app.js、/style.css 由本进程发出）
+  if (req.method === 'GET' && (pathname === '/app.js' || pathname === '/style.css')) {
+    res.setHeader('Cache-Control', assetCacheOf(reqUrl));
+    return serveSingleFile(res, path.join(WEB_DIR, pathname.slice(1)), MIME_MAP[path.extname(pathname)]);
+  }
+
+  // 2. 前端版本：V1/V2 由 Cloudflare Pages Function 提供，V3 没有 Pages，
+  //    直接读 package.json 的 version，commit/branch 由部署环境变量注入
+  if ((req.method === 'GET' || req.method === 'HEAD') && pathname === '/version') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=60' });
+    return res.end(JSON.stringify({
+      ok: true,
+      version: process.env.SITE_VERSION || OWN_VERSION,
+      branch: process.env.SITE_BRANCH || '',
+      commit: process.env.SITE_COMMIT || '',
+      variant: 'monolith',
+      time: cnNowStamp()
+    }));
   }
 
   // 2.5 sitemap：搜索引擎专用。内容只含前端主站（Cloudflare Pages）页面，
@@ -265,17 +308,39 @@ const server = http.createServer((req, res) => {
     return res.end(buildSitemap());
   }
 
-  // 2.6 robots：本域名（后端）除 sitemap 外全部禁止抓取——后台登录页、
-  //     管理接口、评论数据等都不暴露给搜索引擎
+  // 2.5 主站页面：SSR 能直出就直出完整 HTML（文章页带正文与 SEO 元信息），
+  //     渲染不了（隐藏/加密文章、未知路径）就回退 SPA 骨架，行为与 V1/V2 的 Pages 版一致
+  if (req.method === 'GET' || req.method === 'HEAD') {
+    const isApi = pathname === '/api' || pathname.indexOf('/api/') === 0;
+    if (!isApi) {
+      if (pathname === '/') {
+        return serveHtml(res, ssr.shell(), 200);
+      }
+      const seg = pathname.replace(/^\/+|\/+$/g, '');
+      const isSingle = seg && seg.indexOf('/') === -1 && seg.indexOf('.') === -1;
+      if (pathname.indexOf('/post/') === 0 || isSingle) {
+        const page = ssr.render(pathname, { host: req.headers.host });
+        if (page) return serveHtml(res, page.html, page.status, page.cache);
+        // /post/<不存在> 交给前端渲染 404 页；其它单段路径就是 SPA 路由
+        return serveHtml(res, ssr.shell(), pathname.indexOf('/post/') === 0 ? 404 : 200);
+      }
+    }
+  }
+
+  // 2.6 robots：V3 主站与接口同域，因此这里放行站点、只挡后台与接口
   if ((req.method === 'GET' || req.method === 'HEAD') && pathname === '/robots.txt') {
+    const adminPath = '/' + String(site.getSite().adminPath || 'admin').replace(/^\/+|\/+$/g, '');
+    const publicBase = String(process.env.SITE_PUBLIC_URL || PUBLIC_SITE_URL || '').replace(/\/+$/, '');
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
     return res.end(
-      '# 后端 API 域名：仅提供 sitemap 文件，其余路径一律禁止抓取\n' +
+      '# 简单博客（V3 单体版）：站点允许抓取，后台与接口不暴露\n' +
       'User-agent: *\n' +
-      'Allow: /sitemap.xml\n' +
-      'Disallow: /\n' +
+      'Allow: /\n' +
+      'Disallow: ' + adminPath + '\n' +
+      'Disallow: /api/\n' +
+      'Disallow: /file/\n' +
       '\n' +
-      'Sitemap: ' + (process.env.BACKEND_PUBLIC_URL || 'https://api.example.com').replace(/\/+$/, '') + '/sitemap.xml\n'
+      'Sitemap: ' + publicBase + '/sitemap.xml\n'
     );
   }
 
@@ -739,8 +804,8 @@ const server = http.createServer((req, res) => {
           return res.end(JSON.stringify({ ok: false, error: '昵称和评论内容不能为空' }));
         }
 
-        const postFolder = path.join(ARTICLE_DIR, postId);
-        if (!fs.existsSync(postFolder)) {
+        // 存储无关的存在性检查：SQLite 版没有文章目录，不能直接 stat 文件系统
+        if (!storage.postExists(postId)) {
           res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
           return res.end(JSON.stringify({ ok: false, error: '目标文章不存在' }));
         }
@@ -956,8 +1021,18 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // 8.6 前端部署版本（来自 Cloudflare Pages 的 /version，缓存 60 秒）
+  // 8.6 前端部署版本（V1/V2 来自 Cloudflare Pages 的 /version；V3 单体版就是自己）
   if (req.method === 'GET' && pathname === '/api/deploy-version') {
+    if (MONOLITH) {
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=60' });
+      return res.end(JSON.stringify({
+        ok: true,
+        version: process.env.SITE_VERSION || OWN_VERSION,
+        branch: process.env.SITE_BRANCH || '',
+        commit: process.env.SITE_COMMIT || '',
+        site: String(process.env.SITE_PUBLIC_URL || PUBLIC_SITE_URL || '')
+      }));
+    }
     fetchDeployVersion((err, info) => {
       if (res.headersSent) return;
       if (err) {
