@@ -3,9 +3,9 @@ site_description: 三种形态的极简个人博客系统：Cloudflare Pages + �
 site_url: https://usxs.github.io/simple-blog/
 repo_url: https://github.com/usxs/simple-blog
 repo_name: usxs/simple-blog
-edit_uri: edit/main/handbook/
+edit_uri: edit/v1/handbook/
 docs_dir: handbook
-copyright: '<a href="https://github.com/usxs/simple-blog/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>'
+copyright: '<a href="https://github.com/usxs/simple-blog/blob/v1/LICENSE" target="_blank" rel="noopener">MIT License</a>'
 
 extra_css:
   - stylesheets/extra.css

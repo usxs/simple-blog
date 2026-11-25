@@ -20,7 +20,7 @@
 
 | 标签 | 分支 | 形态 | 启动后得到 |
 | --- | --- | --- | --- |
-| `latest` | `main` | V1 | Node 后端（Markdown + JSON 文件），前端另发 Pages |
+| `latest` | `v1` | V1 | Node 后端（Markdown + JSON 文件），前端另发 Pages |
 | `v2` | `v2-sqlite` | V2 | Node 后端（SQLite），前端另发 Pages |
 | `v3` | `v3-monolith` | V3 | 站点 + 后台同一个容器，不需要 Pages |
 
@@ -98,7 +98,7 @@ vim .env
 docker compose -f docker-compose.hub.yml up -d
 ```
 
-V1 / V2 把分支换成 `main` / `v2-sqlite`，并确认 `.env` 里的 `IMAGE_TAG` 是 `latest` / `v2`。compose 文件自带 `STORE=sqlite`、`DB_FILE` 和健康检查；V3 的 `BACKEND_PUBLIC_URL` 留空即可。
+V1 / V2 把分支换成 `v1` / `v2-sqlite`，并确认 `.env` 里的 `IMAGE_TAG` 是 `latest` / `v2`。compose 文件自带 `STORE=sqlite`、`DB_FILE` 和健康检查；V3 的 `BACKEND_PUBLIC_URL` 留空即可。
 
 升级只换标签，数据卷不动：
 
@@ -120,7 +120,7 @@ vim .env
 docker compose up -d --build
 ```
 
-把 `v3-monolith` 换成 `v2-sqlite` / `main` 就是 V2 / V1。也可以手动构建：
+把 `v3-monolith` 换成 `v2-sqlite` / `v1` 就是 V2 / V1。也可以手动构建：
 
 ```bash
 cd backend
@@ -136,7 +136,7 @@ docker build -t my-blog-backend:dev .
 
 | 分支 | 触发 | 稳定标签 |
 | --- | --- | --- |
-| `main` | `main` 上的 `backend/**` 或工作流变化、`v*` 标签 | `latest` |
+| `v1` | `v1` 上的 `backend/**` 或工作流变化、`v*` 标签 | `latest` |
 | `v2-sqlite` | `v2-sqlite` 上的 `backend/**` 或工作流变化、`v2*` / `2.*` 标签 | `v2` |
 | `v3-monolith` | `v3-monolith` 上的 `backend/**` 或工作流变化、`v3*` / `3.*` 标签 | `v3` |
 

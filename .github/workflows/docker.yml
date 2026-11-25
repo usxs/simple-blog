@@ -2,7 +2,7 @@ name: docker
 
 on:
   push:
-    branches: [main]
+    branches: [v1]
     tags: ["v*"]
     paths:
       - "backend/**"

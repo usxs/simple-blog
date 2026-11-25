@@ -6,7 +6,7 @@
 
 | | **V1** | **V2** | **V3** |
 | --- | --- | --- | --- |
-| 分支 | `main` | `v2-sqlite` | `v3-monolith` |
+| 分支 | `v1` | `v2-sqlite` | `v3-monolith` |
 | Docker 标签 | `latest` | `v2` | `v3` |
 | 部署形态 | 两段式 | 两段式 | 单体（一个进程） |
 | 前端位置 | `frontend/`（Cloudflare Pages） | `frontend/`（Cloudflare Pages） | `backend/web/` |
@@ -19,7 +19,7 @@
 | 数据搬家方式 | 拷目录 / 便携包 | 便携包 / 拷 `blog.db` | 同 V2 |
 | 版本号 | `1.x` | `2.x` | `3.x` |
 
-三个分支各自构建镜像：`main` 发 `latest`，`v2-sqlite` 发 `v2`，`v3-monolith` 发 `v3`；版本号标签对应 `1.x` / `2.x` / `3.x`。V3 镜像一个容器就包含站点与后台，可以直接 `docker run`，详见 [Docker 镜像](../ref/docker.md)。
+三个分支各自构建镜像：`v1` 发 `latest`，`v2-sqlite` 发 `v2`，`v3-monolith` 发 `v3`；版本号标签对应 `1.x` / `2.x` / `3.x`。V3 镜像一个容器就包含站点与后台，可以直接 `docker run`，详见 [Docker 镜像](../ref/docker.md)。
 
 ## 二、怎么选
 

@@ -41,7 +41,7 @@ var SITE_CONFIG = {
         | Build command | 留空 |
         | Build output directory | `frontend` |
 
-    3. 保存并部署。之后每次 `push` 到 `main` 都会自动重新发布。
+    3. 保存并部署。之后每次 `push` 到 `v1` 都会自动重新发布。
 
 === "方式 B：命令行上传（不需要 Fork）"
 

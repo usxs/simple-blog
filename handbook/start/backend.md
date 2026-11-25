@@ -50,8 +50,8 @@ docker run -d --name simple-blog-backend --restart unless-stopped \
 用 compose 的话，从对应分支取这两个文件，改名 `.env` 后启动（V1 示例；V2 / V3 换 URL 里的分支和 `IMAGE_TAG`）：
 
 ```bash
-curl -O https://raw.githubusercontent.com/usxs/simple-blog/main/backend/docker-compose.hub.yml
-curl -o .env https://raw.githubusercontent.com/usxs/simple-blog/main/backend/.env.example
+curl -O https://raw.githubusercontent.com/usxs/simple-blog/v1/backend/docker-compose.hub.yml
+curl -o .env https://raw.githubusercontent.com/usxs/simple-blog/v1/backend/.env.example
 vim .env
 docker compose -f docker-compose.hub.yml up -d
 ```
@@ -63,7 +63,7 @@ docker compose -f docker-compose.hub.yml up -d
 ```bash
 git clone https://github.com/usxs/simple-blog.git
 cd simple-blog/backend
-git checkout v3-monolith            # V3 单体版；V2 用 v2-sqlite；V1 留 main
+git checkout v3-monolith            # V3 单体版；V2 用 v2-sqlite；V1 用 v1
 mkdir -p data article Musings img file && touch config.json
 sudo chown -R 1000:1000 data article Musings img file config.json
 cp .env.example .env

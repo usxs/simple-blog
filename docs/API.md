@@ -442,7 +442,7 @@ GET /<adminPath>            # 管理后台（admin.html，默认 /admin）
 后端读取前端站点根域的 `/version`（Cloudflare Pages Function），缓存 60 秒，供后台侧边栏显示前端部署版本。
 
 ```json
-{ "ok": true, "version": "bd358f4d", "branch": "main", "commit": "", "site": "https://www.example.com" }
+{ "ok": true, "version": "bd358f4d", "branch": "v1", "commit": "", "site": "https://www.example.com" }
 ```
 
 前端未部署 Functions 或读取失败时返回 `{"ok":false,"error":"暂时无法读取前端版本"}`，HTTP 状态仍为 200。

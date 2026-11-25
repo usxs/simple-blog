@@ -10,7 +10,7 @@
 [![GHCR](https://img.shields.io/badge/ghcr.io-usxs%2Fsimple--blog--backend-2496ED?logo=github&logoColor=white)](https://github.com/usxs/simple-blog/pkgs/container/simple-blog-backend)
 [![Version](https://img.shields.io/github/v/tag/usxs/simple-blog?logo=git&logoColor=white)](https://github.com/usxs/simple-blog/releases)
 [![Stars](https://img.shields.io/github/stars/usxs/simple-blog?logo=github&logoColor=white)](https://github.com/usxs/simple-blog/stargazers)
-[![Last commit](https://img.shields.io/github/last-commit/usxs/simple-blog?logo=git&logoColor=white)](https://github.com/usxs/simple-blog/commits/main)
+[![Last commit](https://img.shields.io/github/last-commit/usxs/simple-blog?logo=git&logoColor=white)](https://github.com/usxs/simple-blog/commits/v1)
 
 **Docs**: <https://usxs.github.io/simple-blog/> (deployment guide, handbook, FAQ)
 
@@ -18,7 +18,7 @@
 
 A minimal, self-hosted personal blog. The repository ships three variants on three branches — same content model, same API, only the renderer and the storage differ:
 
-- **V1** (`main`, Docker `latest`): Cloudflare Pages static frontend + self-hosted Node backend, data stored as Markdown / JSON files
+- **V1** (`v1`, Docker `latest`): Cloudflare Pages static frontend + self-hosted Node backend, data stored as Markdown / JSON files
 - **V2** (`v2-sqlite`, Docker `v2`): same two-tier deployment, backend switched to SQLite (Node's built-in `node:sqlite`, no third-party driver)
 - **V3** (`v3-monolith`, Docker `v3`): frontend and backend in one process, SQLite + in-process SSR — Cloudflare Pages not required
 
@@ -257,7 +257,7 @@ git clone https://github.com/<your-name>/simple-blog.git
 cd simple-blog
 ```
 
-> A fork does not track upstream automatically. To sync later, click **Sync fork** on GitHub, or locally `git remote add upstream https://github.com/usxs/simple-blog.git && git fetch upstream && git merge upstream/main`.
+> A fork does not track upstream automatically. To sync later, click **Sync fork** on GitHub, or locally `git remote add upstream https://github.com/usxs/simple-blog.git && git fetch upstream && git merge upstream/v1`.
 
 ### 2. Deploy the backend (on the server)
 
@@ -312,7 +312,7 @@ docker run -d --name simple-blog-backend --restart unless-stopped \
 
 For V2 use `:v2`; SQLite only needs `data` (the database is `data/blog.db`), `img` and `file`. The `config.json`, `article` and `Musings` mounts are only required with `STORE=file`.
 
-Or use the bundled `docker-compose.hub.yml` with the same `.env`. V3 is shown below; for V1 / V2 switch the branch in the URLs to `main` / `v2-sqlite` and check `IMAGE_TAG`:
+Or use the bundled `docker-compose.hub.yml` with the same `.env`. V3 is shown below; for V1 / V2 switch the branch in the URLs to `v1` / `v2-sqlite` and check `IMAGE_TAG`:
 
 ```bash
 curl -O https://raw.githubusercontent.com/usxs/simple-blog/v3-monolith/backend/docker-compose.hub.yml
