@@ -1,14 +1,19 @@
 # 搜索引擎与 SEO
 
-这套站点从一开始就是按「能被搜索引擎读懂」做的：真实路径路由、边缘 SSR、动态 sitemap、IndexNow。部署完只差一步——去提交。
+这套站点从一开始就是按「能被搜索引擎读懂」做的：真实路径路由、SSR、动态 sitemap、IndexNow。部署完只差一步——去提交。
+
+三个版本的 SEO 能力一致，只是 SSR 的执行位置不同：V1 / V2 由 Cloudflare Pages Functions 在边缘渲染，V3 由 Node 进程在服务端渲染。
 
 ## 已经做好的部分
 
 - **真实路径**：`/posts`、`/post/<id>`、`/links` 等，不再是 `#/` 哈希
-- **SSR**：文章页由 Pages Functions 注入标题、正文、canonical、Open Graph、`BlogPosting` JSON-LD
-- **sitemap**：`https://www.example.com/sitemap.xml`，发布/删除文章后即时更新，已启用栏目才收录
-- **robots.txt**：前端 `Allow: /` 并指向 sitemap；后端 `Disallow: /` 只放行 `/sitemap.xml`
+- **SSR**：文章页注入标题、正文、canonical、Open Graph、`BlogPosting` JSON-LD——V1 / V2 由 Pages Functions 在边缘完成，V3 由 `backend/web/ssr.js` 在进程内完成，输出结构相同
+- **sitemap**：`https://www.example.com/sitemap.xml`，发布/删除文章后即时更新，已启用栏目才收录（三个版本都由后端生成）
+- **robots.txt**：
+    - V1 / V2：前端 `Allow: /` 并指向 sitemap；后端 `Disallow: /` 只放行 `/sitemap.xml`
+    - V3：同域，改为 `Allow: /` + `Disallow: <后台路径>` + `Disallow: /api/` + `Disallow: /file/`，并指向 sitemap
 - **旧链接兼容**：`#/post/x` 会自动跳到 `/post/x`
+- **首屏内容**：V3 的 HTML 里直接带正文（`.article-reader`），关闭 JS 也能读到全文；V1 / V2 由边缘渲染得到同样结果
 
 自检：
 

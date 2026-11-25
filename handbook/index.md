@@ -9,12 +9,13 @@ hide:
   <h1 class="sb-hero__title">简单博客</h1>
   <p class="sb-hero__tagline">一套可以自己部署的极简个人博客系统</p>
   <p class="sb-hero__desc">
-    静态前端放在 Cloudflare Pages，后端跑在自己的服务器上，数据全部以 Markdown / JSON 落在磁盘里。
-    没有数据库，没有第三方依赖，一条 <code>docker run</code> 就能跑起来。
+    一套代码，三种形态：V1 用 Cloudflare Pages + 文件存储，V2 换成 SQLite，V3 把前后端合成一个进程。
+    内容模型与接口完全一致，数据还能互相迁移，挑一个分支部署就行。
   </p>
   <p class="sb-hero__actions">
     <a class="md-button md-button--primary" href="start/prerequisites/">快速开始</a>
     <a class="md-button" href="guide/admin/">使用手册</a>
+    <a class="md-button" href="start/versions/">版本选择</a>
     <a class="md-button" href="https://github.com/usxs/simple-blog">GitHub</a>
   </p>
 </div>
@@ -76,3 +77,17 @@ hide:
 <a class="sb-link" href="ops/troubleshooting/"><strong>排错手册</strong><span>从容器到浏览器的分层排查</span></a>
 
 </div>
+
+## 三种形态
+
+| | 分支 | 前端 | 后端 | 存储 | 适合 |
+| --- | --- | --- | --- | --- | --- |
+| **V1** | `main` | Cloudflare Pages | Node（自托管） | Markdown + JSON 文件 | 数据即文件，拷走就能搬家 |
+| **V2** | `v2-sqlite` | Cloudflare Pages | Node（自托管） | SQLite（`node:sqlite`） | 文章 / 评论很多，想要更稳的写入与查询 |
+| **V3** | `v3-monolith` | 同进程 SSR | 同一个进程 | SQLite | 一台 VPS 跑完，不依赖 Cloudflare |
+
+三个版本之间可以互相迁移：V1 后台「设置 → 迁移」能把整站打成便携包（下载或直推目标站点），V2 / V3 用令牌接收；也支持和 **Hugo / Hexo / Jekyll / Astro / Ghost / Obsidian** 的 Markdown 互相导入导出。
+
+- 不知道选哪个：[版本选择](start/versions.md)
+- 第一次部署：[部署前准备](start/prerequisites.md)
+- 已经在用 V1，想换存储或换形态：[迁移与导入导出](guide/transfer.md)

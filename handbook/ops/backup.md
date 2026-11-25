@@ -79,7 +79,12 @@ docker compose up -d --build
 
 ## 前端发布
 
-前端在 Cloudflare Pages 上，每次部署都有独立 ID，可以在 Dashboard 的 **Deployments** 里一键回滚到上一个版本；`git revert` 后推送也会触发重新发布。
+- **V1 / V2**：前端在 Cloudflare Pages 上，每次部署都有独立 ID，可以在 Dashboard 的 **Deployments** 里一键回滚；`git revert` 后推送也会触发重新发布。
+- **V3**：前端就在 `backend/web/` 里，跟着镜像走——回滚镜像（或 `git checkout` 后 `--build`）即可，没有独立的前端发布步骤。
+
+## 跨版本搬家
+
+换了存储或换了形态，别手工拷数据库：后台 **设置 → 迁移** 可以导出便携包（`.zip`，含文章、瞬间、评论、栏目配置、友链、图片与可选的管理员凭据），目标站点用迁移令牌接收。详见 [迁移与导入导出](../guide/transfer.md)。
 
 ## 下一步
 
