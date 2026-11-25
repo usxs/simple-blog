@@ -70,6 +70,24 @@ function renderMarkdown(md) {
     var line = lines[i];
     var trimmed = line.trim();
 
+    /* ── 加密片段占位块（正文里只有密文，解锁后才渲染内容）── */
+    var lockMatch = /^:::locked\s+([A-Za-z0-9+/=]+)\s*$/.exec(trimmed);
+    if (lockMatch) {
+      var lockPayload = lockMatch[1];
+      i++;
+      if (i < lines.length && lines[i].trim() === ':::') i++;
+      html += '<div class="md-lock" data-lock="' + markdownEscapeHtml(lockPayload) + '">' +
+        '<div class="md-lock-icon" aria-hidden="true">🔒</div>' +
+        '<div class="md-lock-body">' +
+          '<p class="md-lock-title">这段内容已加密</p>' +
+          '<p class="md-lock-tip">输入口令后查看被加密的文字或图片</p>' +
+          '<div class="md-lock-form"><input type="password" class="md-lock-input" placeholder="输入口令" autocomplete="off" /><button type="button" class="md-lock-btn">解锁</button></div>' +
+          '<p class="md-lock-error" hidden></p>' +
+        '</div>' +
+      '</div>';
+      continue;
+    }
+
     /* ── 围栏代码块 ───────────────────────────── */
     if (isFence(trimmed)) {
       var fenceChar = trimmed.charAt(0);

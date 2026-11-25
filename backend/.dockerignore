@@ -7,9 +7,5 @@ img
 file
 config.json
 *.log
-*.tar.gz
-*.tgz
-.backup-*
 .git
-.github
 .DS_Store

@@ -33,7 +33,7 @@
 
       <ul class="nav-list" id="mod-nav">
         <li class="nav-item-row" data-nav-row="posts"><button class="nav-btn active" data-mod="posts" onclick="cms.switchMod('posts')"><span class="nav-label" data-label="posts">文章</span><span class="nav-count" id="count-posts">0</span></button></li>
-        <li class="nav-item-row" data-nav-row="moments"><button class="nav-btn" data-mod="moments" onclick="cms.switchMod('moments')"><span class="nav-label" data-label="moments">瞬间</span><span class="nav-count" id="count-moments">0</span></button></li>
+        <li class="nav-item-row" data-nav-row="moments"><button class="nav-btn" data-mod="moments" onclick="cms.switchMod('moments')"><span class="nav-label" data-label="moments">碎碎念</span><span class="nav-count" id="count-moments">0</span></button></li>
         <li class="nav-item-row" data-nav-row="comments"><button class="nav-btn" data-mod="comments" onclick="cms.switchMod('comments')"><span class="nav-label">评论审核</span><span class="nav-count" id="count-comments">0</span></button></li>
         <li class="nav-item-row" data-nav-row="links"><button class="nav-btn" data-mod="links" onclick="cms.switchMod('links')"><span class="nav-label">友链</span><span class="nav-count" id="count-links">0</span></button></li>
         <li class="nav-item-row" data-nav-row="notify"><button class="nav-btn" data-mod="notify" onclick="cms.switchMod('notify')"><span class="nav-label">推送</span></button></li>
@@ -42,19 +42,7 @@
         <li class="nav-item-row" data-nav-row="status"><button class="nav-btn" data-mod="status" onclick="cms.switchMod('status')"><span class="nav-label" data-label="status">状态</span><span class="nav-count" id="count-status">0</span></button></li>
         <li class="nav-item-row" data-nav-row="quirky"><button class="nav-btn" data-mod="quirky" onclick="cms.switchMod('quirky')"><span class="nav-label" data-label="quirky">奇奇怪怪</span><span class="nav-count" id="count-quirky">0</span></button></li>
         <li class="nav-item-row" data-nav-row="settings">
-          <button class="nav-btn" data-mod="settings" onclick="cms.openSettings(event)"><span class="nav-label">管理</span></button>
-          <ul class="nav-sub" id="settings-subnav" hidden>
-            <li><button type="button" class="nav-sub-btn" data-jump="card-site">站点信息</button></li>
-            <li><button type="button" class="nav-sub-btn" data-jump="card-modules">栏目与图标</button></li>
-            <li><button type="button" class="nav-sub-btn" data-jump="card-footer">页脚与备案</button></li>
-            <li><button type="button" class="nav-sub-btn" data-jump="card-social">社交链接</button></li>
-            <li><button type="button" class="nav-sub-btn" data-jump="card-indexnow">搜索引擎推送</button></li>
-            <li><button type="button" class="nav-sub-btn" data-jump="card-telegram">瞬间同步</button></li>
-            <li><button type="button" class="nav-sub-btn" data-jump="card-account">管理员账号</button></li>
-            <li><button type="button" class="nav-sub-btn" data-jump="card-totp">两步验证</button></li>
-            <li><button type="button" class="nav-sub-btn" data-jump="card-passkey">通行密钥</button></li>
-            <li><button type="button" class="nav-sub-btn" data-jump="card-sessions">登录会话</button></li>
-          </ul>
+          <button class="nav-btn" data-mod="settings" onclick="cms.switchMod('settings')"><span class="nav-label">管理</span></button>
         </li>
       </ul>
 
@@ -126,14 +114,115 @@
           </section>
         </div>
 
+        <section class="admin-posts" id="admin-posts" hidden>
+          <header class="posts-head">
+            <div class="posts-head-text">
+              <h2 class="settings-title">文章</h2>
+              <p class="settings-desc">点标题进入写作页；标题右侧「⋯」可编辑、加密、隐藏、删除</p>
+            </div>
+            <div class="posts-head-actions">
+              <input class="field-input posts-search" id="posts-search-input" placeholder="搜索标题 / 标签…" autocomplete="off" />
+              <button class="btn btn-primary" type="button" onclick="cms.openPostEditor('')">+ 新建文章</button>
+            </div>
+          </header>
+          <ul class="posts-list" id="posts-list"></ul>
+          <div class="auth-error" id="posts-error"></div>
+        </section>
+
+        <section class="admin-post-editor" id="admin-post-editor" hidden>
+          <header class="editor-head">
+            <div class="editor-head-left">
+              <button class="btn" type="button" onclick="cms.backToPosts()">← 返回列表</button>
+              <span class="editor-head-title" id="post-editor-title">新建文章</span>
+              <span class="settings-tip" id="post-editor-status"></span>
+            </div>
+            <div class="editor-head-actions">
+              <button class="btn btn-danger" type="button" id="post-delete-btn" onclick="cms.deleteCurrentPost()">删除</button>
+              <button class="btn btn-primary" type="button" onclick="cms.savePostEditor()">保存文章</button>
+            </div>
+          </header>
+
+          <div class="editor-meta">
+            <div class="field field--wide">
+              <label class="field-label" for="post-title">标题</label>
+              <input class="field-input" id="post-title" maxlength="120" placeholder="文章标题" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="post-id">链接 ID</label>
+              <input class="field-input" id="post-id" maxlength="80" placeholder="留空自动生成" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="post-date">日期</label>
+              <input class="field-input" id="post-date" placeholder="YYYY-MM-DD" />
+            </div>
+            <div class="field field--wide">
+              <label class="field-label" for="post-tags">标签</label>
+              <input class="field-input" id="post-tags" placeholder="用逗号分隔，例如：前端, 随笔" />
+            </div>
+          </div>
+
+          <div class="editor-flags">
+            <label class="check-row"><input type="checkbox" id="post-hidden" /> 在前端隐藏（后端保留，可随时恢复）</label>
+            <label class="check-row"><input type="checkbox" id="post-enc" /> 整篇加密（读者需输入口令才能查看）</label>
+            <input class="field-input editor-password" id="post-password" type="password" autocomplete="new-password" placeholder="设置 / 修改访问口令（留空表示不修改）" />
+          </div>
+
+          <div class="editor-lock-bar" id="post-lock-bar" hidden>
+            <span class="editor-lock-text">🔒 这篇文章已加密，输入口令解锁后才能编辑正文。</span>
+            <input class="field-input" id="post-unlock-input" type="password" autocomplete="current-password" placeholder="访问口令" />
+            <button class="btn" type="button" id="post-unlock-btn">解锁编辑</button>
+            <span class="auth-error" id="post-unlock-error"></span>
+          </div>
+
+          <div class="md-toolbar" id="md-toolbar" role="toolbar" aria-label="Markdown 快捷操作">
+            <button type="button" class="md-btn" data-md="h1" title="一级标题">H1</button>
+            <button type="button" class="md-btn" data-md="h2" title="二级标题">H2</button>
+            <button type="button" class="md-btn" data-md="h3" title="三级标题">H3</button>
+            <span class="md-sep"></span>
+            <button type="button" class="md-btn" data-md="bold" title="加粗"><b>B</b></button>
+            <button type="button" class="md-btn" data-md="italic" title="斜体"><i>I</i></button>
+            <button type="button" class="md-btn" data-md="strike" title="删除线"><s>S</s></button>
+            <button type="button" class="md-btn" data-md="upper" title="将选中文字转为大写">大写</button>
+            <span class="md-sep"></span>
+            <button type="button" class="md-btn" data-md="quote" title="引用">❝</button>
+            <button type="button" class="md-btn" data-md="code" title="行内代码">&lt;/&gt;</button>
+            <button type="button" class="md-btn" data-md="link" title="链接">链接</button>
+            <button type="button" class="md-btn" data-md="image" title="图片">图片</button>
+            <span class="md-sep"></span>
+            <button type="button" class="md-btn" data-md="ul" title="无序列表">• 列表</button>
+            <button type="button" class="md-btn" data-md="ol" title="有序列表">1. 列表</button>
+            <button type="button" class="md-btn" data-md="hr" title="分隔线">—</button>
+            <span class="md-sep"></span>
+            <button type="button" class="md-btn md-btn-lock" data-md="lock" title="插入加密片段">🔒 加密片段</button>
+            <span class="md-toolbar-tip" id="md-toolbar-tip">选中文字后点按钮即可套用格式</span>
+          </div>
+
+          <div class="markdown-workspace post-workspace" id="post-workspace" data-mode="compare">
+            <div class="markdown-source">
+              <div class="dropzone-wrap">
+                <textarea class="field-textarea" id="post-content" placeholder="在这里用 Markdown 写作…"></textarea>
+                <div class="drop-hint"><span>支持拖入图片或 Ctrl+V 粘贴图片上传</span><span id="post-upload-status"></span></div>
+              </div>
+            </div>
+            <div class="markdown-preview"><div class="markdown-preview-content" id="post-preview"></div></div>
+          </div>
+          <div class="auth-error" id="post-error"></div>
+        </section>
+
         <section class="admin-settings" id="admin-settings" hidden>
           <header class="settings-head">
             <h2 class="settings-title">管理</h2>
-            <p class="settings-desc">站点信息 · 栏目与页脚 · 社交链接 · 账号安全 · 多因素认证 · 登录会话</p>
+            <p class="settings-desc">按功能分组：常规设置 · 安全与账号 · 集成服务 · 备份迁移</p>
+            <nav class="settings-tabs" id="settings-tabs" role="tablist" aria-label="管理分组">
+              <button type="button" class="settings-tab active" data-tab="general" role="tab">常规</button>
+              <button type="button" class="settings-tab" data-tab="security" role="tab">安全</button>
+              <button type="button" class="settings-tab" data-tab="integration" role="tab">集成</button>
+              <button type="button" class="settings-tab" data-tab="backup" role="tab">备份</button>
+            </nav>
           </header>
 
           <div class="settings-grid">
-            <section class="settings-card settings-card--wide" id="card-site">
+            <section class="settings-card settings-card--wide" data-group="general" id="card-site">
               <div class="settings-card-head">
                 <h3>站点信息</h3>
                 <span class="settings-tip">保存后对前台立即生效</span>
@@ -169,7 +258,7 @@
               </form>
             </section>
 
-            <section class="settings-card settings-card--wide" id="card-modules">
+            <section class="settings-card settings-card--wide" data-group="general" id="card-modules">
               <div class="settings-card-head">
                 <h3>前台栏目</h3>
                 <span class="settings-tip">拖动左侧 ⋮⋮ 调整顺序 · 开关即时生效 · 可改名称与图标</span>
@@ -179,7 +268,7 @@
               <div class="auth-error" id="module-error"></div>
             </section>
 
-            <section class="settings-card settings-card--wide" id="card-footer">
+            <section class="settings-card settings-card--wide" data-group="general" id="card-footer">
               <div class="settings-card-head">
                 <h3>页脚与备案</h3>
                 <span class="settings-tip">留空即不显示 · 保存后前台立即生效</span>
@@ -215,7 +304,7 @@
               </form>
             </section>
 
-            <section class="settings-card settings-card--wide" id="card-social">
+            <section class="settings-card settings-card--wide" data-group="general" id="card-social">
               <div class="settings-card-head">
                 <h3>社交链接</h3>
                 <span class="settings-tip">显示在首页标题下方 · 清空即隐藏该项</span>
@@ -246,7 +335,7 @@
               </form>
             </section>
 
-            <section class="settings-card settings-card--wide" id="card-indexnow">
+            <section class="settings-card settings-card--wide" data-group="integration" id="card-indexnow">
               <div class="settings-card-head">
                 <h3>搜索引擎推送</h3>
                 <span class="settings-badge" id="indexnow-badge" data-on="false">未启用</span>
@@ -280,13 +369,13 @@
               </form>
             </section>
 
-            <section class="settings-card settings-card--wide" id="card-telegram">
+            <section class="settings-card settings-card--wide" data-group="integration" id="card-telegram">
               <div class="settings-card-head">
-                <h3>瞬间同步</h3>
+                <h3>碎碎念同步</h3>
                 <span class="settings-badge" id="telegram-badge" data-on="false">未启用</span>
               </div>
               <p class="settings-tip">
-                开启后，新建或编辑「瞬间」会自动发到 Telegram 频道，删除时同步撤回。
+                开启后，新建或编辑「碎碎念」会自动发到 Telegram 频道，删除时同步撤回。
                 内容里的图片会一起发送（最多 4 张）。需要一个 Bot：在 Telegram 里找 <code>@BotFather</code>
                 建机器人拿 Token，把机器人拉进频道并给「发消息」权限，频道 ID 形如 <code>@your_channel</code> 或 <code>-1001234567890</code>。
               </p>
@@ -294,7 +383,7 @@
                 <div class="check-row">
                   <label class="check-label">
                     <input type="checkbox" id="telegram-enabled" />
-                    启用瞬间同步到 Telegram
+                    启用碎碎念同步到 Telegram
                   </label>
                 </div>
                 <div class="field-grid">
@@ -329,7 +418,26 @@
               </form>
             </section>
 
-            <section class="settings-card" id="card-account">
+            <section class="settings-card settings-card--wide" data-group="security" id="card-whitelist">
+              <div class="settings-card-head">
+                <h3>外部域名白名单</h3>
+                <span class="settings-tip">前台点外链时，只有名单内的域名会直接跳转</span>
+              </div>
+              <p class="settings-desc">默认包含代码内置的几个域名。这里增删的域名保存在后端，前台刷新后立即生效。只填域名即可（如 <code>example.com</code>），不要带 https:// 与路径；子域名无需单独添加。</p>
+              <div class="whitelist-add">
+                <input class="field-input" id="whitelist-input" placeholder="example.com" autocomplete="off" />
+                <button class="btn" type="button" id="whitelist-add-btn">添加</button>
+                <button class="btn" type="button" id="whitelist-reset-btn">恢复默认</button>
+              </div>
+              <ul class="whitelist-list" id="whitelist-list"></ul>
+              <div class="settings-actions">
+                <button class="btn btn-primary" type="button" id="whitelist-save-btn">保存白名单</button>
+                <span class="settings-tip" id="whitelist-state"></span>
+              </div>
+              <div class="auth-error" id="whitelist-error"></div>
+            </section>
+
+            <section class="settings-card" data-group="security" id="card-account">
               <div class="settings-card-head">
                 <h3>管理员账号</h3>
               </div>
@@ -350,7 +458,7 @@
               </form>
             </section>
 
-            <section class="settings-card" id="card-totp">
+            <section class="settings-card" data-group="security" id="card-totp">
               <div class="settings-card-head">
                 <h3>两步验证</h3>
                 <span class="settings-badge" id="totp-badge">未启用</span>
@@ -388,7 +496,7 @@
               <div class="auth-error" id="totp-error"></div>
             </section>
 
-            <section class="settings-card" id="card-passkey">
+            <section class="settings-card" data-group="security" id="card-passkey">
               <div class="settings-card-head">
                 <h3>通行密钥</h3>
                 <span class="settings-tip">指纹 / 面容 / 安全密钥</span>
@@ -401,7 +509,7 @@
               <div class="auth-error" id="passkey-error"></div>
             </section>
 
-            <section class="settings-card" id="card-sessions">
+            <section class="settings-card" data-group="security" id="card-sessions">
               <div class="settings-card-head">
                 <h3>登录会话</h3>
                 <span class="settings-tip" id="session-count"></span>
@@ -422,6 +530,75 @@
                 <button class="btn" type="button" id="revoke-others-btn">下线其它设备</button>
               </div>
               <div class="auth-error" id="session-error"></div>
+            </section>
+
+            <section class="settings-card settings-card--wide" data-group="backup" id="card-backup">
+              <div class="settings-card-head">
+                <h3>备份与迁移</h3>
+                <span class="settings-tip">整站后端 + 数据 + 前端版本，一个压缩包带走</span>
+              </div>
+              <p class="settings-desc">把后端代码、文章、碎碎念、图片、附件、配置与登录数据打成一个 tar.gz，同时记录当前前端部署版本号；能读到前端源码时一并打包。包内附 restore.sh 与 MIGRATION.md，可在新服务器上一键恢复。</p>
+              <div class="backup-info">
+                <div class="backup-meta"><span>前端版本</span><b id="backup-fe-version">—</b></div>
+                <div class="backup-meta"><span>备份目录</span><b id="backup-dir">—</b></div>
+                <div class="backup-meta"><span>保留份数</span><b id="backup-keep">—</b></div>
+                <div class="backup-meta"><span>可用空间</span><b id="backup-free">—</b></div>
+              </div>
+              <div class="settings-actions">
+                <button class="btn btn-primary" type="button" id="backup-start-btn">立即备份并下载</button>
+                <span class="settings-badge" id="backup-state">空闲</span>
+              </div>
+
+              <div class="backup-settings">
+                <div class="backup-settings-head">自动备份</div>
+                <label class="check-row"><input type="checkbox" id="backup-auto" /> 每天定时自动备份（北京时间，服务器不需重启）</label>
+                <div class="field-row">
+                  <div class="field">
+                    <label class="field-label" for="backup-time">每天备份时间</label>
+                    <input class="field-input" id="backup-time" type="time" value="03:00" />
+                  </div>
+                  <div class="field">
+                    <label class="field-label" for="backup-keep-input">保留份数（1–50）</label>
+                    <input class="field-input" id="backup-keep-input" type="number" min="1" max="50" value="10" />
+                  </div>
+                </div>
+
+                <div class="backup-settings-head">WebDAV 自动上传</div>
+                <p class="settings-desc">备份完成后可自动上传到坚果云、Nextcloud、Alist 等支持 WebDAV 的网盘；上传失败不影响本地备份。</p>
+                <label class="check-row"><input type="checkbox" id="backup-dav-enabled" /> 启用 WebDAV 上传</label>
+                <label class="check-row"><input type="checkbox" id="backup-dav-auto" checked /> 每次备份完成后自动上传</label>
+                <div class="field-row">
+                  <div class="field field--wide">
+                    <label class="field-label" for="backup-dav-url">WebDAV 地址</label>
+                    <input class="field-input" id="backup-dav-url" placeholder="https://dav.jianguoyun.com/dav" autocomplete="off" />
+                  </div>
+                  <div class="field">
+                    <label class="field-label" for="backup-dav-user">用户名</label>
+                    <input class="field-input" id="backup-dav-user" autocomplete="off" />
+                  </div>
+                  <div class="field">
+                    <label class="field-label" for="backup-dav-pass">密码 / 应用密码</label>
+                    <input class="field-input" id="backup-dav-pass" type="password" autocomplete="new-password" placeholder="留空表示不修改" />
+                  </div>
+                  <div class="field">
+                    <label class="field-label" for="backup-dav-dir">远程目录</label>
+                    <input class="field-input" id="backup-dav-dir" placeholder="/blog-backup" />
+                  </div>
+                </div>
+                <div class="settings-actions">
+                  <button class="btn btn-primary" type="button" id="backup-settings-save">保存备份设置</button>
+                  <button class="btn" type="button" id="backup-dav-test">测试 WebDAV 连接</button>
+                  <button class="btn" type="button" id="backup-dav-upload">上传最新备份</button>
+                  <span class="settings-tip" id="backup-settings-state"></span>
+                </div>
+                <div class="auth-error" id="backup-settings-error"></div>
+              </div>
+              <div class="backup-progress" id="backup-progress" hidden><div class="backup-bar" id="backup-bar"></div></div>
+              <div class="backup-history-wrap">
+                <div class="backup-history-head">历史备份 <span class="settings-tip" id="backup-history-count"></span></div>
+                <ul class="backup-history" id="backup-history"><li class="backup-empty">暂无备份</li></ul>
+              </div>
+              <div class="auth-error" id="backup-error"></div>
             </section>
           </div>
         </section>

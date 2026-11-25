@@ -38,7 +38,7 @@ const PRESET_ICONS = [
 const MODULE_DEFAULTS = {
   home: { name: '首页', icon: 'home', route: '' },
   posts: { name: '文章', icon: 'book', route: 'posts' },
-  moments: { name: '瞬间', icon: 'message', route: 'moment' },
+  moments: { name: '碎碎念', icon: 'message', route: 'moments' },
   links: { name: '友链', icon: 'link', route: 'links' },
   tools: { name: '工具', icon: 'wrench', route: 'tools' },
   probe: { name: '探针', icon: 'activity', route: 'probe' },
@@ -52,7 +52,7 @@ const RESERVED_ROUTES = [
   'post', 'posts', 'admin', 'api', 'img', 'file', 'assets', 'static', 'data',
   'sitemap', 'robots', 'sitemap.xml', 'robots.txt', 'version', 'favicon',
   'index', 'index.html', 'markdown', 'style', 'app', 'functions',
-  'moment', 'moments', 'tools', 'probe', 'status', 'quirky', 'comments', 'login'
+  'moments', 'tools', 'probe', 'status', 'quirky', 'comments', 'login'
 ];
 
 function normalizeRoute(value, fallback) {
@@ -156,6 +156,40 @@ const DEFAULTS = {
   adminPath: process.env.ADMIN_PATH || 'admin'
 };
 
+// 外部域名白名单：默认值写在代码里，后台可增删；初始化后以 data/site.json 为准
+const WHITELIST_DEFAULTS = (process.env.SITE_WHITELIST || [
+  'github.com',
+  'x.com',
+  'twitter.com',
+  't.me',
+  'telegram.me',
+  'gitee.com',
+  'beian.miit.gov.cn'
+].join(','))
+  .split(/[,，\s]+/)
+  .map((s) => String(s || '').trim().toLowerCase())
+  .filter(Boolean)
+  .slice(0, 200);
+
+// 接受数组或逗号/换行分隔字符串；去协议、路径、端口，校验域名格式后去重
+function normalizeWhitelist(value) {
+  const raw = Array.isArray(value) ? value : String(value == null ? '' : value).split(/[,，\s]+/);
+  const seen = Object.create(null);
+  const out = [];
+  for (let i = 0; i < raw.length; i++) {
+    let host = String(raw[i] == null ? '' : raw[i]).trim().toLowerCase();
+    host = host.replace(/^[a-z][a-z0-9+.-]*:\/\//, '').replace(/[\/?#].*$/, '').replace(/:\d+$/, '');
+    if (host.charAt(0) === '.') host = host.slice(1);
+    if (!host || host.length > 100) continue;
+    if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/.test(host)) continue;
+    if (seen[host]) continue;
+    seen[host] = true;
+    out.push(host);
+    if (out.length >= 200) break;
+  }
+  return out;
+}
+
 function readStored() {
   try {
     const raw = JSON.parse(fs.readFileSync(SITE_FILE, 'utf8'));
@@ -250,6 +284,7 @@ function getSite() {
     probe: normalizeProbe(source.probe),
     footer: normalizeFooter(source.footer),
     socials: normalizeSocials(source.socials),
+    whitelist: normalizeWhitelist(source.whitelist === undefined ? WHITELIST_DEFAULTS : source.whitelist),
     adminPath: normalizeAdminPath(source.adminPath),
     updatedAt: Number(source.updatedAt) || 0
   };
@@ -324,6 +359,7 @@ function saveSite(patch) {
     probe,
     footer,
     socials,
+    whitelist: p.whitelist === undefined ? current.whitelist : normalizeWhitelist(p.whitelist),
     adminPath: p.adminPath === undefined ? current.adminPath : normalizeAdminPath(p.adminPath),
     updatedAt: Date.now()
   };
@@ -348,5 +384,7 @@ module.exports = {
   PROBE_PROVIDERS,
   PROBE_LABELS,
   normalizeProbe,
-  normalizeAdminPath
+  normalizeAdminPath,
+  normalizeWhitelist,
+  WHITELIST_DEFAULTS
 };

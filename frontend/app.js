@@ -1053,6 +1053,7 @@ var router = {
   current: 'home',
   signatures: {},
   searchQuery: '',
+  activeTag: '',
   cachedPosts: [],
   probeRefreshTimer: null,
   probeRequestId: 0,
@@ -1383,6 +1384,36 @@ var router = {
     var days = Math.max(1, Math.floor((Date.now() - new Date(SITE_CONFIG.siteStartDate).getTime()) / 86400000));
     this.cachedPosts = sortedPosts;
 
+    // 标签云：统计每篇文章的 tags（旧数据只有单个 tag 字段），按首次出现顺序展示
+    var tagMap = {};
+    var tagKeys = [];
+    for (var t = 0; t < sortedPosts.length; t++) {
+      var rowTags = sortedPosts[t].tags || (sortedPosts[t].tag ? [sortedPosts[t].tag] : []);
+      for (var j = 0; j < rowTags.length; j++) {
+        var tagText = String(rowTags[j] || '').trim();
+        if (!tagText) continue;
+        var tagKey = tagText.toLowerCase();
+        if (!tagMap[tagKey]) { tagMap[tagKey] = { label: tagText, count: 0 }; tagKeys.push(tagKey); }
+        tagMap[tagKey].count += 1;
+      }
+    }
+    var tagCloud = '';
+    if (tagKeys.length) {
+      tagCloud +=
+        '<div class="blog-tags">' +
+          '<h2 class="blog-stats-title">标签</h2>' +
+          '<div class="blog-tag-list">' +
+            '<button type="button" class="blog-tag-chip" data-tag="" data-active="' + (this.activeTag ? 'false' : 'true') + '" onclick="router.selectTagFromButton(this)">全部</button>';
+      for (var k = 0; k < tagKeys.length; k++) {
+        var tagInfo = tagMap[tagKeys[k]];
+        tagCloud +=
+            '<button type="button" class="blog-tag-chip" data-tag="' + escapeHtml(tagKeys[k]) + '" data-active="' + (String(this.activeTag).toLowerCase() === tagKeys[k] ? 'true' : 'false') + '" onclick="router.selectTagFromButton(this)">' +
+              escapeHtml(tagInfo.label) + '<span class="blog-tag-count">' + tagInfo.count + '</span>' +
+            '</button>';
+      }
+      tagCloud += '</div></div>';
+    }
+
     container.innerHTML =
       '<div class="page-wrap-with-aside">' +
         '<div class="blog-list-main">' +
@@ -1396,6 +1427,7 @@ var router = {
           '<div id="post-list-host"></div>' +
         '</div>' +
         '<aside class="blog-aside">' +
+          tagCloud +
           '<div class="blog-stats">' +
             '<h2 class="blog-stats-title">统计</h2>' +
             '<ul class="blog-stats-list">' +
@@ -1445,14 +1477,33 @@ var router = {
 
   filterPosts: function (posts, q) {
     var needle = String(q || '').trim().toLowerCase();
-    if (!needle) return posts;
+    var activeTag = String(this.activeTag || '').trim().toLowerCase();
+    if (!needle && !activeTag) return posts;
     var out = [];
     for (var i = 0; i < posts.length; i++) {
       var p = posts[i];
-      var hay = String(p.title || '') + ' ' + String(p.excerpt || p.content || '') + ' ' + String(p.tag || '');
-      if (hay.toLowerCase().indexOf(needle) !== -1) out.push(p);
+      var rowTags = p.tags || (p.tag ? [p.tag] : []);
+      var tagText = '';
+      for (var t = 0; t < rowTags.length; t++) tagText += ' ' + String(rowTags[t] || '');
+      if (activeTag && tagText.toLowerCase().indexOf(activeTag) === -1) continue;
+      if (needle) {
+        var hay = String(p.title || '') + ' ' + String(p.excerpt || p.content || '') + tagText;
+        if (hay.toLowerCase().indexOf(needle) === -1) continue;
+      }
+      out.push(p);
     }
     return out;
+  },
+
+  // 标签框点击：再点一次取消筛选，「全部」清空
+  selectTagFromButton: function (btn) {
+    var next = btn && btn.getAttribute ? String(btn.getAttribute('data-tag') || '') : '';
+    this.activeTag = (String(this.activeTag || '').toLowerCase() === next) ? '' : next;
+    var chips = document.querySelectorAll('.blog-tag-chip');
+    for (var i = 0; i < chips.length; i++) {
+      chips[i].setAttribute('data-active', chips[i].getAttribute('data-tag') === this.activeTag ? 'true' : 'false');
+    }
+    this.updatePostList();
   },
 
   buildPostRows: function (list) {
@@ -1460,14 +1511,16 @@ var router = {
     var html = '<ul class="post-list">';
     for (var k = 0; k < list.length; k++) {
       var item = list[k];
+      var isLocked = !!item.locked;
+      var summary = isLocked ? '该文章已加密，输入口令后查看' : (item.excerpt || extractFirstLine(item.content));
       html +=
         '<li class="post-row">' +
           '<a class="post-row-link" href="/post/' + encodeURIComponent(String(item.id)) + '" onclick="router.openPost(\'' + escapeHtml(item.id) + '\');return false;">' +
             '<div class="post-row-top">' +
-              '<h2 class="post-row-title">' + escapeHtml(item.title) + '</h2>' +
+              '<h2 class="post-row-title">' + (isLocked ? '<span class="post-row-lock" aria-label="加密文章">🔒</span>' : '') + escapeHtml(item.title) + '</h2>' +
               '<time class="post-row-date">' + escapeHtml(item.date || '') + '</time>' +
             '</div>' +
-            '<p class="post-row-firstline">' + escapeHtml(item.excerpt || extractFirstLine(item.content)) + '</p>' +
+            '<p class="post-row-firstline' + (isLocked ? ' post-row-firstline-locked' : '') + '">' + escapeHtml(summary) + '</p>' +
           '</a>' +
         '</li>';
     }
@@ -1519,20 +1572,39 @@ var router = {
       return;
     }
     // /api/sync 匿名只回摘要（无 content），正文单独取，否则文章页只剩标题
+    // 加密文章先取一次：命中口令缓存时服务端会直接回正文，否则只回 locked + enchint
     if (!post.content) {
       try {
         var fullPost = await syncClient.fetchPost(post.id);
-        if (fullPost && fullPost.content) {
-          post = Object.assign({}, post, fullPost);
+        if (fullPost && (fullPost.content || fullPost.locked)) {
+          var patch = fullPost;
+          if (fullPost.locked) patch = Object.assign({}, fullPost, { content: '' });
+          post = Object.assign({}, post, patch);
           for (var c = 0; c < this.cachedPosts.length; c++) {
             if (String(this.cachedPosts[c].id) === String(post.id)) {
-              this.cachedPosts[c] = Object.assign({}, this.cachedPosts[c], { content: fullPost.content });
+              var rowPatch = { locked: !!fullPost.locked, enchint: fullPost.enchint || '' };
+              if (fullPost.content) rowPatch.content = fullPost.content;
+              this.cachedPosts[c] = Object.assign({}, this.cachedPosts[c], rowPatch);
               break;
             }
           }
         }
       } catch (e) {}
     }
+    var isLocked = !!post.locked && !post.unlocked;
+    var lockedHtml =
+      '<div class="article-lock-card" id="article-lock-card">' +
+        '<div class="article-lock-icon" aria-hidden="true">🔒</div>' +
+        '<h2 class="article-lock-title">这篇文章已加密</h2>' +
+        '<p class="article-lock-desc">' + escapeHtml(post.enchint || '请输入访问口令后查看全文') + '</p>' +
+        '<form class="article-lock-form" id="article-lock-form" novalidate>' +
+          '<input type="password" class="article-lock-input" id="article-lock-input" placeholder="访问口令" autocomplete="current-password" aria-label="访问口令" />' +
+          '<button type="submit" class="article-lock-btn" id="article-lock-btn">解锁阅读</button>' +
+        '</form>' +
+        '<p class="article-lock-error" id="article-lock-error" hidden></p>' +
+        '<p class="article-lock-tip">口令由作者设置，本站不会明文保存</p>' +
+      '</div>' +
+      '<div class="reader-content" id="reader-content-body" hidden></div>';
     this.current = 'post';
     this.syncDock('post');
     // 先瞬间归零再换内容：用平滑滚动会让新文章从底部“滑上来”，观感上就是闪一下
@@ -1544,7 +1616,7 @@ var router = {
         '<button class="back-btn" onclick="router.go(\'posts\')">← 返回文章列表</button>' +
         '<h1 class="reader-title">' + escapeHtml(post.title) + '</h1>' +
         '<div class="reader-meta">' + escapeHtml(post.date || '') + '</div>' +
-        '<div class="reader-content">' + renderMarkdown(post.content) + '</div>' +
+        (isLocked ? lockedHtml : '<div class="reader-content" id="reader-content-body">' + renderMarkdown(post.content) + '</div>') +
         '<footer class="article-license">' +
           '本文采用 <a href="https://opensource.org/license/mit" target="_blank" rel="noopener noreferrer">MIT License</a> 授权发布 · 转载请注明出处' +
         '</footer>' +
@@ -1579,6 +1651,118 @@ var router = {
       '</article>';
 
     commentBox.loadSection(post.id);
+    if (isLocked) this.bindArticleUnlock(post);
+    else this.bindFragmentLocks(container);
+  },
+
+  // 整篇加密：输口令 → POST /api/public/post/<id>/unlock → 渲染正文
+  bindArticleUnlock: function (post) {
+    var form = document.getElementById('article-lock-form');
+    if (!form) return;
+    var self = this;
+    form.addEventListener('submit', async function (ev) {
+      ev.preventDefault();
+      var input = document.getElementById('article-lock-input');
+      var errEl = document.getElementById('article-lock-error');
+      var btn = document.getElementById('article-lock-btn');
+      var body = document.getElementById('reader-content-body');
+      var card = document.getElementById('article-lock-card');
+      var password = input ? input.value : '';
+      function fail(msg) {
+        if (!errEl) return;
+        errEl.textContent = msg;
+        errEl.hidden = false;
+        if (input) input.focus();
+      }
+      if (!password) { fail('请输入访问口令'); return; }
+      if (errEl) errEl.hidden = true;
+      if (btn) { btn.disabled = true; btn.textContent = '解密中...'; }
+      try {
+        var base = SITE_CONFIG.apiBaseUrl.replace(/\/+$/, '');
+        var res = await fetch(base + '/api/public/post/' + encodeURIComponent(String(post.id)) + '/unlock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: password })
+        });
+        var data = await res.json().catch(function () { return {}; });
+        if (!res.ok || !data || !data.ok) throw new Error((data && data.error) || '口令错误');
+        if (body) {
+          body.hidden = false;
+          body.innerHTML = renderMarkdown(data.content || '');
+          self.bindFragmentLocks(body);
+        }
+        if (card) card.hidden = true;
+        for (var i = 0; i < self.cachedPosts.length; i++) {
+          if (String(self.cachedPosts[i].id) === String(post.id)) {
+            self.cachedPosts[i].content = data.content || '';
+            self.cachedPosts[i].unlocked = true;
+            break;
+          }
+        }
+      } catch (err) {
+        fail((err && err.message) || '口令错误');
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '解锁阅读'; }
+      }
+    });
+    var focusInput = document.getElementById('article-lock-input');
+    if (focusInput) focusInput.focus();
+  },
+
+  // 正文里的加密片段：把 .md-lock 卡片接上解锁逻辑，成功后原地替换成真实内容
+  bindFragmentLocks: function (root) {
+    var scope = root || document.getElementById('page-content');
+    if (!scope || !scope.querySelectorAll) return;
+    var cards = scope.querySelectorAll('.md-lock');
+    for (var i = 0; i < cards.length; i++) {
+      (function (card) {
+        if (card.getAttribute('data-bound') === '1') return;
+        card.setAttribute('data-bound', '1');
+        var input = card.querySelector('.md-lock-input');
+        var btn = card.querySelector('.md-lock-btn');
+        var errEl = card.querySelector('.md-lock-error');
+        if (!input || !btn) return;
+        async function tryUnlock() {
+          var password = input.value;
+          if (!password) {
+            if (errEl) { errEl.hidden = false; errEl.textContent = '请输入口令'; }
+            input.focus();
+            return;
+          }
+          if (errEl) errEl.hidden = true;
+          btn.disabled = true;
+          var oldLabel = btn.textContent;
+          btn.textContent = '解密中...';
+          try {
+            var base = SITE_CONFIG.apiBaseUrl.replace(/\/+$/, '');
+            var res = await fetch(base + '/api/public/unlock-fragment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ payload: card.getAttribute('data-lock') || '', password: password })
+            });
+            var data = await res.json().catch(function () { return {}; });
+            if (!res.ok || !data || !data.ok) throw new Error((data && data.error) || '口令错误');
+            var opened = document.createElement('div');
+            opened.className = 'md-lock-opened';
+            opened.innerHTML = renderMarkdown(data.content || '');
+            if (card.parentNode) card.parentNode.replaceChild(opened, card);
+            router.bindFragmentLocks(opened);
+          } catch (err) {
+            if (errEl) {
+              errEl.hidden = false;
+              errEl.textContent = (err && err.message) || '口令错误或该片段已损坏';
+            }
+          } finally {
+            btn.disabled = false;
+            btn.textContent = oldLabel;
+          }
+        }
+        btn.addEventListener('click', tryUnlock);
+        input.addEventListener('keydown', function (ev) {
+          if (ev.key === 'Enter') { ev.preventDefault(); tryUnlock(); }
+        });
+      })(cards[i]);
+    }
   },
 
 renderLinksView: function (container, links) {

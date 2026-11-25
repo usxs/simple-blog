@@ -1369,52 +1369,6 @@ body.md-lightbox-locked {
   .ss-fields { grid-template-columns: 1fr; }
 }
 
-/* ---------------- 管理：侧边栏二级菜单（点击「管理」后从右侧弹出） ---------------- */
-.nav-item-row { position: relative; }
-.nav-btn[data-mod="settings"]::after {
-  content: '';
-  width: 0; height: 0;
-  margin-left: auto;
-  border-left: 4px solid currentColor;
-  border-top: 3.5px solid transparent;
-  border-bottom: 3.5px solid transparent;
-  opacity: .45;
-  transition: transform .15s ease;
-}
-.nav-item-row.menu-open .nav-btn[data-mod="settings"]::after {
-  opacity: .9;
-}
-.nav-sub {
-  position: absolute;
-  left: calc(100% + 8px);
-  top: -10px;
-  z-index: 70;
-  margin: 0;
-  padding: 6px;
-  list-style: none;
-  min-width: 150px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.nav-sub[hidden] { display: none; }
-.nav-sub-btn {
-  width: 100%;
-  text-align: left;
-  padding: 6px 9px;
-  border-radius: 6px;
-  font-size: 12.5px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  white-space: nowrap;
-}
-.nav-sub-btn:hover { background: var(--bg-subtle); color: var(--text-primary); }
-.nav-sub-btn.active { color: var(--text-primary); font-weight: 600; background: var(--bg-subtle); }
-
 /* 跳到卡片时的短暂高亮 */
 .settings-card.card-flash {
   animation: cardFlash 1.2s ease;
@@ -1473,10 +1427,6 @@ body.md-lightbox-locked {
 }
 .fvp-badge:hover .fvp-badge-tip { opacity: 1; visibility: visible; }
 .fvp-empty { font-size: 11.5px; color: var(--text-muted); }
-
-@media (max-width: 720px) {
-  .nav-sub { left: 0; top: calc(100% + 6px); }
-}
 
 /* ---------------- 回到顶部 ---------------- */
 .to-top {
@@ -1778,3 +1728,185 @@ body.md-lightbox-locked {
 .tpl-group .tpl-tabs {
   margin-bottom: 0;
 }
+/* ---------------- 备份与迁移 ---------------- */
+.backup-info {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 12px 0 16px;
+}
+.backup-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-surface);
+  font-size: 12px;
+}
+.backup-meta span { color: var(--text-muted); }
+.backup-meta b { font-size: 13px; font-weight: 600; word-break: break-all; }
+.settings-badge.is-busy { color: var(--accent); border-color: var(--accent); }
+.backup-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--bg-surface);
+  overflow: hidden;
+  margin: 10px 0 4px;
+}
+.backup-bar {
+  height: 100%;
+  width: 36%;
+  border-radius: 999px;
+  background: var(--accent);
+  animation: backupSlide 1.2s ease-in-out infinite;
+}
+@keyframes backupSlide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(320%); }
+}
+.backup-history-wrap { margin-top: 14px; }
+.backup-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.backup-history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.backup-empty { color: var(--text-muted); font-size: 12px; padding: 6px 0; }
+.backup-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-surface);
+}
+.backup-item-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.backup-item-file { font-size: 13px; font-weight: 600; word-break: break-all; }
+.backup-item-meta { font-size: 12px; color: var(--text-muted); }
+.backup-item-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+
+/* ===== 文章：列表页 ===== */
+.admin-posts { display: flex; flex-direction: column; gap: 16px; }
+.admin-posts[hidden] { display: none !important; }
+.posts-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.posts-head-text { display: flex; flex-direction: column; gap: 4px; }
+.posts-head-actions { display: flex; align-items: center; gap: 8px; }
+.posts-search { width: 220px; }
+.posts-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.posts-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-surface);
+  transition: border-color .15s ease, transform .15s ease;
+}
+.posts-item:hover { border-color: var(--border-strong); }
+.posts-item-main { display: flex; flex-direction: column; gap: 5px; min-width: 0; flex: 1; }
+.posts-item-title {
+  text-align: left; font-size: 15px; font-weight: 600; cursor: pointer; color: var(--text-primary);
+  background: none; border: none; padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.posts-item-title:hover { text-decoration: underline; }
+.posts-item-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--text-muted); }
+.posts-item-date { font-family: var(--font-mono); }
+.post-tag {
+  padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--bg-subtle); color: var(--text-secondary); font-size: 11px;
+}
+.post-badge { padding: 1px 8px; border-radius: 999px; font-size: 11px; border: 1px solid var(--border); }
+.post-badge--hidden { color: var(--status-warn); border-color: var(--status-warn); }
+.post-badge--lock { color: var(--accent); border-color: var(--border-strong); }
+.posts-more-btn {
+  flex-shrink: 0; width: 30px; height: 30px; border-radius: 8px; cursor: pointer;
+  color: var(--text-secondary); display: inline-flex; align-items: center; justify-content: center;
+}
+.posts-more-btn:hover { background: var(--bg-subtle); color: var(--text-primary); }
+.posts-empty { padding: 26px 12px; text-align: center; color: var(--text-muted); font-size: 13px; }
+
+.posts-menu {
+  position: fixed; z-index: 300; min-width: 144px; padding: 6px;
+  background: var(--bg-surface); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0,0,0,.16); display: flex; flex-direction: column; gap: 2px;
+}
+.posts-menu button {
+  text-align: left; padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--text-primary);
+}
+.posts-menu button:hover { background: var(--bg-subtle); }
+.posts-menu button.danger { color: var(--danger); }
+
+/* ===== 文章：写作页 ===== */
+.admin-post-editor { display: flex; flex-direction: column; gap: 14px; }
+.admin-post-editor[hidden] { display: none !important; }
+.editor-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.editor-head-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.editor-head-title { font-size: 16px; font-weight: 600; }
+.editor-head-actions { display: flex; gap: 8px; }
+.editor-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.editor-meta .field--wide { grid-column: span 2; }
+.editor-flags { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.check-row { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-secondary); cursor: pointer; }
+.check-row input { accent-color: var(--accent); }
+.editor-password { width: 260px; }
+.editor-lock-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 12px; border: 1px dashed var(--border-strong); border-radius: 10px; background: var(--bg-subtle);
+}
+.editor-lock-text { font-size: 13px; color: var(--text-secondary); }
+.editor-lock-bar .field-input { width: 200px; }
+
+.md-toolbar {
+  display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+  padding: 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-surface);
+  position: sticky; top: 0; z-index: 5;
+}
+.md-btn {
+  min-width: 32px; height: 30px; padding: 0 8px; border-radius: 6px; cursor: pointer;
+  font-size: 12px; color: var(--text-secondary); display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid transparent;
+}
+.md-btn:hover { background: var(--bg-subtle); color: var(--text-primary); border-color: var(--border); }
+.md-sep { width: 1px; height: 18px; background: var(--border); margin: 0 4px; }
+.md-btn-lock { color: var(--text-primary); border-color: var(--border-strong); }
+.md-toolbar-tip { margin-left: auto; font-size: 11px; color: var(--text-muted); }
+.post-workspace { min-height: 420px; }
+.post-workspace .markdown-source textarea { min-height: 420px; }
+
+/* ===== 管理页分组 tab ===== */
+.settings-tabs { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 14px; border-bottom: 1px solid var(--border); }
+.settings-tab {
+  padding: 8px 14px; cursor: pointer; font-size: 13px; color: var(--text-secondary);
+  border-bottom: 2px solid transparent; margin-bottom: -1px; border-radius: 6px 6px 0 0;
+}
+.settings-tab:hover { color: var(--text-primary); background: var(--bg-subtle); }
+.settings-tab.active { color: var(--text-primary); font-weight: 600; border-bottom-color: var(--accent); }
+.settings-card[hidden] { display: none !important; }
+
+/* ===== 白名单 ===== */
+.whitelist-add { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.whitelist-add .field-input { flex: 1; min-width: 200px; }
+.whitelist-list { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.whitelist-empty { color: var(--text-muted); font-size: 12px; }
+.whitelist-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 12px;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--bg-subtle); font-size: 12px;
+}
+.whitelist-domain { font-family: var(--font-mono); }
+.whitelist-remove { cursor: pointer; width: 18px; height: 18px; border-radius: 50%; color: var(--text-muted); display: inline-flex; align-items: center; justify-content: center; }
+.whitelist-remove:hover { background: var(--danger); color: #fff; }
+
+/* ===== 备份设置表单 ===== */
+.backup-settings { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--border); display: flex; flex-direction: column; gap: 10px; }
+.backup-settings-head { font-size: 13px; font-weight: 600; }
+.backup-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--text-secondary); }
+.backup-row .field-input { width: 160px; }
+.backup-row .field-input.backup-wide { width: 100%; max-width: 420px; }
+.backup-subhead { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+/* ---------------- hidden 属性统一生效（.admin-tip 例外：工具提示靠 hover 显示） ---------------- */
+[hidden]:not(.admin-tip) { display: none !important; }

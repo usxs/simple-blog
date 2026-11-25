@@ -123,6 +123,8 @@ function pruneMdCache(alivePaths) {
 function stripMarkdownForExcerpt(text) {
   return String(text || '')
     .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/^:::locked\s+[A-Za-z0-9+/=]+\s*$/gm, ' ')
+    .replace(/^:::\s*$/gm, ' ')
     .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/^\s{0,3}#{1,6}\s+/gm, '')
@@ -140,13 +142,18 @@ function excerptOf(content, max) {
 }
 
 function summarizeItem(item) {
+  const locked = Boolean(item && item.enc);
   const out = {
     id: item.id,
     title: item.title,
     date: item.date,
     tag: item.tag,
+    tags: Array.isArray(item.tags) ? item.tags : normalizeTags(item.tag || ''),
+    hidden: Boolean(item.hidden),
+    locked: locked,
+    enchint: locked ? String(item.enchint || '') : '',
     mtime: item.mtime,
-    excerpt: excerptOf(item.content, 140)
+    excerpt: locked ? '' : excerptOf(item.content, 140)
   };
   return out;
 }
@@ -178,7 +185,7 @@ function snippetAround(text, term, radius) {
 
 function scorePost(post, terms) {
   const title = searchNormalize(post.title);
-  const tag = searchNormalize(post.tag);
+  const tag = searchNormalize([post.tag || '', Array.isArray(post.tags) ? post.tags.join(' ') : ''].join(' '));
   const body = searchNormalize(post.content);
   const bodyRaw = String(post.content || '').toLowerCase();
   let score = 0;
@@ -214,6 +221,7 @@ function searchArticles(query, limit) {
   const posts = readArticles();
   const scored = [];
   for (let i = 0; i < posts.length; i++) {
+    if (posts[i].hidden || posts[i].enc) continue;   // 隐藏文章与加密文章不参与公开搜索
     const r = scorePost(posts[i], terms);
     if (r.score <= 0) continue;
     scored.push({ post: posts[i], r: r });
@@ -233,6 +241,7 @@ function searchArticles(query, limit) {
     title: x.post.title,
     date: x.post.date,
     tag: x.post.tag,
+    tags: Array.isArray(x.post.tags) ? x.post.tags : [],
     score: x.r.score,
     snippet: snippetAround(x.post.content, x.r.firstTerm, 48)
   }));
@@ -265,6 +274,21 @@ function sortNewestFirst(list) {
   });
 }
 
+// 标签：接受字符串（逗号分隔）或数组，去重、去空、限制数量与长度
+function normalizeTags(value) {
+  const raw = Array.isArray(value) ? value : String(value == null ? '' : value).split(/[,，]/);
+  const seen = Object.create(null);
+  const out = [];
+  for (let i = 0; i < raw.length; i++) {
+    const tag = String(raw[i] == null ? '' : raw[i]).replace(/[\r\n]+/g, ' ').trim().slice(0, 24);
+    if (!tag || seen[tag.toLowerCase()]) continue;
+    seen[tag.toLowerCase()] = true;
+    out.push(tag);
+    if (out.length >= 12) break;
+  }
+  return out;
+}
+
 function parseMdFile(filePath, fileId) {
   try {
     const raw = fs.readFileSync(filePath, 'utf8').replace(/^\uFEFF/, '');
@@ -288,11 +312,22 @@ function parseMdFile(filePath, fileId) {
       }
     }
 
+    const tags = normalizeTags(meta.tags || meta.tag || '');
+    const hidden = meta.hidden === '1' || meta.hidden === 'true';
+    const enc = meta.enc === '1' || meta.enc === 'true';
+
     return {
       id: String(fileId),
       title: String(meta.title || fileId),
       date: String(meta.date || fallbackDate),
-      tag: String(meta.tag || ''),
+      tag: String(meta.tag || tags[0] || ''),
+      tags: tags,
+      hidden: hidden,
+      enc: enc,
+      encsalt: String(meta.encsalt || ''),
+      enciv: String(meta.enciv || ''),
+      enctag: String(meta.enctag || ''),
+      enchint: String(meta.enchint || ''),
       mtime: Math.round(Number(meta.mtime) || stat.mtimeMs),
       content: String(body || '')
     };
@@ -306,11 +341,21 @@ function buildMdContent(item, type) {
   const cleanDate = String(item.date || cnDateOf(new Date())).replace(/[\r\n]+/g, ' ');
   const cleanTag = String(item.tag || '').replace(/[\r\n]+/g, ' ');
   const mtime = Number(item.mtime) || Date.now();
+  const tags = normalizeTags(item.tags || item.tag || '');
   const lines = ['---'];
   if (type === 'posts') {
     lines.push('title: ' + cleanTitle);
     lines.push('date: ' + cleanDate);
     lines.push('mtime: ' + mtime);
+    if (tags.length) lines.push('tags: ' + tags.join(', '));
+    if (item.hidden) lines.push('hidden: 1');
+    if (item.enc) {
+      lines.push('enc: 1');
+      lines.push('encsalt: ' + String(item.encsalt || ''));
+      lines.push('enciv: ' + String(item.enciv || ''));
+      lines.push('enctag: ' + String(item.enctag || ''));
+      if (item.enchint) lines.push('enchint: ' + String(item.enchint).replace(/[\r\n]+/g, ' ').slice(0, 60));
+    }
   } else {
     lines.push('date: ' + cleanDate);
     lines.push('mtime: ' + mtime);
@@ -508,5 +553,6 @@ module.exports = {
   mutatePostComments,
   summarizeItem,
   excerptOf,
-  searchArticles
+  searchArticles,
+  normalizeTags
 };

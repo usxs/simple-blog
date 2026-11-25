@@ -70,7 +70,7 @@ var SCHEMAS = {
     ]
   },
   moments: {
-    label: '瞬间',
+    label: '碎碎念',
     storageHint: '存储: ./Musings/*.md | 图片: ./img/日期/ | 文件: ./file/日期/',
     fields: [
       { key: 'tag', label: '标签 (可选)', type: 'text', placeholder: '例如：日常 / 折腾' },
@@ -156,7 +156,7 @@ var MODULE_ICON_SVGS = {
 var MODULE_FALLBACK = {
   home: { name: '首页', icon: 'home' },
   posts: { name: '文章', icon: 'book' },
-  moments: { name: '瞬间', icon: 'message' },
+  moments: { name: '碎碎念', icon: 'message' },
   links: { name: '友链', icon: 'link' },
   tools: { name: '工具', icon: 'wrench' },
   probe: { name: '探针', icon: 'activity' },
@@ -201,6 +201,7 @@ function moduleIconHtml(icon, fallbackId) {
 
 var cms = {
   mod: 'posts',
+  page: '',
   modules: null,
   order: MODULE_ORDER.slice(),
   iconTarget: null,
@@ -209,6 +210,12 @@ var cms = {
   store: { posts: [], moments: [], comments: [], tools: [], status: [], quirky: [] },
   currentItem: null,
   authed: false,
+  postEditor: null,
+  postMenuId: '',
+  editorPassword: '',
+  editorUnlocked: true,
+  settingsTab: 'general',
+  whitelist: [],
 
   init: async function () {
     var mode = localStorage.getItem('site-theme-mode') || 'auto';
@@ -278,6 +285,8 @@ var cms = {
     this.authed = true;
     this.hideAuthOverlay();
     document.getElementById('auth-username').textContent = username || 'admin';
+    // 登录后默认进入「文章」列表页（新版写作流程的入口，替代旧的左右分栏）
+    this.switchMod(this.mod || 'posts');
     this.loadAll();
     // 侧边栏按「前台栏目」配置显示 / 隐藏（不需要先打开管理页）
     this.loadSettings().catch(function () { /* 忽略：管理数据拉取失败不影响主流程 */ });
@@ -502,7 +511,8 @@ var cms = {
         return resolve();
       }
 
-      var statusEl = document.getElementById('upload-status-text');
+      var editorId = self.activeEditorId();
+      var statusEl = document.getElementById(editorId === 'post-content' ? 'post-upload-status' : 'upload-status-text');
       if (statusEl) statusEl.textContent = '正在上传: ' + fileObj.name + ' ...';
       self.notify('正在上传 ' + fileObj.name + ' ...');
 
@@ -522,7 +532,7 @@ var cms = {
           if (res.status === 401) { self.handle401(); return resolve(); }
           if (!res.ok) throw new Error('Upload failed');
           var data = await res.json();
-          self.insertAtCursor('field-content', data.markdown);
+          self.insertAtCursor(editorId, data.markdown);
           if (statusEl) {
             statusEl.textContent = '已保存至: ' + data.relativeUrl;
           }
@@ -586,8 +596,17 @@ var cms = {
 
   bindTextareaDropzone: function () {
     var self = this;
-    var ta = document.getElementById('field-content');
-    if (!ta) return;
+    var targets = ['field-content', 'post-content'];
+    for (var t = 0; t < targets.length; t++) {
+      var el = document.getElementById(targets[t]);
+      if (!el || el.getAttribute('data-dropzone') === '1') continue;
+      el.setAttribute('data-dropzone', '1');
+      this.bindOneDropzone(el);
+    }
+  },
+
+  bindOneDropzone: function (ta) {
+    var self = this;
 
     ta.addEventListener('dragover', function (e) {
       e.preventDefault();
@@ -646,6 +665,25 @@ var cms = {
     }
   },
 
+  // 后端 /api/sync 返回的文章带着原始 front matter 字段（enc 为 "1"/true），
+  // 后台统一用 locked 标记，避免列表徽标与编辑器锁屏判断失真。
+  normalizePosts: function (arr) {
+    if (!Array.isArray(arr)) return [];
+    return arr.map(function (p) {
+      if (!p || typeof p !== 'object') return p;
+      var enc = p.enc;
+      p.locked = !!(p.locked || enc === true || enc === 1 || enc === '1' || enc === 'true');
+      return p;
+    });
+  },
+
+  setPosts: function (arr) {
+    var list = sortNewestFirst(this.normalizePosts(arr));
+    this.store.posts = list;
+    var cnt = document.getElementById('count-posts');
+    if (cnt) cnt.textContent = String(list.length);
+  },
+
   loadAll: async function () {
     var badge = document.getElementById('conn-badge');
     var stateEl = document.getElementById('conn-state');
@@ -666,7 +704,11 @@ var cms = {
         if (!res.ok) throw new Error('HTTP ' + res.status);
         var data = await res.json();
         var arr = Array.isArray(data.data) ? data.data : [];
-        if (m === 'posts' || m === 'moments' || m === 'comments') {
+        if (m === 'posts') {
+          this.setPosts(arr);
+          continue;
+        }
+        if (m === 'moments' || m === 'comments') {
           arr = sortNewestFirst(arr);
         }
         this.store[m] = arr;
@@ -678,7 +720,8 @@ var cms = {
       }
       badge.setAttribute('data-status', 'online');
       stateEl.textContent = 'ONLINE';
-      this.renderList();
+      if (this.mod === 'posts' && this.page !== 'post-editor') this.renderPostsPage();
+      else this.renderList();
     } catch (e) {
       badge.setAttribute('data-status', 'offline');
       stateEl.textContent = 'OFFLINE';
@@ -687,36 +730,29 @@ var cms = {
 
   switchMod: function (m) {
     this.mod = m;
+    this.page = '';
     this.currentItem = null;
     var btns = document.querySelectorAll('#mod-nav .nav-btn');
     for (var i = 0; i < btns.length; i++) {
       btns[i].classList.toggle('active', btns[i].getAttribute('data-mod') === m);
     }
 
-    // 「管理」「探针」都是独立页面，不参与列表 / 编辑器布局
-    this.closeSettingsMenu();
-
-    var PAGES = { settings: 'admin-settings', probe: 'admin-probe', links: 'admin-links', notify: 'admin-notify' };
+    // 「文章」「管理」「探针」等独立页面，不参与列表 / 编辑器左右布局
+    var PAGES = { settings: 'admin-settings', probe: 'admin-probe', links: 'admin-links', notify: 'admin-notify', posts: 'admin-posts' };
     var pageId = PAGES[m] || '';
+    var ALL_PAGES = ['admin-settings', 'admin-probe', 'admin-links', 'admin-notify', 'admin-posts', 'admin-post-editor'];
     var grid = document.querySelector('.cms-grid');
     if (grid) grid.style.display = pageId ? 'none' : '';
-    ['admin-settings', 'admin-probe', 'admin-links', 'admin-notify'].forEach(function (id) {
-      var el = document.getElementById(id);
-      if (el) el.hidden = (id !== pageId);
-    });
-    // 二级菜单高亮只在「正在看哪个区块」时存在，切到其它页面一律清空
-    if (m === 'settings') {
-      var self2 = this;
-      setTimeout(function () { self2.syncSubnavActive(); }, 0);
-    } else {
-      this.subnavTarget = '';
-      this.clearSubnavActive();
+    for (var k = 0; k < ALL_PAGES.length; k++) {
+      var pel = document.getElementById(ALL_PAGES[k]);
+      if (pel) pel.hidden = ALL_PAGES[k] !== pageId;
     }
 
     // 存储路径提示只属于内容类页面，独立页面不显示
     var hintEl = document.getElementById('storage-hint');
     if (pageId) {
       if (hintEl) hintEl.style.display = 'none';
+      if (m === 'posts') { this.renderPostsPage(); return; }
       if (m === 'links') this.loadLinks();
       else if (m === 'notify') this.loadNotify();
       else this.loadSettings();
@@ -1046,12 +1082,16 @@ var cms = {
       if (!res.ok) throw new Error('HTTP ' + res.status);
       var resData = await res.json();
       if (Array.isArray(resData.data)) {
-        var arr = resData.data;
-        if (this.mod === 'posts' || this.mod === 'moments') {
-          arr = sortNewestFirst(arr);
+        if (this.mod === 'posts') {
+          this.setPosts(resData.data);
+        } else {
+          var arr = resData.data;
+          if (this.mod === 'moments') {
+            arr = sortNewestFirst(arr);
+          }
+          this.store[this.mod] = arr;
+          document.getElementById('count-' + this.mod).textContent = String(arr.length);
         }
-        this.store[this.mod] = arr;
-        document.getElementById('count-' + this.mod).textContent = String(arr.length);
       }
       this.currentItem = resData.item || null;
       this.renderList();
@@ -1078,11 +1118,15 @@ var cms = {
       if (!res.ok) throw new Error('HTTP ' + res.status);
       var resData = await res.json();
       if (Array.isArray(resData.data)) {
-        this.store[this.mod] = resData.data;
-        if (this.mod === 'comments') {
-          this.updateCommentCountBadge();
+        if (this.mod === 'posts') {
+          this.setPosts(resData.data);
         } else {
-          document.getElementById('count-' + this.mod).textContent = String(resData.data.length);
+          this.store[this.mod] = resData.data;
+          if (this.mod === 'comments') {
+            this.updateCommentCountBadge();
+          } else {
+            document.getElementById('count-' + this.mod).textContent = String(resData.data.length);
+          }
         }
       }
       this.currentItem = null;
@@ -1092,6 +1136,412 @@ var cms = {
     } catch (err) {
       this.notify('删除失败：请确认登录状态是否有效');
     }
+  },
+
+  // ======================= 文章：列表页 + Markdown 写作页 =======================
+
+  findPost: function (id) {
+    var list = this.store.posts || [];
+    for (var i = 0; i < list.length; i++) {
+      if (String(list[i].id) === String(id)) return list[i];
+    }
+    return null;
+  },
+
+  renderPostsPage: function () {
+    var ul = document.getElementById('posts-list');
+    if (!ul) return;
+    var input = document.getElementById('posts-search-input');
+    var kw = input ? String(input.value || '').trim().toLowerCase() : '';
+    var list = sortNewestFirst(this.store.posts || []);
+    if (kw) {
+      list = list.filter(function (p) {
+        var hay = [p.title || '', p.id || '', (p.tags || []).join(' '), p.tag || ''].join(' ').toLowerCase();
+        return hay.indexOf(kw) !== -1;
+      });
+    }
+    if (!list.length) {
+      ul.innerHTML = '<li class="posts-empty">' + (kw ? '没有匹配的文章' : '还没有文章，点右上角「+ 新建文章」开始写作') + '</li>';
+      return;
+    }
+    ul.innerHTML = list.map(function (p) {
+      var tags = (p.tags && p.tags.length ? p.tags : (p.tag ? [p.tag] : [])).map(function (t) {
+        return '<span class="post-tag">' + cms.escape(t) + '</span>';
+      }).join('');
+      var badges = '';
+      if (p.hidden) badges += '<span class="post-badge post-badge--hidden">已隐藏</span>';
+      if (p.locked) badges += '<span class="post-badge post-badge--lock">🔒 已加密</span>';
+      var pid = String(p.id || '');
+      return '<li class="posts-item" data-post-id="' + cms.escape(pid) + '">' +
+        '<div class="posts-item-main">' +
+          '<button type="button" class="posts-item-title" data-post-open="' + cms.escape(pid) + '">' + cms.escape(p.title || pid || '未命名') + '</button>' +
+          '<div class="posts-item-meta"><span class="posts-item-date">' + cms.escape(p.date || '') + '</span>' + tags + badges + '</div>' +
+        '</div>' +
+        '<button type="button" class="posts-more-btn" data-post-menu="' + cms.escape(pid) + '" aria-label="更多操作">⋯</button>' +
+      '</li>';
+    }).join('');
+  },
+
+  showPage: function (pageId) {
+    var ALL_PAGES = ['admin-settings', 'admin-probe', 'admin-links', 'admin-notify', 'admin-posts', 'admin-post-editor'];
+    var grid = document.querySelector('.cms-grid');
+    if (grid) grid.style.display = 'none';
+    for (var i = 0; i < ALL_PAGES.length; i++) {
+      var el = document.getElementById(ALL_PAGES[i]);
+      if (el) el.hidden = ALL_PAGES[i] !== pageId;
+    }
+    var hint = document.getElementById('storage-hint');
+    if (hint) hint.style.display = 'none';
+  },
+
+  today: function () {
+    var d = new Date();
+    var p = function (n) { return (n < 10 ? '0' : '') + n; };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  },
+
+  openPostEditor: function (id) {
+    var p = id ? this.findPost(id) : null;
+    if (id && !p) { this.notify('文章不存在，可能已被删除'); return; }
+    this.page = 'post-editor';
+    this.mod = 'posts';
+    this.currentItem = p ? JSON.parse(JSON.stringify(p)) : null;
+    this.postEditor = p ? JSON.parse(JSON.stringify(p)) : null;
+    this.editorPassword = '';
+    this.editorUnlocked = !p || !p.locked;
+    this.closePostMenu();
+    this.showPage('admin-post-editor');
+
+    var locked = !!(p && p.locked);
+    document.getElementById('post-title').value = p ? (p.title || '') : '';
+    document.getElementById('post-id').value = p ? (p.id || '') : '';
+    document.getElementById('post-id').readOnly = !!p;
+    document.getElementById('post-id').style.opacity = p ? '0.65' : '';
+    document.getElementById('post-date').value = p ? (p.date || '') : this.today();
+    document.getElementById('post-tags').value = ((p && p.tags) || []).join(', ');
+    document.getElementById('post-hidden').checked = !!(p && p.hidden);
+    document.getElementById('post-enc').checked = locked;
+    document.getElementById('post-password').value = '';
+    document.getElementById('post-password').placeholder = locked ? '设置新口令（留空表示沿用原口令）' : '设置访问口令（启用加密时必填）';
+    document.getElementById('post-content').value = p && !locked ? (p.content || '') : '';
+    document.getElementById('post-content').readOnly = locked;
+    document.getElementById('post-lock-bar').hidden = !locked;
+    document.getElementById('post-unlock-input').value = '';
+    document.getElementById('post-unlock-error').textContent = '';
+    document.getElementById('post-editor-title').textContent = p ? ('编辑文章 · ' + (p.title || p.id)) : '新建文章';
+    document.getElementById('post-delete-btn').style.display = p ? '' : 'none';
+    document.getElementById('post-editor-status').textContent = locked ? '已加密 · 解锁后可编辑正文' : (p ? ('ID: ' + p.id) : 'NEW');
+    document.getElementById('post-error').textContent = '';
+    document.getElementById('md-toolbar-tip').textContent = locked ? '请先解锁正文' : '选中文字后点按钮即可套用格式';
+    this.renderPostPreview();
+  },
+
+  backToPosts: function () {
+    this.closePostMenu();
+    this.page = '';
+    this.switchMod('posts');
+  },
+
+  renderPostPreview: function () {
+    var ta = document.getElementById('post-content');
+    var preview = document.getElementById('post-preview');
+    if (!ta || !preview) return;
+    preview.innerHTML = renderMarkdown(ta.value || '');
+  },
+
+  unlockPostEditor: async function () {
+    var p = this.postEditor;
+    if (!p || !p.locked) return;
+    var input = document.getElementById('post-unlock-input');
+    var err = document.getElementById('post-unlock-error');
+    var pwd = input ? input.value : '';
+    err.textContent = '';
+    if (!pwd) { err.textContent = '请输入访问口令'; return; }
+    try {
+      var out = await this.api('/api/admin/post/unlock', { method: 'POST', body: { id: p.id, password: pwd } });
+      var ta = document.getElementById('post-content');
+      ta.value = out.content || '';
+      ta.readOnly = false;
+      this.editorUnlocked = true;
+      this.editorPassword = pwd;
+      document.getElementById('post-lock-bar').hidden = true;
+      document.getElementById('post-editor-status').textContent = '已解锁 · 可编辑';
+      document.getElementById('md-toolbar-tip').textContent = '选中文字后点按钮即可套用格式';
+      this.renderPostPreview();
+      this.notify('已解锁，可以编辑正文了');
+    } catch (e) {
+      err.textContent = (e && e.message === 'unauthorized') ? '' : ('解锁失败：' + this.errText(e));
+    }
+  },
+
+  savePostEditor: async function () {
+    var err = document.getElementById('post-error');
+    err.textContent = '';
+    var p = this.postEditor || {};
+    var ta = document.getElementById('post-content');
+    var title = document.getElementById('post-title').value.trim();
+    var content = ta.value;
+    if (!title) { err.textContent = '请填写文章标题'; return; }
+    if (p.locked && !this.editorUnlocked) { err.textContent = '请先输入口令解锁后再保存'; return; }
+    var encOn = document.getElementById('post-enc').checked;
+    var pwd = document.getElementById('post-password').value;
+    if (encOn && !pwd && !(p.locked && this.editorPassword)) { err.textContent = '启用加密需要设置访问口令'; return; }
+    if (encOn && pwd && pwd.length < 4) { err.textContent = '口令至少 4 位'; return; }
+
+    var item = {
+      id: p.id || document.getElementById('post-id').value.trim(),
+      title: title,
+      date: document.getElementById('post-date').value.trim(),
+      tags: document.getElementById('post-tags').value.trim(),
+      hidden: document.getElementById('post-hidden').checked,
+      enc: encOn,
+      content: content
+    };
+    if (encOn) {
+      if (pwd) item.encPassword = pwd;
+      else if (this.editorPassword) item.encPassword = this.editorPassword;
+    }
+    try {
+      var out = await this.api('/api/save', { method: 'POST', body: { module: 'posts', item: item } });
+      if (Array.isArray(out.data)) {
+        this.setPosts(out.data);
+      }
+      this.notify('文章已保存');
+      this.backToPosts();
+    } catch (e) {
+      if (e && e.message === 'unauthorized') return;
+      err.textContent = '保存失败：' + this.errText(e);
+    }
+  },
+
+  deleteCurrentPost: async function () {
+    var p = this.postEditor;
+    if (!p || !p.id) { this.notify('这篇文章还没有保存'); return; }
+    if (!window.confirm('确定删除《' + (p.title || p.id) + '》？删除后无法恢复。')) return;
+    try {
+      var out = await this.api('/api/delete', { method: 'POST', body: { module: 'posts', id: p.id } });
+      if (Array.isArray(out.data)) {
+        this.setPosts(out.data);
+      }
+      this.notify('已删除');
+      this.backToPosts();
+    } catch (e) {
+      if (e && e.message === 'unauthorized') return;
+      var err = document.getElementById('post-error');
+      if (err) err.textContent = '删除失败：' + this.errText(e);
+    }
+  },
+
+  openPostMenu: function (id, anchorEl) {
+    this.closePostMenu();
+    var p = this.findPost(id);
+    if (!p || !anchorEl) return;
+    var menu = document.createElement('div');
+    menu.className = 'posts-menu';
+    menu.id = 'posts-menu';
+    menu.innerHTML =
+      '<button type="button" data-post-act="edit">编辑</button>' +
+      '<button type="button" data-post-act="encrypt">' + (p.locked ? '取消加密' : '加密文章') + '</button>' +
+      '<button type="button" data-post-act="hidden">' + (p.hidden ? '取消隐藏' : '隐藏文章') + '</button>' +
+      '<button type="button" class="danger" data-post-act="delete">删除</button>';
+    document.body.appendChild(menu);
+    var r = anchorEl.getBoundingClientRect();
+    menu.style.top = Math.round(r.bottom + 6) + 'px';
+    menu.style.left = Math.max(8, Math.round(Math.min(r.left, window.innerWidth - 152))) + 'px';
+    this.postMenuId = id;
+    var self = this;
+    menu.addEventListener('click', function (ev) {
+      var btn = ev.target && ev.target.closest ? ev.target.closest('[data-post-act]') : null;
+      if (!btn) return;
+      var act = btn.getAttribute('data-post-act');
+      self.closePostMenu();
+      self.postMenuAction(id, act);
+    });
+  },
+
+  closePostMenu: function () {
+    var menu = document.getElementById('posts-menu');
+    if (menu && menu.parentNode) menu.parentNode.removeChild(menu);
+    this.postMenuId = '';
+  },
+
+  postMenuAction: function (id, act) {
+    if (act === 'edit') { this.openPostEditor(id); return; }
+    if (act === 'encrypt') { this.encryptPostFromList(id); return; }
+    if (act === 'hidden') { this.togglePostHidden(id); return; }
+    if (act === 'delete') { this.deletePostFromList(id); return; }
+  },
+
+  savePostPatch: async function (p, patch) {
+    var item = {
+      id: p.id,
+      title: p.title || p.id,
+      date: p.date || '',
+      tags: p.tags || [],
+      hidden: !!p.hidden,
+      enc: !!p.locked,
+      content: p.content || ''
+    };
+    Object.keys(patch || {}).forEach(function (k) { item[k] = patch[k]; });
+    var out = await this.api('/api/save', { method: 'POST', body: { module: 'posts', item: item } });
+    if (Array.isArray(out.data)) {
+      this.setPosts(out.data);
+    }
+    this.renderPostsPage();
+    return out;
+  },
+
+  togglePostHidden: async function (id) {
+    var p = this.findPost(id);
+    if (!p) return;
+    try {
+      await this.savePostPatch(p, { hidden: !p.hidden });
+      this.notify(p.hidden ? '已取消隐藏，前台恢复显示' : '已隐藏，前台不再显示，可在列表里随时恢复');
+    } catch (e) {
+      if (e && e.message === 'unauthorized') return;
+      this.notify('操作失败：' + this.errText(e));
+    }
+  },
+
+  deletePostFromList: async function (id) {
+    var p = this.findPost(id);
+    if (!p) return;
+    if (!window.confirm('确定删除《' + (p.title || id) + '》？删除后无法恢复。')) return;
+    try {
+      var out = await this.api('/api/delete', { method: 'POST', body: { module: 'posts', id: id } });
+      if (Array.isArray(out.data)) {
+        this.setPosts(out.data);
+      }
+      this.notify('已删除');
+      this.renderPostsPage();
+    } catch (e) {
+      if (e && e.message === 'unauthorized') return;
+      this.notify('删除失败：' + this.errText(e));
+    }
+  },
+
+  encryptPostFromList: async function (id) {
+    var p = this.findPost(id);
+    if (!p) return;
+    if (p.locked) {
+      var pwd = window.prompt('取消加密需要验证口令，请输入这篇文章当前的访问口令：');
+      if (!pwd) return;
+      try {
+        var out = await this.api('/api/admin/post/unlock', { method: 'POST', body: { id: id, password: pwd } });
+        await this.savePostPatch(p, { content: out.content || '', enc: false });
+        this.notify('已取消加密，文章恢复公开阅读');
+      } catch (e) {
+        if (e && e.message === 'unauthorized') return;
+        this.notify('取消失败：' + this.errText(e));
+      }
+      return;
+    }
+    var pass = window.prompt('为《' + (p.title || id) + '》设置访问口令（读者输入正确口令才能查看全文）：');
+    if (!pass) return;
+    if (pass.length < 4) { this.notify('口令至少 4 位'); return; }
+    var pass2 = window.prompt('再输入一次口令确认：');
+    if (pass2 !== pass) { this.notify('两次输入的口令不一致'); return; }
+    try {
+      await this.savePostPatch(p, { enc: true, encPassword: pass });
+      this.notify('已加密，前台需要口令才能阅读');
+    } catch (e) {
+      if (e && e.message === 'unauthorized') return;
+      this.notify('加密失败：' + this.errText(e));
+    }
+  },
+
+  errText: function (e) {
+    return (e && e.message) ? String(e.message) : '未知错误';
+  },
+
+  activeEditorId: function () {
+    var editorPage = document.getElementById('admin-post-editor');
+    if (editorPage && !editorPage.hidden && document.getElementById('post-content')) return 'post-content';
+    return 'field-content';
+  },
+
+  // ---------- Markdown 快捷工具 ----------
+  mdApply: function (action) {
+    var ta = document.getElementById('post-content');
+    if (!ta || ta.readOnly) return;
+    var self = this;
+    var start = ta.selectionStart || 0;
+    var end = ta.selectionEnd || 0;
+    var value = ta.value;
+    var sel = value.slice(start, end);
+    var before = value.slice(0, start);
+    var after = value.slice(end);
+    var NL = String.fromCharCode(10);
+    var BT = String.fromCharCode(96);
+
+    function place(text, selFrom, selTo) {
+      ta.value = before + text + after;
+      var base = before.length;
+      ta.selectionStart = base + (selFrom || 0);
+      ta.selectionEnd = base + (selTo == null ? (selFrom || 0) : selTo);
+      ta.focus();
+      self.renderPostPreview();
+    }
+    function wrap(l, r, ph) {
+      var inner = sel || ph || '';
+      place(l + inner + r, l.length, l.length + inner.length);
+    }
+    function eachLine(prefix) {
+      var s = start, e = end;
+      while (s > 0 && value.charAt(s - 1) !== NL) s--;
+      while (e < value.length && value.charAt(e) !== NL) e++;
+      var block = value.slice(s, e) || '文本';
+      var out = block.split(NL).map(function (ln) { return prefix + ln; }).join(NL);
+      ta.value = value.slice(0, s) + out + value.slice(e);
+      ta.selectionStart = s;
+      ta.selectionEnd = s + out.length;
+      ta.focus();
+      self.renderPostPreview();
+    }
+
+    switch (action) {
+      case 'h1': eachLine('# '); break;
+      case 'h2': eachLine('## '); break;
+      case 'h3': eachLine('### '); break;
+      case 'bold': wrap('**', '**', '加粗文字'); break;
+      case 'italic': wrap('*', '*', '斜体文字'); break;
+      case 'strike': wrap('~~', '~~', '删除线文字'); break;
+      case 'code': wrap(BT, BT, '代码'); break;
+      case 'link': wrap('[', '](https://example.com)', '链接文字'); break;
+      case 'image': wrap('![', '](https://example.com/a.png)', '图片描述'); break;
+      case 'upper': {
+        var up = (sel || '大写文字').toUpperCase();
+        place(up, 0, up.length);
+        break;
+      }
+      case 'quote': eachLine('> '); break;
+      case 'ul': eachLine('- '); break;
+      case 'ol': eachLine('1. '); break;
+      case 'hr': {
+        var ins = (before && before.charAt(before.length - 1) !== NL ? NL + NL : '') + '---' + NL + NL;
+        place(ins, ins.length);
+        break;
+      }
+      case 'lock': this.mdInsertLock(); break;
+    }
+  },
+
+  mdInsertLock: function () {
+    var ta = document.getElementById('post-content');
+    if (!ta || ta.readOnly) return;
+    var start = ta.selectionStart || 0;
+    var end = ta.selectionEnd || 0;
+    var sel = ta.value.slice(start, end) || '这里是要加密的文字或图片 Markdown';
+    var pwd = window.prompt('为这段内容设置口令（读者输入正确口令后才显示）：');
+    if (!pwd) return;
+    if (pwd.length < 4) { this.notify('口令至少 4 位'); return; }
+    var block = ':::lock ' + pwd + '\n' + sel + '\n:::';
+    var value = ta.value;
+    ta.value = value.slice(0, start) + block + value.slice(end);
+    ta.selectionStart = ta.selectionEnd = start + block.length;
+    ta.focus();
+    this.renderPostPreview();
+    this.notify('已插入加密片段，保存后由后端加密（明文不会写入磁盘）');
   },
 
   // ======================= 管理页（站点 / 账号 / 两步验证 / 通行密钥 / 会话） =======================
@@ -1365,8 +1815,14 @@ var cms = {
       this.renderPasskeys(pkeys);
 
       this.renderSessions(data.sessions || [], data.history || [], data.blocked || []);
+
+      this.whitelist = Array.isArray(site.whitelist) ? site.whitelist.slice() : [];
+      this.renderWhitelist();
+      this.setSettingsTab(this.settingsTab || 'general');
+
       this.loadIndexNow();
       this.loadTelegram();
+      this.loadBackup();
     } catch (e) {
       if (String(e && e.message) === 'unauthorized') return;
       this.notify('管理信息加载失败：' + (e && e.message ? e.message : '未知错误'));
@@ -1844,10 +2300,10 @@ var cms = {
       badge.setAttribute('data-on', ready ? 'true' : 'false');
     }
     if (status) {
-      if (!c.enabled) status.textContent = '开关关闭时不会同步任何瞬间。';
+      if (!c.enabled) status.textContent = '开关关闭时不会同步任何碎碎念。';
       else if (!c.hasToken) status.textContent = '还差 Bot Token，填好并保存后开始同步。';
       else if (!c.chatId) status.textContent = '还差频道 / 会话 ID。';
-      else status.textContent = '已同步 ' + (synced || 0) + ' 条瞬间；新建、编辑会重发，删除会撤回。';
+      else status.textContent = '已同步 ' + (synced || 0) + ' 条碎碎念；新建、编辑会重发，删除会撤回。';
     }
   },
 
@@ -1866,7 +2322,7 @@ var cms = {
     if (tokenVal) payload.botToken = tokenVal;
     this.api('/api/admin/telegram', { method: 'POST', body: payload }).then(function (res) {
       cms.renderTelegram(res.config, res.synced);
-      cms.notify('瞬间同步设置已保存');
+      cms.notify('碎碎念同步设置已保存');
       if (status) status.textContent = '已保存。' + (res.config && res.config.enabled ? '可以点「发送测试消息」验证。' : '');
     }).catch(function (e) {
       if (err) err.textContent = e.message || '保存失败';
@@ -1945,115 +2401,202 @@ var cms = {
     });
   },
 
-  // 侧边栏「管理」二级菜单：鼠标悬停临时展开；点右侧小三角固定展开（点别处才收起）；
-  // 点按钮左侧（图标与文字）仍是原来的行为——直接进入管理页，不弹菜单。
-  menuPinned: false,
-  suppressHoverUntil: 0,
-  subnavTarget: '',
-  subnavHoldUntil: 0,
-
-  openSettings: function (ev) {
-    var subnav = document.getElementById('settings-subnav');
-    var btn = (ev && (ev.currentTarget || ev.target)) || null;
-    if (btn && btn.closest) btn = btn.closest('.nav-btn') || btn;
-    var rect = btn && btn.getBoundingClientRect ? btn.getBoundingClientRect() : null;
-    var onArrow = !!(ev && rect && typeof ev.clientX === 'number' && ev.clientX >= rect.right - 26);
-
-    if (onArrow) {
-      if (ev.preventDefault) ev.preventDefault();
-      if (ev.stopPropagation) ev.stopPropagation();
-      // 只有在「已固定展开」时第二次点箭头才收起，否则一律固定展开
-      var willOpen = !(this.menuPinned && subnav && !subnav.hidden);
-      this.menuPinned = willOpen;
-      if (willOpen) this.showSettingsMenu();
-      else this.closeSettingsMenu();
-      return;
-    }
-
-    // 左侧：正常进入「管理」页，不弹出二级菜单（并短暂抑制悬停自动展开）
-    this.menuPinned = false;
-    this.suppressHoverUntil = Date.now() + 500;
-    this.closeSettingsMenu();
+  // 侧边栏「管理」：直接进入管理页，页内用横向分组 tab 切换，不再有二级菜单
+  openSettings: function () {
     this.switchMod('settings');
   },
 
-  showSettingsMenu: function () {
-    var subnav = document.getElementById('settings-subnav');
-    var row = document.querySelector('.nav-item-row[data-nav-row="settings"]');
-    if (subnav) subnav.hidden = false;
-    if (row) row.classList.add('menu-open');
-  },
-
-  closeSettingsMenu: function () {
-    var subnav = document.getElementById('settings-subnav');
-    if (subnav) subnav.hidden = true;
-    var row = document.querySelector('.nav-item-row[data-nav-row="settings"]');
-    if (row) row.classList.remove('menu-open');
-    this.menuPinned = false;
-  },
-
-  clearSubnavActive: function () {
-    var subs = document.querySelectorAll('#settings-subnav .nav-sub-btn');
-    for (var i = 0; i < subs.length; i++) subs[i].classList.remove('active');
-  },
-
-  // 高亮「当前正在看的那张卡片」；不在管理页或看不到卡片时全部取消
-  syncSubnavActive: function () {
-    if (this.mod !== 'settings') { this.clearSubnavActive(); return; }
+  setSettingsTab: function (tab) {
+    this.settingsTab = tab || 'general';
+    var tabs = document.querySelectorAll('#settings-tabs .settings-tab');
+    for (var i = 0; i < tabs.length; i++) {
+      tabs[i].classList.toggle('active', tabs[i].getAttribute('data-tab') === this.settingsTab);
+    }
     var page = document.getElementById('admin-settings');
-    if (!page || page.hidden) { this.clearSubnavActive(); return; }
-    var cards = page.querySelectorAll('.settings-card[id]');
-    if (!cards.length) { this.clearSubnavActive(); return; }
+    if (!page) return;
+    var cards = page.querySelectorAll('.settings-card');
+    for (var j = 0; j < cards.length; j++) {
+      var group = cards[j].getAttribute('data-group') || 'general';
+      cards[j].hidden = group !== this.settingsTab;
+    }
+  },
 
-    // 刚点过的区块只要还在视野里就保持高亮（同一行左右两张卡不会互相抢）
-    var target = this.subnavTarget;
-    if (target) {
-      var tEl = document.getElementById(target);
-      var hold = Date.now() < this.subnavHoldUntil;
-      if (tEl) {
-        var tr = tEl.getBoundingClientRect();
-        if (hold || (tr.bottom > 120 && tr.top < window.innerHeight * 0.6)) {
-          this.setSubnavActive(target);
-          return;
-        }
+  // ---------- 外部域名白名单 ----------
+  WHITELIST_DEFAULTS: ['github.com', 'x.com', 'twitter.com', 't.me', 'telegram.me', 'gitee.com', 'beian.miit.gov.cn'],
+
+  renderWhitelist: function () {
+    var ul = document.getElementById('whitelist-list');
+    if (!ul) return;
+    var list = this.whitelist || [];
+    if (!list.length) {
+      ul.innerHTML = '<li class="whitelist-empty">白名单为空：前台所有外部链接都会弹确认框</li>';
+      return;
+    }
+    ul.innerHTML = list.map(function (d) {
+      return '<li class="whitelist-chip"><span class="whitelist-domain">' + cms.escape(d) + '</span>' +
+        '<button type="button" class="whitelist-remove" data-whitelist-remove="' + cms.escape(d) + '" aria-label="移除">×</button></li>';
+    }).join('');
+  },
+
+  normalizeWhitelistInput: function (raw) {
+    return String(raw || '')
+      .trim()
+      .replace(/^https?:\/\//i, '')
+      .replace(/^\/\//, '')
+      .split(/[\s,，;；]+/)
+      .map(function (one) {
+        return one.split('/')[0].split(':')[0].replace(/^\.+/, '').toLowerCase();
+      });
+  },
+
+  addWhitelist: function () {
+    var input = document.getElementById('whitelist-input');
+    var err = document.getElementById('whitelist-error');
+    if (err) err.textContent = '';
+    var raw = input ? String(input.value || '') : '';
+    if (!raw.trim()) return;
+    var added = 0;
+    var bad = [];
+    this.normalizeWhitelistInput(raw).forEach(function (domain) {
+      if (!domain) return;
+      if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/.test(domain)) { bad.push(domain); return; }
+      if (cms.whitelist.indexOf(domain) === -1) { cms.whitelist.push(domain); added++; }
+    });
+    if (bad.length && err) err.textContent = '域名格式不正确：' + bad.join('、');
+    if (input) input.value = '';
+    this.renderWhitelist();
+  },
+
+  removeWhitelist: function (domain) {
+    this.whitelist = (this.whitelist || []).filter(function (d) { return d !== domain; });
+    this.renderWhitelist();
+  },
+
+  resetWhitelist: function () {
+    if (!window.confirm('恢复为代码内置的默认白名单？（保存后生效）')) return;
+    this.whitelist = this.WHITELIST_DEFAULTS.slice();
+    this.renderWhitelist();
+  },
+
+  saveWhitelist: async function () {
+    var err = document.getElementById('whitelist-error');
+    var state = document.getElementById('whitelist-state');
+    if (err) err.textContent = '';
+    try {
+      var out = await this.api('/api/admin/site', { method: 'POST', body: { whitelist: this.whitelist } });
+      var saved = (out && out.site && out.site.whitelist) || [];
+      this.whitelist = saved.slice();
+      this.renderWhitelist();
+      if (state) state.textContent = '已保存 · ' + saved.length + ' 个域名';
+      this.notify('白名单已保存');
+    } catch (e) {
+      if (e && e.message === 'unauthorized') return;
+      if (err) err.textContent = '保存失败：' + this.errText(e);
+    }
+  },
+
+  // ---------- 备份设置（定时 / WebDAV） ----------
+  renderBackupSettings: function (settings) {
+    var s = settings || {};
+    var dav = s.webdav || {};
+    var setVal = function (id, v) { var el = document.getElementById(id); if (el) el.value = v; };
+    var setChk = function (id, v) { var el = document.getElementById(id); if (el) el.checked = !!v; };
+    setChk('backup-auto', s.auto);
+    setVal('backup-time', s.time || '03:00');
+    setVal('backup-keep-input', s.keep || 10);
+    setChk('backup-dav-enabled', dav.enabled);
+    setChk('backup-dav-auto', dav.autoUpload === undefined ? true : !!dav.autoUpload);
+    setVal('backup-dav-url', dav.url || '');
+    setVal('backup-dav-user', dav.username || '');
+    setVal('backup-dav-dir', dav.dir || '/blog-backup');
+    var pass = document.getElementById('backup-dav-pass');
+    if (pass) {
+      pass.value = '';
+      pass.placeholder = dav.passwordSet ? '已保存，留空表示不修改' : '留空表示不修改';
+    }
+    var state = document.getElementById('backup-settings-state');
+    if (state) {
+      var bits = [];
+      if (s.auto) bits.push('自动备份已开启：每天 ' + (s.time || '03:00'));
+      if (s.lastRun) bits.push('上次自动备份：' + s.lastRun);
+      if (s.lastError) bits.push('上次错误：' + s.lastError);
+      state.textContent = bits.join(' · ');
+    }
+  },
+
+  saveBackupSettings: async function () {
+    var err = document.getElementById('backup-settings-error');
+    if (err) err.textContent = '';
+    var payload = {
+      auto: document.getElementById('backup-auto').checked,
+      time: document.getElementById('backup-time').value || '03:00',
+      keep: Number(document.getElementById('backup-keep-input').value) || 10,
+      webdav: {
+        enabled: document.getElementById('backup-dav-enabled').checked,
+        autoUpload: document.getElementById('backup-dav-auto').checked,
+        url: document.getElementById('backup-dav-url').value.trim(),
+        username: document.getElementById('backup-dav-user').value.trim(),
+        dir: document.getElementById('backup-dav-dir').value.trim()
       }
-      this.subnavTarget = '';
-    }
-
-    // 否则取「顶部离 170px 最近且已滚过」的那张；同一行并列时取文档顺序靠前的
-    var current = '';
-    var bestTop = -Infinity;
-    for (var i = 0; i < cards.length; i++) {
-      var top = cards[i].getBoundingClientRect().top;
-      if (top <= 170 && top > bestTop) { bestTop = top; current = cards[i].id; }
-    }
-    if (!current) current = cards[0].id;
-    this.setSubnavActive(current);
-  },
-
-  setSubnavActive: function (cardId) {
-    var subs = document.querySelectorAll('#settings-subnav .nav-sub-btn');
-    for (var j = 0; j < subs.length; j++) {
-      subs[j].classList.toggle('active', subs[j].getAttribute('data-jump') === cardId);
+    };
+    var pass = document.getElementById('backup-dav-pass').value;
+    if (pass) payload.webdav.password = pass;
+    try {
+      var out = await this.api('/api/admin/backup/settings', { method: 'POST', body: payload });
+      if (out && out.settings) this.renderBackupSettings(out.settings);
+      var state = document.getElementById('backup-settings-state');
+      if (state) state.textContent = '设置已保存' + (payload.auto ? ' · 每天 ' + payload.time + ' 自动备份' : '');
+      this.notify('备份设置已保存');
+      this.loadBackup();
+    } catch (e) {
+      if (e && e.message === 'unauthorized') return;
+      if (err) err.textContent = '保存失败：' + this.errText(e);
     }
   },
 
-  // 侧边栏「管理」二级菜单：跳到对应卡片
+  testWebdav: async function () {
+    var err = document.getElementById('backup-settings-error');
+    var state = document.getElementById('backup-settings-state');
+    if (err) err.textContent = '';
+    if (state) state.textContent = '正在测试 WebDAV 连接…';
+    try {
+      var out = await this.api('/api/admin/backup/webdav-test', { method: 'POST', body: {} });
+      if (state) state.textContent = '测试成功' + (out && out.dir ? '：' + out.dir : '');
+      this.notify('WebDAV 连接正常');
+    } catch (e) {
+      if (e && e.message === 'unauthorized') return;
+      if (state) state.textContent = '';
+      if (err) err.textContent = '测试失败：' + this.errText(e);
+    }
+  },
+
+  uploadLatestBackup: async function () {
+    var err = document.getElementById('backup-settings-error');
+    var state = document.getElementById('backup-settings-state');
+    if (err) err.textContent = '';
+    if (state) state.textContent = '正在上传最新备份到 WebDAV…';
+    try {
+      var out = await this.api('/api/admin/backup/webdav-upload', { method: 'POST', body: {} });
+      if (state) state.textContent = '已上传' + (out && out.url ? '：' + out.url : '');
+      this.notify('最新备份已上传到 WebDAV');
+    } catch (e) {
+      if (e && e.message === 'unauthorized') return;
+      if (state) state.textContent = '';
+      if (err) err.textContent = '上传失败：' + this.errText(e);
+    }
+  },
+
+  // 跳到某张设置卡片（先切到它所属分组再滚动+高亮）
   jumpToCard: function (cardId) {
     if (this.mod !== 'settings') this.switchMod('settings');
-    this.closeSettingsMenu();
     var card = document.getElementById(cardId);
     if (!card) return;
-    this.subnavTarget = cardId;
-    this.subnavHoldUntil = Date.now() + 1400;
-    this.setSubnavActive(cardId);
+    this.setSettingsTab(card.getAttribute('data-group') || 'general');
     card.scrollIntoView({ behavior: 'smooth', block: 'start' });
     card.classList.remove('card-flash');
     void card.offsetWidth;
     card.classList.add('card-flash');
     setTimeout(function () { card.classList.remove('card-flash'); }, 1200);
-    var self = this;
-    setTimeout(function () { self.syncSubnavActive(); }, 420);
   },
 
   renderProbeSettings: function (probe) {
@@ -2122,6 +2665,67 @@ var cms = {
     } catch (e) {
       /* 拿不到版本不提示，避免干扰 */
     }
+  },
+
+  // 文章：列表页 + 写作页的交互绑定（只绑一次）
+  bindPostEditor: function () {
+    var self = this;
+    var search = document.getElementById('posts-search-input');
+    if (search) search.addEventListener('input', function () { self.renderPostsPage(); });
+
+    var list = document.getElementById('posts-list');
+    if (list) {
+      list.addEventListener('click', function (ev) {
+        var open = ev.target.closest ? ev.target.closest('[data-post-open]') : null;
+        if (open) { self.openPostEditor(open.getAttribute('data-post-open')); return; }
+        var more = ev.target.closest ? ev.target.closest('[data-post-menu]') : null;
+        if (more) {
+          ev.stopPropagation();
+          var id = more.getAttribute('data-post-menu');
+          if (self.postMenuId === id) { self.closePostMenu(); return; }
+          self.openPostMenu(id, more);
+        }
+      });
+    }
+
+    var toolbar = document.getElementById('md-toolbar');
+    if (toolbar) {
+      toolbar.addEventListener('click', function (ev) {
+        var btn = ev.target.closest ? ev.target.closest('[data-md]') : null;
+        if (!btn) return;
+        self.mdApply(btn.getAttribute('data-md'));
+      });
+    }
+
+    var editor = document.getElementById('post-content');
+    if (editor) editor.addEventListener('input', function () { self.renderPostPreview(); });
+
+    var unlockBtn = document.getElementById('post-unlock-btn');
+    if (unlockBtn) unlockBtn.addEventListener('click', function () { self.unlockPostEditor(); });
+    var unlockInput = document.getElementById('post-unlock-input');
+    if (unlockInput) {
+      unlockInput.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter') { ev.preventDefault(); self.unlockPostEditor(); }
+      });
+    }
+
+    var titleEl = document.getElementById('post-title');
+    if (titleEl) {
+      titleEl.addEventListener('input', function () {
+        var hint = document.getElementById('post-editor-title');
+        if (hint) hint.textContent = titleEl.value.trim() || '新文章';
+      });
+    }
+
+    // 右上角三点菜单：点空白处或 Esc 关闭
+    document.addEventListener('click', function (ev) {
+      if (!self.postMenuId) return;
+      if (ev.target.closest && (ev.target.closest('#posts-menu') || ev.target.closest('[data-post-menu]'))) return;
+      self.closePostMenu();
+    });
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape') self.closePostMenu();
+    });
   },
 
   bindSettings: function () {
@@ -2300,58 +2904,47 @@ var cms = {
       if (dlBtn) dlBtn.addEventListener('click', function () { self.downloadIndexNowKey(); });
     }
 
-    // 滚动时更新二级菜单高亮（只在管理页生效）
-    var scrollRaf = false;
-    window.addEventListener('scroll', function () {
-      if (scrollRaf) return;
-      scrollRaf = true;
-      requestAnimationFrame(function () { scrollRaf = false; self.syncSubnavActive(); });
-    }, { passive: true });
-
-    // 侧边栏「管理」：悬停展开、移开 180ms 后收起（点右侧固定后不受影响）
-    var settingsRow = document.querySelector('.nav-item-row[data-nav-row="settings"]');
-    var settingsSub = document.getElementById('settings-subnav');
-    var hideTimer = null;
-    function cancelHide() {
-      if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
-    }
-    function scheduleHide() {
-      if (self.menuPinned) return;
-      cancelHide();
-      hideTimer = setTimeout(function () {
-        hideTimer = null;
-        if (!self.menuPinned) self.closeSettingsMenu();
-      }, 180);
-    }
-    if (settingsRow) {
-      settingsRow.addEventListener('mouseenter', function () {
-        if (Date.now() < self.suppressHoverUntil) return;
-        cancelHide();
-        self.showSettingsMenu();
-      });
-      settingsRow.addEventListener('mouseleave', scheduleHide);
-    }
-    if (settingsSub) {
-      settingsSub.addEventListener('mouseenter', cancelHide);
-      settingsSub.addEventListener('mouseleave', scheduleHide);
-    }
-
-    // 点击「管理」以外的区域，或按 Esc，收起二级菜单
-    document.addEventListener('click', function (ev) {
-      var row = document.querySelector('.nav-item-row[data-nav-row="settings"]');
-      if (row && !row.contains(ev.target)) self.closeSettingsMenu();
-    });
-    document.addEventListener('keydown', function (ev) {
-      if (ev.key === 'Escape') self.closeSettingsMenu();
-    });
-
-    var subnav = document.getElementById('settings-subnav');
-    if (subnav) {
-      subnav.addEventListener('click', function (ev) {
-        var btn = ev.target.closest ? ev.target.closest('[data-jump]') : null;
-        if (btn) self.jumpToCard(btn.getAttribute('data-jump'));
+    // 管理页：横向分组 tab（常规 / 安全 / 集成 / 备份）
+    var settingsTabs = document.getElementById('settings-tabs');
+    if (settingsTabs) {
+      settingsTabs.addEventListener('click', function (ev) {
+        var btn = ev.target.closest ? ev.target.closest('.settings-tab') : null;
+        if (!btn) return;
+        self.setSettingsTab(btn.getAttribute('data-tab') || 'general');
       });
     }
+
+    // 外部域名白名单
+    var whitelistAdd = document.getElementById('whitelist-add-btn');
+    if (whitelistAdd) whitelistAdd.addEventListener('click', function () { self.addWhitelist(); });
+    var whitelistInput = document.getElementById('whitelist-input');
+    if (whitelistInput) {
+      whitelistInput.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter') { ev.preventDefault(); self.addWhitelist(); }
+      });
+    }
+    var whitelistReset = document.getElementById('whitelist-reset-btn');
+    if (whitelistReset) whitelistReset.addEventListener('click', function () { self.resetWhitelist(); });
+    var whitelistSave = document.getElementById('whitelist-save-btn');
+    if (whitelistSave) whitelistSave.addEventListener('click', function () { self.saveWhitelist(); });
+    var whitelistList = document.getElementById('whitelist-list');
+    if (whitelistList) {
+      whitelistList.addEventListener('click', function (ev) {
+        var btn = ev.target.closest ? ev.target.closest('[data-whitelist-remove]') : null;
+        if (btn) self.removeWhitelist(btn.getAttribute('data-whitelist-remove'));
+      });
+    }
+
+    // 备份设置（定时 / WebDAV）
+    var backupSave = document.getElementById('backup-settings-save');
+    if (backupSave) backupSave.addEventListener('click', function () { self.saveBackupSettings(); });
+    var davTest = document.getElementById('backup-dav-test');
+    if (davTest) davTest.addEventListener('click', function () { self.testWebdav(); });
+    var davUpload = document.getElementById('backup-dav-upload');
+    if (davUpload) davUpload.addEventListener('click', function () { self.uploadLatestBackup(); });
+
+    // 文章：列表页与写作页
+    this.bindPostEditor();
 
     var probeForm = document.getElementById('probe-form');
     if (probeForm) {
@@ -2630,6 +3223,198 @@ var cms = {
         }
       });
     }
+
+    var backupStart = document.getElementById('backup-start-btn');
+    if (backupStart) {
+      backupStart.addEventListener('click', function () {
+        self.startBackup();
+      });
+    }
+    var backupList = document.getElementById('backup-history');
+    if (backupList) {
+      backupList.addEventListener('click', function (e) {
+        var target = e.target;
+        if (!target || !target.getAttribute) return;
+        var dl = target.getAttribute('data-backup-download');
+        if (dl) { self.downloadBackup(dl); return; }
+        var del = target.getAttribute('data-backup-delete');
+        if (del) self.deleteBackup(del);
+      });
+    }
+  },
+
+  // ---------------- 备份与迁移 ----------------
+  fmtBytes: function (n) {
+    var v = Number(n) || 0;
+    if (v < 1024) return v + ' B';
+    if (v < 1048576) return (v / 1024).toFixed(1) + ' KB';
+    if (v < 1073741824) return (v / 1048576).toFixed(1) + ' MB';
+    return (v / 1073741824).toFixed(2) + ' GB';
+  },
+
+  loadBackup: async function () {
+    try {
+      var data = await this.api('/api/admin/backup/status?_t=' + Date.now());
+      this.renderBackup(data);
+    } catch (e) {
+      if (String(e && e.message) === 'unauthorized') return;
+      var err = document.getElementById('backup-error');
+      if (err) err.textContent = '备份状态读取失败：' + (e && e.message ? e.message : '未知错误');
+    }
+  },
+
+  renderBackup: function (data) {
+    var self = this;
+    var cfg = (data && data.config) || {};
+    var history = (data && data.history) || [];
+    var job = data && data.job;
+    var running = !!(data && data.running);
+    var feVersion = (history[0] && history[0].frontend && history[0].frontend.version) || '';
+    if (!feVersion && job && job.frontend) feVersion = job.frontend.version || '';
+
+    var feEl = document.getElementById('backup-fe-version');
+    if (feEl) feEl.textContent = feVersion || '未记录';
+    var dirEl = document.getElementById('backup-dir');
+    if (dirEl) dirEl.textContent = cfg.dir || '—';
+    var keepEl = document.getElementById('backup-keep');
+    if (keepEl) keepEl.textContent = cfg.keep ? ('最近 ' + cfg.keep + ' 份') : '—';
+    var freeEl = document.getElementById('backup-free');
+    if (freeEl) freeEl.textContent = cfg.freeBytes ? self.fmtBytes(cfg.freeBytes) : '—';
+
+    var state = document.getElementById('backup-state');
+    var bar = document.getElementById('backup-progress');
+    var startBtn = document.getElementById('backup-start-btn');
+    if (state) {
+      state.textContent = running ? ((job && job.stepLabel) || '备份中') : (job && job.status === 'error' ? '上次失败' : '空闲');
+      state.classList.toggle('is-busy', running);
+    }
+    if (bar) bar.hidden = !running;
+    if (startBtn) {
+      startBtn.disabled = running;
+      startBtn.textContent = running ? '备份进行中…' : '立即备份并下载';
+    }
+
+    var err = document.getElementById('backup-error');
+    if (err && !running) err.textContent = (job && job.status === 'error' && job.error) ? ('上次备份失败：' + job.error) : '';
+
+    this.renderBackupSettings((data && data.settings) || {});
+
+    var countEl = document.getElementById('backup-history-count');
+    if (countEl) countEl.textContent = history.length ? ('共 ' + history.length + ' 份') : '';
+
+    var list = document.getElementById('backup-history');
+    if (!list) return;
+    if (!history.length) {
+      list.innerHTML = '<li class="backup-empty">暂无备份</li>';
+      return;
+    }
+    list.innerHTML = history.map(function (h) {
+      var fe = (h.frontend && h.frontend.version) || '';
+      var mode = (h.frontend && h.frontend.mode) || '';
+      var modeText = mode === 'source' ? '含前端源码' : mode === 'snapshot' ? '前端快照' : '';
+      var bits = [h.createdAtLocal || '', h.size ? self.fmtBytes(h.size) : '', fe ? ('前端 ' + fe) : '', modeText].filter(Boolean);
+      return '<li class="backup-item">' +
+        '<div class="backup-item-main">' +
+          '<b class="backup-item-file">' + self.escape(h.file || '') + '</b>' +
+          '<span class="backup-item-meta">' + self.escape(bits.join(' · ')) + '</span>' +
+        '</div>' +
+        '<div class="backup-item-actions">' +
+          '<button type="button" class="btn btn-sm" data-backup-download="' + self.escape(h.file || '') + '">下载</button>' +
+          '<button type="button" class="btn btn-sm btn-danger" data-backup-delete="' + self.escape(h.file || '') + '">删除</button>' +
+        '</div>' +
+      '</li>';
+    }).join('');
+  },
+
+  startBackup: async function () {
+    var self = this;
+    var err = document.getElementById('backup-error');
+    if (err) err.textContent = '';
+    var startBtn = document.getElementById('backup-start-btn');
+    if (startBtn) { startBtn.disabled = true; startBtn.textContent = '备份进行中…'; }
+    var state = document.getElementById('backup-state');
+    if (state) { state.textContent = '准备中'; state.classList.add('is-busy'); }
+    var bar = document.getElementById('backup-progress');
+    if (bar) bar.hidden = false;
+    try {
+      await self.api('/api/admin/backup/start', { method: 'POST', body: {} });
+    } catch (e) {
+      if (String(e && e.message) === 'unauthorized') return;
+      if (!/进行中/.test(String(e && e.message))) {
+        if (err) err.textContent = '备份启动失败：' + (e && e.message ? e.message : '未知错误');
+        if (startBtn) { startBtn.disabled = false; startBtn.textContent = '立即备份并下载'; }
+        if (state) { state.textContent = '空闲'; state.classList.remove('is-busy'); }
+        if (bar) bar.hidden = true;
+        return;
+      }
+    }
+    self.pollBackup(0);
+  },
+
+  pollBackup: async function (tries) {
+    var self = this;
+    if (tries > 240) {
+      var errEl = document.getElementById('backup-error');
+      if (errEl) errEl.textContent = '备份超时，请稍后在历史备份里查看';
+      self.loadBackup();
+      return;
+    }
+    var data;
+    try {
+      data = await self.api('/api/admin/backup/status?_t=' + Date.now());
+    } catch (e) {
+      if (String(e && e.message) === 'unauthorized') return;
+      setTimeout(function () { self.pollBackup(tries + 1); }, 2000);
+      return;
+    }
+    self.renderBackup(data);
+    var job = data && data.job;
+    var state = document.getElementById('backup-state');
+    if (job && job.status === 'running') {
+      if (state) state.textContent = job.stepLabel || '备份中';
+      setTimeout(function () { self.pollBackup(tries + 1); }, 1500);
+      return;
+    }
+    if (job && job.status === 'done') {
+      if (state) { state.textContent = '完成'; state.classList.remove('is-busy'); }
+      if (job.fileName) self.downloadBackup(job.fileName);
+      self.notify('备份完成：' + (job.fileName || '') + '（' + self.fmtBytes(job.size || 0) + '），已开始下载');
+      self.loadBackup();
+      return;
+    }
+    if (job && job.status === 'error') {
+      if (state) { state.textContent = '上次失败'; state.classList.remove('is-busy'); }
+      var err2 = document.getElementById('backup-error');
+      if (err2) err2.textContent = '备份失败：' + (job.error || '未知错误');
+      self.notify('备份失败：' + (job.error || '未知错误'));
+      self.loadBackup();
+      return;
+    }
+    self.loadBackup();
+  },
+
+  downloadBackup: function (file) {
+    if (!file) return;
+    var link = document.createElement('a');
+    link.href = '/api/admin/backup/download?file=' + encodeURIComponent(file);
+    link.download = file;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(function () { document.body.removeChild(link); }, 1000);
+  },
+
+  deleteBackup: async function (file) {
+    if (!file) return;
+    if (!window.confirm('确定删除备份 ' + file + '？删除后无法恢复。')) return;
+    try {
+      await this.api('/api/admin/backup/delete', { method: 'POST', body: { file: file } });
+      this.notify('已删除该备份');
+    } catch (e) {
+      if (String(e && e.message) === 'unauthorized') return;
+      this.notify('删除失败：' + (e && e.message ? e.message : '未知错误'));
+    }
+    this.loadBackup();
   },
 
   copy: function (text, okMsg) {

@@ -593,6 +593,65 @@ button, input, textarea {
   font-weight: 500;
 }
 
+/* 文章标签云：一个标签一个圆角框，点击筛选 */
+.blog-tags {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.blog-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.blog-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: border-color .15s ease, color .15s ease, background .15s ease;
+}
+
+.blog-tag-chip:hover {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+.blog-tag-chip[data-active="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+
+.blog-tag-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  opacity: .65;
+}
+
+/* 加密文章在列表里的标识 */
+.post-row-lock {
+  margin-right: 6px;
+  font-size: 13px;
+}
+
+.post-row-firstline-locked {
+  color: var(--text-muted);
+}
+
+
 .moments-feed {
   max-width: 640px;
   width: 100%;
@@ -921,6 +980,171 @@ button, input, textarea {
   max-width: 760px; /* 与评论区同宽，列表页→文章页无宽度跳变 */
   overflow-wrap: break-word;
   word-break: break-word;
+}
+
+/* 整篇加密文章：口令卡片 */
+.article-lock-card {
+  max-width: 760px;
+  margin: 8px 0 32px;
+  padding: 32px 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  text-align: center;
+}
+
+.article-lock-icon {
+  font-size: 26px;
+  margin-bottom: 10px;
+}
+
+.article-lock-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.article-lock-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 18px;
+}
+
+.article-lock-form {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  max-width: 380px;
+  margin: 0 auto;
+}
+
+.article-lock-input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13.5px;
+}
+
+.article-lock-input:focus {
+  outline: none;
+  border-color: var(--border-strong);
+}
+
+.article-lock-btn {
+  padding: 9px 16px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.article-lock-btn:disabled {
+  opacity: .6;
+  cursor: default;
+}
+
+.article-lock-error {
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: #DC2626;
+}
+
+.article-lock-tip {
+  margin-top: 16px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+/* 正文中的加密片段占位 / 解锁后的内容 */
+.md-lock {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  max-width: 760px;
+  margin: 18px 0;
+  padding: 16px 18px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+}
+
+.md-lock-icon {
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+.md-lock-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.md-lock-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.md-lock-tip {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+}
+
+.md-lock-form {
+  display: flex;
+  gap: 8px;
+}
+
+.md-lock-input {
+  flex: 1;
+  min-width: 0;
+  max-width: 240px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.md-lock-input:focus {
+  outline: none;
+  border-color: var(--border-strong);
+}
+
+.md-lock-btn {
+  padding: 7px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.md-lock-btn:hover {
+  border-color: var(--text-muted);
+}
+
+.md-lock-error {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #DC2626;
+}
+
+.md-lock-opened {
+  margin: 4px 0;
 }
 
 .reader-content p {
@@ -2573,3 +2797,6 @@ html[data-theme="dark"] .sk-card::after {
   border-color: var(--text-primary);
   opacity: 0.88;
 }
+
+/* ---------------- hidden 属性统一生效（.deploy-tip 例外：工具提示靠 hover 显示） ---------------- */
+[hidden]:not(.deploy-tip) { display: none !important; }

@@ -87,6 +87,15 @@ POST /api/admin/site
 
 `updatedAt` 为 0 表示还在用环境变量里的初始值。响应头带 `Cache-Control: no-cache`。
 
+`whitelist` 是前台放行外链的域名白名单（数组，元素不带协议，如 `"github.com"`）。默认是内置的几个常见站点；后台「管理 → 安全 → 外链白名单」可以增删，保存走：
+
+```jsonc
+POST /api/admin/site
+{ "whitelist": ["github.com", "example.org"] }
+```
+
+不在白名单里的外链，前台点击时会先弹确认框；列表清空则所有外链都弹确认。
+
 ### `POST /api/auth/passkey/login-options` / `POST /api/auth/passkey/login`
 
 通行密钥免密登录（公开接口，仍需同源）。先取 challenge：
@@ -139,8 +148,10 @@ POST /api/admin/site
 
 `module` 取值：`posts` / `moments` / `tools` / `status` / `quirky` / `comments`。
 
-- 除 `comments` 外均为公开，`posts` 的条目包含正文 `content`（前端列表与 SSR 都会用到）；
+- 除 `comments` 外均为公开；匿名请求 `posts` 只拿摘要，登录后（带会话 Cookie）才返回含正文 `content` 的全文；
+- 摘要条目字段：`id/title/date/tag/tags/hidden/locked/enchint/mtime/excerpt`。`hidden` 表示文章设为「前台隐藏」，匿名请求会被过滤掉，登录后台仍可见；`locked` 为 true 表示整篇加密，此时 `excerpt` 恒为空；
 - 传 `version` 可做增量判断，命中时返回 `{"updated": false, ...}`；
+- 响应带 `ETag`，可以用 `If-None-Match` 换 304；
 - `module=comments` 需要登录，返回含待审核评论的完整列表。
 
 ### `GET /api/search?q=<关键词>&limit=<1-50>`
@@ -167,10 +178,42 @@ POST /api/admin/site
 单篇文章，供 Cloudflare Pages Functions 抓取做 SSR。
 
 ```json
-{ "ok": true, "post": { "id": "my-post", "title": "…", "date": "2026-01-01", "content": "…", "mtime": 1767… } }
+{ "ok": true, "post": { "id": "my-post", "title": "…", "date": "2026-01-01", "tags": ["…"], "content": "…", "mtime": 1767… } }
 ```
 
-不存在返回 `404 {"error":"Not Found"}`。响应带 `Cache-Control: public, max-age=60`。
+- 不存在，或文章是「前台隐藏」且未登录：`404 {"error":"Not Found"}`；
+- 整篇加密的文章不返回 `content`，改为 `{"ok":true,"post":{…,"locked":true,"enchint":"口令提示","excerpt":""}}`，并带 `Cache-Control: no-store`，正文要拿口令换（见下）；
+- 普通文章响应带 `Cache-Control: public, max-age=60`。
+
+### `POST /api/public/post/<id>/unlock`
+
+整篇文章加密后的口令校验（公开接口，同源）。
+
+```json
+{ "password": "口令" }
+```
+
+成功：`{"ok":true,"content":"明文正文","id":"my-post"}`；口令错误：`403 {"ok":false,"error":"口令错误"}`；失败次数过多：`429`。
+
+### `POST /api/public/unlock-fragment`
+
+正文片段加密的口令校验（公开接口）。片段在 Markdown 里是 `:::locked <base64>` 标记，把 `<base64>` 原样放进 `payload`：
+
+```json
+{ "password": "口令", "payload": "eyJ2IjoxLCJjb3N0IjoxNjM4NCw…" }
+```
+
+成功返回 `{"ok":true,"content":"片段明文"}`；口令错误或数据损坏返回 `403`。同一 IP 连续输错会触发频率限制（`429`）。
+
+### `POST /api/admin/post/unlock`
+
+后台编辑加密文章时用：校验口令后返回明文正文，**需要登录**，不受公开接口的 IP 频率限制。
+
+```json
+{ "id": "my-post", "password": "口令" }
+```
+
+成功 `{"ok":true,"content":"…"}`；口令错误 `403 {"ok":false,"error":"口令错误"}`。
 
 ### `GET /api/comments?postId=<id>`
 
@@ -248,7 +291,7 @@ POST /api/admin/site
 | 接口 | 说明 |
 | --- | --- |
 | `GET /api/admin/overview` | 汇总数据：`{username, site, totp:{enabled,pending,backupCodesLeft}, passkeys, sessions, dataWritable, version}` |
-| `POST /api/admin/site` | 保存站点信息：`{name, avatarText, title, subtitle, modules}`，长度上限 40/2/80/200，栏目 `name` 12 字、`route` 24 位 |
+| `POST /api/admin/site` | 保存站点信息：`{name, avatarText, title, subtitle, modules, whitelist}`，长度上限 40/2/80/200，栏目 `name` 12 字、`route` 24 位；只传部分字段做局部合并 |
 | `POST /api/auth/change-username` | `{password, username}`；成功后旧会话失效 |
 | `POST /api/auth/totp/setup` | `{password}` → `{secret, otpauth}`，此时还没启用 |
 | `POST /api/auth/totp/enable` | `{code}` → `{backupCodes:[10 个明文备用码]}`（只显示这一次） |
@@ -279,6 +322,24 @@ IndexNow 配置优先读取 `data/indexnow.json`（后台写入），没有再�
 会话状态判定：最近 3 分钟内有请求的记为 `online`，否则 `offline`；被踢下线、主动退出、过期归档的进入 `history`（保留最近 80 条）。黑名单命中后，登录接口返回 403「该设备或 IP 已被禁止登录」。
 
 所有接口都需要有效的会话 Cookie；写操作还要通过同源校验（`Origin` / `Sec-Fetch-Site`）。
+
+### 备份与迁移接口
+
+后台「管理 → 备份」用的一组接口（都需登录）：
+
+| 接口 | 说明 |
+| --- | --- |
+| `GET /api/admin/backup/status` | `{running, job, history, config:{keep,dir,site,frontendDir,freeBytes}, settings}`；`job` 是当前/最近一次任务快照 |
+| `GET /api/admin/backup/history` | `{history:[{file,bytes,createdAt,files,frontendVersion}], config}` |
+| `POST /api/admin/backup/start` | 立即备份，返回 `202 {ok, job}`；已有任务在跑时返回 `409` |
+| `GET /api/admin/backup/download?file=<包名>` | 下载 `.tar.gz`（`Content-Type: application/gzip`）；文件名必须以 `BACKUP_PREFIX`（默认 `backup-`）开头，防目录穿越 |
+| `POST /api/admin/backup/delete` | `{file}` 删除某个备份包 |
+| `GET /api/admin/backup/settings` | 读取自动备份/WebDAV 配置（WebDAV 密码只回 `passwordSet: true`） |
+| `POST /api/admin/backup/settings` | `{auto, time:"HH:MM", keep, webdav:{enabled,url,username,password?,dir,autoUpload}}`；`password` 省略表示沿用原密码 |
+| `POST /api/admin/backup/webdav-test` | 用当前或请求体里的配置探测 WebDAV 目录，返回 `{ok, error?}` |
+| `POST /api/admin/backup/webdav-upload` | `{file?}` 把指定/最新备份包上传到 WebDAV |
+
+备份包内容：整份后端源码 + `data/` 数据 + 前端快照（有源码时复制 `../前端`，否则抓线上站点的 HTML/CSS/JS）+ `manifest.json`（记录 `frontend.version`、分支、提交号）+ `restore.sh` + `MIGRATION.md` + `docker-compose.yml` + `.env.example`，可在新服务器上解包后一键恢复（详见 `docs/DEPLOY.md`）。
 
 ### `POST /api/save`
 

@@ -61,6 +61,7 @@ const image = require('./backend/image');
 const telegram = require('./backend/telegram');
 const links = require('./backend/links');
 const notify = require('./backend/notify');
+const backup = require('./backend/backup');
 
 const {
   ROOT_DIR,
@@ -367,6 +368,12 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && pathname === '/api/admin/overview') {
     if (!guardAuth(req, res)) return;
     return auth.handleAdminOverview(req, res);
+  }
+
+  // 3.7.1 备份与迁移（需登录）: /api/admin/backup/*
+  if (pathname.indexOf('/api/admin/backup/') === 0) {
+    if (!guardAuth(req, res)) return;
+    return backup.handleRequest(req, res, pathname, reqUrl);
   }
 
   // 3.8 保存站点信息（需登录）: POST /api/admin/site
@@ -1204,4 +1211,5 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log('Backend server listening on http://127.0.0.1:' + PORT);
+  backup.startScheduler();
 });

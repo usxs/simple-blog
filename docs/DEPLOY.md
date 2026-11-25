@@ -198,6 +198,58 @@ wrangler pages deploy frontend --project-name simple-blog
 
 ## 六、备份与迁移
 
+### 方式一：后台一键备份（推荐）
+
+后台「管理 → 备份」，点「立即备份并下载」：服务器把整个 `backend/`（代码 + 文章 + 图片 + 文件 + `data/`，不含 `node_modules`）打成 `<BACKUP_PREFIX><时间>-fe<前端版本>.tar.gz`，浏览器自动下载。同一份包也留在服务器上，列表里可以再次下载或删除。
+
+同一张卡片里还能配自动备份和 WebDAV：
+
+| 设置 | 说明 |
+| --- | --- |
+| 自动备份 | 打开后每天在指定时间（服务器本地时区，`HH:MM`）自动打包一次，页面关闭也不影响 |
+| 保留份数 | 最近几份之外的旧包自动删除（1–50） |
+| WebDAV | 填地址（如 `https://dav.example.com/`）、账号、密码、目录；「自动上传」打开后每次自动备份成功即传到网盘，「测试连接」可先探测目录 |
+| 手动上传 | 备份列表里任选一份，点「上传到 WebDAV」 |
+
+WebDAV 密码只存在服务器 `data/backup-settings.json`（0600），接口只回 `passwordSet: true`，不会回显明文。
+
+每个包内除了 `backend/`，还带这几样：
+
+| 文件 | 用途 |
+| --- | --- |
+| `manifest.json` | 生成时间、主机、后端文件数与大小、前端版本 / 分支 / commit |
+| `frontend/` | 前端源码（能找到就近的 `前端/` 目录时）或首页 / CSS / JS / robots 的静态快照 |
+| `restore.sh` | 一键恢复脚本，见下方 |
+| `MIGRATION.md` | 迁移清单、nginx 反代示例、检查项 |
+| `docker-compose.yml` + `.env.example` | 可移植的编排文件，相对路径挂载，改端口只动 `.env` |
+
+前端版本号取自站点 `/version`，写进包名和 `manifest.json`。Cloudflare Pages 的 Functions 源码抓不到，这种情况包里会存静态快照并在 `frontend/SNAPSHOT.md` 里说明——前端要完整迁移，请另外保留 `前端/functions/` 的源码。
+
+相关环境变量：
+
+| 变量 | 默认 | 说明 |
+| --- | --- | --- |
+| `BACKUP_DIR` | `data/backups` | 备份包存放目录，建议挂到宿主机 |
+| `BACKUP_PREFIX` | `backup-` | 备份包文件名前缀，也是下载接口允许的包名前缀 |
+| `BACKUP_KEEP` | `10` | 只保留最近几份，超出自动删旧的（1–50） |
+
+### 一键迁移到新服务器
+
+```bash
+docker run --rm -v "$PWD":/w -w /w alpine tar xzf backup-*.tar.gz
+cd backup-*/
+./restore.sh --prepare-only     # 先体检：docker / compose / 磁盘 / 端口
+sudo ./restore.sh               # 恢复，默认写入脚本内置的 BACKEND_DEPLOY_DIR（可用 TARGET_DIR 覆盖）
+```
+
+`restore.sh` 会：复制代码、把 `article Musings img file` 与 `config.json`、`data/` 铺到目标目录（已存在则跳过，加 `--force` 覆盖）、生成 `.env` 和 `docker-compose.yml`、`chown 1000:1000`、`docker compose up -d --build`，最后轮询健康检查。目标目录和端口可以改：
+
+```bash
+sudo TARGET_DIR=/srv/blog PORT=33002 ./restore.sh
+```
+
+### 方式二：手工打包
+
 需要备份的只有六个路径：
 
 ```
