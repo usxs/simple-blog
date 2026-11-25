@@ -152,6 +152,17 @@ function migrateLegacyArticles() {
 }
 migrateLegacyArticles();
 
+// 文章是否存在：给路由层用，避免它们直接摸文件路径（SQLite 版没有目录）
+function postExists(id) {
+  const safe = sanitizeId(id);
+  if (!safe) return false;
+  try {
+    return fs.statSync(path.join(ARTICLE_DIR, safe)).isDirectory();
+  } catch (e) {
+    return false;
+  }
+}
+
 function readArticles() {
   try {
     if (!fs.existsSync(ARTICLE_DIR)) return [];
@@ -375,6 +386,7 @@ module.exports = {
   sanitizeId,
   buildMdContent,
   readArticles,
+  postExists,
   readPostComments,
   savePostComments,
   collectCascadeIds,

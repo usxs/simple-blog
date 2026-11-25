@@ -739,8 +739,8 @@ const server = http.createServer((req, res) => {
           return res.end(JSON.stringify({ ok: false, error: '昵称和评论内容不能为空' }));
         }
 
-        const postFolder = path.join(ARTICLE_DIR, postId);
-        if (!fs.existsSync(postFolder)) {
+        // 存储无关的存在性检查：SQLite 版没有文章目录，不能直接 stat 文件系统
+        if (!storage.postExists(postId)) {
           res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
           return res.end(JSON.stringify({ ok: false, error: '目标文章不存在' }));
         }

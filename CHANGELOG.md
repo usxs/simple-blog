@@ -18,6 +18,10 @@ V2：把后端从「Markdown 文件 + JSON」换成 SQLite，前端仍然部署�
 - 命令行导入便携包：`scripts/import-portable.js --file bundle.zip [--mode replace|merge]`
 - 后台「迁移」页显示当前存储形态（V1 文件 / V2 数据库），令牌区块只在数据库版出现
 
+### 修复
+
+- 评论提交按 `article/<id>` 目录判断文章是否存在，SQLite 模式下恒为「目标文章不存在」；改走 `storage.postExists(id)`，两种存储都能正常提交
+
 ### 变更
 
 - 存储实现拆成 `storage-file.js`（原 `storage.js`）+ `storage-db.js`，由 `backend/storage.js` 按 `STORE` 选择；纯函数（id 清洗、摘要、搜索排序、日期）抽到 `backend/text.js`，前言解析抽到 `backend/mdparse.js`
