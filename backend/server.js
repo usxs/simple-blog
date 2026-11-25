@@ -260,7 +260,7 @@ const server = http.createServer((req, res) => {
   res.setHeader('X-Accel-Expires', '0');
 
   // 1. 后台页面与分离后的静态资源 (/admin, /admin.css, /admin.js)
-  // 后台入口路径可配置：默认 /admin，改了之后旧地址会 302 过去
+  // 后台入口路径可配置：默认 /admin，改了之后旧地址直接返回 401
   var adminEntry = '/' + String(site.getSite().adminPath || 'admin').replace(/^\/+|\/+$/g, '');
   if (req.method === 'GET' && (pathname === adminEntry || pathname === adminEntry + '/')) {
     return serveSingleFile(res, path.join(ROOT_DIR, 'admin.html'), MIME_MAP['.html']);

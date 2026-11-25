@@ -55,7 +55,7 @@ docker compose up -d
 ## 升级（镜像方式）
 
 ```bash
-# 改 .env 里的 IMAGE_TAG，或直接拉 latest
+# 改 .env 里的 IMAGE_TAG（latest / v2 / v3，按你的版本）
 docker compose -f docker-compose.hub.yml pull
 docker compose -f docker-compose.hub.yml up -d
 docker compose -f docker-compose.hub.yml ps      # 等 healthy

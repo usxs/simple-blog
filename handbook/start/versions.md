@@ -7,6 +7,7 @@
 | | **V1** | **V2** | **V3** |
 | --- | --- | --- | --- |
 | 分支 | `main` | `v2-sqlite` | `v3-monolith` |
+| Docker 标签 | `latest` | `v2` | `v3` |
 | 部署形态 | 两段式 | 两段式 | 单体（一个进程） |
 | 前端位置 | `frontend/`（Cloudflare Pages） | `frontend/`（Cloudflare Pages） | `backend/web/` |
 | SSR | Pages Functions 在边缘渲染 | Pages Functions 在边缘渲染 | Node 进程内渲染 |
@@ -14,15 +15,17 @@
 | 数据库依赖 | 无 | Node ≥ 22.5 内置 `node:sqlite` | 同 V2 |
 | 需要 Cloudflare 账号 | 是 | 是 | 否 |
 | 需要的域名 | 两个（站点 + 接口） | 两个 | 一个（同域） |
-| 后台入口 | `https://api.example.com/admin.html` | 同 V1 | `https://www.example.com/admin.html` |
+| 后台入口 | `https://api.example.com/admin` | 同 V1 | `https://www.example.com/admin` |
 | 数据搬家方式 | 拷目录 / 便携包 | 便携包 / 拷 `blog.db` | 同 V2 |
 | 版本号 | `1.x` | `2.x` | `3.x` |
+
+三个分支各自构建镜像：`main` 发 `latest`，`v2-sqlite` 发 `v2`，`v3-monolith` 发 `v3`；版本号标签对应 `1.x` / `2.x` / `3.x`。V3 镜像一个容器就包含站点与后台，可以直接 `docker run`，详见 [Docker 镜像](../ref/docker.md)。
 
 ## 二、怎么选
 
 - **想要「数据就是文件」**：`article/<id>/<id>.md` 用任何编辑器都能改，`git` 也能纳入版本管理 → **V1**。
 - **文章上千、评论每天几十上百，或想要事务与查询**：文件写入与全量扫描会越来越吃力 → **V2**。
-- **不想注册 Cloudflare，也不想要两段式**：一台 VPS、一个域名、一个容器 → **V3**。
+- **不想注册 Cloudflare，也不想要两段式**：一台 VPS、一个域名、一个容器，`docker run ...:v3` 就能上线 → **V3**。
 - **已经有 Cloudflare Pages 站点，只想换后端**：**V2**，前端不用动。
 - **想要最少的运维面（一个容器、一个域名、一份数据）**：**V3**。
 

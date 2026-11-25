@@ -4,7 +4,31 @@
 
 ## 方式 0：用现成镜像
 
-镜像：`starspacec/simple-blog-backend`（Docker Hub，`linux/amd64`，标签有 `latest` 和版本号）。
+镜像：`starspacec/simple-blog-backend`（Docker Hub，`linux/amd64` + `linux/arm64`）。三个分支各有稳定标签：
+
+| 标签 | 版本 | 形态 |
+| --- | --- | --- |
+| `latest` | V1 | 后端（文件存储），前端另发 Pages |
+| `v2` | V2 | 后端（SQLite），前端另发 Pages |
+| `v3` | V3 | 站点 + 后台同一个容器，不需要 Pages |
+
+V3 最短路径（只挂 `data` / `img` / `file`，不需要 `BACKEND_PUBLIC_URL`）：
+
+```bash
+mkdir -p blog && cd blog
+mkdir -p data img file && sudo chown -R 1000:1000 data img file
+
+docker run -d --name simple-blog --restart unless-stopped \
+  -p 127.0.0.1:33001:33001 \
+  -v "$PWD/data:/app/data" -v "$PWD/img:/app/img" -v "$PWD/file:/app/file" \
+  -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD='换成你自己的强密码' \
+  -e SITE_PUBLIC_URL='https://blog.example.com' \
+  starspacec/simple-blog-backend:v3
+```
+
+打开 `http://服务器IP:33001/` 是站点，`/admin` 是后台。V2 / V3 的完整说明见 [Docker 镜像](../ref/docker.md) 与 [部署 V3 单体版](monolith.md)。
+
+V1（文件存储）仍需要全部卷，并把镜像标签换成 `latest`：
 
 ```bash
 mkdir -p blog-backend && cd blog-backend
@@ -23,7 +47,7 @@ docker run -d --name simple-blog-backend --restart unless-stopped \
   starspacec/simple-blog-backend:latest
 ```
 
-用 compose 的话，把仓库里这两个文件拷到目录，改名 `.env` 后启动：
+用 compose 的话，从对应分支取这两个文件，改名 `.env` 后启动（V1 示例；V2 / V3 换 URL 里的分支和 `IMAGE_TAG`）：
 
 ```bash
 curl -O https://raw.githubusercontent.com/usxs/simple-blog/main/backend/docker-compose.hub.yml
@@ -32,7 +56,7 @@ vim .env
 docker compose -f docker-compose.hub.yml up -d
 ```
 
-升级：改 `.env` 里的 `IMAGE_TAG` 后 `docker compose -f docker-compose.hub.yml pull && docker compose -f docker-compose.hub.yml up -d`，数据在卷里不受影响。
+升级：改 `.env` 里的 `IMAGE_TAG` 后 `docker compose -f docker-compose.hub.yml pull && docker compose -f docker-compose.hub.yml up -d`，数据在卷里不受影响。固定某次构建时用 CI 生成的短 SHA 标签，或打 tag 后使用 `1.18.0` / `2.0.0` / `3.0.0` 这样的版本号。
 
 ## 方式 A：从源码构建
 
@@ -55,13 +79,13 @@ docker compose up -d --build
 
 ## 环境变量
 
-最低要改这四项（其余见 [环境变量](../ref/env.md)）：
+最低要改这几项（其余见 [环境变量](../ref/env.md)）：
 
 ```ini
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=换成你自己的强密码     # 只在首次初始化时使用
-SITE_PUBLIC_URL=https://www.example.com    # 前端地址，写进 sitemap / 邮件链接
-BACKEND_PUBLIC_URL=https://api.example.com # 后端地址，写进 robots.txt
+SITE_PUBLIC_URL=https://www.example.com    # 站点地址，写进 sitemap / 邮件链接
+BACKEND_PUBLIC_URL=https://api.example.com # V1 / V2 的接口地址；V3 同域，留空
 ```
 
 `ADMIN_PASSWORD` 留空也行，首次打开 `https://api.example.com/<ADMIN_PATH>` 会出现初始化页面，填一次即可。
@@ -81,7 +105,7 @@ docker logs --tail 30 simple-blog-backend
 
 ## 后台入口
 
-默认是 `https://api.example.com/admin`。可以在后台「管理 → 站点信息 → 后台入口」改成任意 2–24 位小写字母/数字/短横线（如 `console`），改完旧地址直接返回 401，不暴露新入口。
+V1 / V2 默认是 `https://api.example.com/admin`，V3 默认是 `https://blog.example.com/admin`。可以在后台「管理 → 站点信息 → 后台入口」改成任意 2–24 位小写字母/数字/短横线（如 `console`），改完旧地址直接返回 401，不暴露新入口。
 
 !!! tip "忘记入口了怎么办"
     改宿主机 `data/site.json` 里的 `adminPath`（或删掉该字段回退默认 `admin`），然后重启容器。
