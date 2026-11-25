@@ -51,7 +51,7 @@ docker run -d --name simple-blog --restart unless-stopped \
   -v "$PWD/data:/app/data" -v "$PWD/img:/app/img" -v "$PWD/file:/app/file" \
   -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD='换成你自己的强密码' \
   -e SITE_PUBLIC_URL='https://blog.example.com' \
-  starspacec/simple-blog-backend:v3
+  ghcr.io/usxs/simple-blog-backend:v3
 ```
 
 打开 `http://服务器IP:33001/` 就是站点，后台在同一个域名的 `/admin`。数据只需要 `data/`（含 `blog.db` 与 WAL 文件）、`img/`、`file/`；不需要 `config.json`、`article/`、`Musings/`，也不需要 `BACKEND_PUBLIC_URL`。

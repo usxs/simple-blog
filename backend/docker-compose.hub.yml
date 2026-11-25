@@ -1,4 +1,4 @@
-# 博客（V3 单体版）—— 直接用 Docker Hub 镜像启动，一个容器提供站点与后台
+# 博客（V3 单体版）—— 直接用 GHCR 镜像启动，一个容器提供站点与后台
 #
 #   mkdir -p data img file
 #   docker compose -f docker-compose.hub.yml up -d
@@ -9,7 +9,7 @@
 # 完整说明：https://usxs.github.io/simple-blog/ref/docker/
 services:
   backend:
-    image: ${IMAGE_NAME:-starspacec/simple-blog-backend}:${IMAGE_TAG:-v3}
+    image: ${IMAGE_NAME:-ghcr.io/usxs/simple-blog-backend}:${IMAGE_TAG:-v3}
     container_name: simple-blog-backend
     restart: unless-stopped
     user: "1000:1000"

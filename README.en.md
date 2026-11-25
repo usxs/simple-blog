@@ -7,8 +7,7 @@
 [![Cloudflare Pages](https://img.shields.io/badge/Cloudflare%20Pages-deployed-F38020?logo=cloudflare&logoColor=white)](https://pages.cloudflare.com)
 [![Docs](https://img.shields.io/badge/docs-usxs.github.io%2Fsimple--blog-555?logo=readthedocs&logoColor=white)](https://usxs.github.io/simple-blog/)
 
-[![Docker](https://img.shields.io/badge/docker-starspacec%2Fsimple--blog--backend-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/starspacec/simple-blog-backend)
-[![Docker pulls](https://img.shields.io/docker/pulls/starspacec/simple-blog-backend?logo=docker&logoColor=white)](https://hub.docker.com/r/starspacec/simple-blog-backend)
+[![GHCR](https://img.shields.io/badge/ghcr.io-usxs%2Fsimple--blog--backend-2496ED?logo=github&logoColor=white)](https://github.com/usxs/simple-blog/pkgs/container/simple-blog-backend)
 [![Version](https://img.shields.io/github/v/tag/usxs/simple-blog?logo=git&logoColor=white)](https://github.com/usxs/simple-blog/releases)
 [![Stars](https://img.shields.io/github/stars/usxs/simple-blog?logo=github&logoColor=white)](https://github.com/usxs/simple-blog/stargazers)
 [![Last commit](https://img.shields.io/github/last-commit/usxs/simple-blog?logo=git&logoColor=white)](https://github.com/usxs/simple-blog/commits/main)
@@ -117,7 +116,7 @@ On phones the sidebar collapses into a **liquid-glass bottom bar** that hides on
 | Configurable admin path | The dashboard lives at `/admin` by default; change it under **Manage → Site info** to any 2–24 character slug. The old path returns 401 instead of redirecting, so the new entry stays hidden |
 | Telegram sync | Turn it on in **Manage → Moment sync**; every new or edited moment is posted to your Telegram channel (images included, up to 4) and deleting a moment removes the message. A **Send test message** button verifies the bot/channel pairing |
 | Admin UI | Every replaceable binary option is a Switch; the post editor uses a proof-sheet layout with no emoji icons; the workspace has content / preview / compare views with monospace pane labels and keycap hints |
-| Docker image | One image for V1 / V2 / V3 — `starspacec/simple-blog-backend` with stable tags `latest`, `v2`, `v3`; multi-arch (`linux/amd64` + `linux/arm64`), built per branch by GitHub Actions; on V3 a single container serves both site and admin |
+| Docker image | One image for V1 / V2 / V3 — `ghcr.io/usxs/simple-blog-backend` with stable tags `latest`, `v2`, `v3`; multi-arch (`linux/amd64` + `linux/arm64`), built per branch by GitHub Actions; on V3 a single container serves both site and admin |
 | Deploy version | Hover the sidebar "Node ONLINE" badge to see the deployed short version, commit and branch |
 | Post search | The post-list search box matches title / excerpt / tags; Chinese by substring, English by subsequence; filters as soon as IME composition ends, supports Enter and Esc without rebuilding the input |
 | Mobile | Below 860px the layout collapses to one column and a floating dock appears; the dock is a frosted glass panel with specular highlights and a glass selection pill; it auto-hides when scrolling down and returns when scrolling up, fitting all 7 entries even at 320–430px |
@@ -264,7 +263,7 @@ cd simple-blog
 
 #### 2.0 Use the published image (recommended, no source needed)
 
-The image is on Docker Hub: <https://hub.docker.com/r/starspacec/simple-blog-backend>, built for `linux/amd64` and `linux/arm64`. Each branch has a stable tag:
+The image is published to GHCR (GitHub Container Registry): <https://github.com/usxs/simple-blog/pkgs/container/simple-blog-backend>, publicly pullable and built for `linux/amd64` and `linux/arm64`. Each branch has a stable tag:
 
 | Tag | Variant | What you get |
 | --- | --- | --- |
@@ -286,7 +285,7 @@ docker run -d --name simple-blog --restart unless-stopped \
   -v "$PWD/data:/app/data" -v "$PWD/img:/app/img" -v "$PWD/file:/app/file" \
   -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD='a-strong-password' \
   -e SITE_PUBLIC_URL='https://blog.example.com' \
-  starspacec/simple-blog-backend:v3
+  ghcr.io/usxs/simple-blog-backend:v3
 ```
 
 Once it is up, `http://127.0.0.1:33001/` on the server is the site and `/admin` on the same origin is the admin; put Nginx in front when you are ready. V3 needs no `BACKEND_PUBLIC_URL` and no frontend deployment.
@@ -308,7 +307,7 @@ docker run -d --name simple-blog-backend --restart unless-stopped \
   -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD='a-strong-password' \
   -e SITE_PUBLIC_URL='https://www.example.com' \
   -e BACKEND_PUBLIC_URL='https://api.example.com' \
-  starspacec/simple-blog-backend:latest
+  ghcr.io/usxs/simple-blog-backend:latest
 ```
 
 For V2 use `:v2`; SQLite only needs `data` (the database is `data/blog.db`), `img` and `file`. The `config.json`, `article` and `Musings` mounts are only required with `STORE=file`.

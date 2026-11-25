@@ -20,7 +20,7 @@ docker -v && docker compose version
 
 ## 二、部署后端
 
-### 方式 0：直接用 Docker Hub 镜像（最快）
+### 方式 0：直接用 GHCR 镜像（最快）
 
 不想拉源码、不想本地构建，可以直接跑发布好的镜像：
 
@@ -37,10 +37,10 @@ docker run -d --name simple-blog-backend --restart unless-stopped \
   -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD='换成你自己的密码' \
   -e SITE_PUBLIC_URL='https://www.example.com' \
   -e BACKEND_PUBLIC_URL='https://api.example.com' \
-  starspacec/simple-blog-backend:latest
+  ghcr.io/usxs/simple-blog-backend:latest
 ```
 
-镜像：<https://hub.docker.com/r/starspacec/simple-blog-backend>，标签 `latest` 与版本号；当前发布的是 `linux/amd64`。
+镜像：<https://github.com/usxs/simple-blog/pkgs/container/simple-blog-backend>，标签 `latest` 与版本号；覆盖 `linux/amd64` 与 `linux/arm64`。
 
 用 compose 的话，把仓库里的 `docker-compose.hub.yml` 和 `.env.example` 拷到目录里，改名 `.env` 后：
 
