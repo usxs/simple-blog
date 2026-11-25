@@ -621,11 +621,21 @@ function getSession(req) {
   lastSeenMem.set(id, now);
   const list = store.sessions;
 
+  // 会话跟随当前请求的出口 IP：同一 Cookie（同一设备）只更新 IP，不新建会话
+  let dirty = false;
+  const currentIp = getClientIp(req);
+  if (currentIp && currentIp !== rec.ip) {
+    rec.ip = currentIp;
+    dirty = true;
+  }
+
   if (now - rec.lastSeenAt > SESSION_RENEW_GAP_MS) {
     rec.lastSeenAt = now;
     rec.expiresAt = Math.min(now + SESSION_TTL_MS, rec.createdAt + SESSION_MAX_MS);
-    saveSessions(list);
+    dirty = true;
   }
+
+  if (dirty) saveSessions(list);
   return rec;
 }
 

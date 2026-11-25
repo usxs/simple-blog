@@ -33,7 +33,7 @@
 
       <ul class="nav-list" id="mod-nav">
         <li class="nav-item-row" data-nav-row="posts"><button class="nav-btn active" data-mod="posts" onclick="cms.switchMod('posts')"><span class="nav-label" data-label="posts">文章</span><span class="nav-count" id="count-posts">0</span></button></li>
-        <li class="nav-item-row" data-nav-row="moments"><button class="nav-btn" data-mod="moments" onclick="cms.switchMod('moments')"><span class="nav-label" data-label="moments">碎碎念</span><span class="nav-count" id="count-moments">0</span></button></li>
+        <li class="nav-item-row" data-nav-row="moments"><button class="nav-btn" data-mod="moments" onclick="cms.switchMod('moments')"><span class="nav-label" data-label="moments">瞬间</span><span class="nav-count" id="count-moments">0</span></button></li>
         <li class="nav-item-row" data-nav-row="comments"><button class="nav-btn" data-mod="comments" onclick="cms.switchMod('comments')"><span class="nav-label">评论审核</span><span class="nav-count" id="count-comments">0</span></button></li>
         <li class="nav-item-row" data-nav-row="links"><button class="nav-btn" data-mod="links" onclick="cms.switchMod('links')"><span class="nav-label">友链</span><span class="nav-count" id="count-links">0</span></button></li>
         <li class="nav-item-row" data-nav-row="notify"><button class="nav-btn" data-mod="notify" onclick="cms.switchMod('notify')"><span class="nav-label">推送</span></button></li>
@@ -419,11 +419,11 @@
 
             <section class="settings-card settings-card--wide" data-group="integration" id="card-telegram">
               <div class="settings-card-head">
-                <h3>碎碎念同步</h3>
+                <h3>瞬间同步</h3>
                 <span class="settings-badge" id="telegram-badge" data-on="false">未启用</span>
               </div>
               <p class="settings-tip">
-                开启后，新建或编辑「碎碎念」会自动发到 Telegram 频道，删除时同步撤回。
+                开启后，新建或编辑「瞬间」会自动发到 Telegram 频道，删除时同步撤回。
                 内容里的图片会一起发送（最多 4 张）。需要一个 Bot：在 Telegram 里找 <code>@BotFather</code>
                 建机器人拿 Token，把机器人拉进频道并给「发消息」权限，频道 ID 形如 <code>@your_channel</code> 或 <code>-1001234567890</code>。
               </p>
@@ -431,7 +431,7 @@
                 <div class="check-row">
                   <label class="check-label">
                     <input type="checkbox" id="telegram-enabled" />
-                    启用碎碎念同步到 Telegram
+                    启用瞬间同步到 Telegram
                   </label>
                 </div>
                 <div class="field-grid">
@@ -672,7 +672,7 @@
                 <h3>备份与迁移</h3>
                 <span class="settings-tip">整站后端 + 数据 + 前端版本，一个压缩包带走</span>
               </div>
-              <p class="settings-desc">把后端代码、文章、碎碎念、图片、附件、配置与登录数据打成一个 tar.gz，同时记录当前前端部署版本号；能读到前端源码时一并打包。包内附 restore.sh 与 MIGRATION.md，可在新服务器上一键恢复。</p>
+              <p class="settings-desc">把后端代码、文章、瞬间、图片、附件、配置与登录数据打成一个 tar.gz，同时记录当前前端部署版本号；能读到前端源码时一并打包。包内附 restore.sh 与 MIGRATION.md，可在新服务器上一键恢复。</p>
               <div class="backup-info">
                 <div class="backup-meta"><span>前端版本</span><b id="backup-fe-version">—</b></div>
                 <div class="backup-meta"><span>备份目录</span><b id="backup-dir">—</b></div>
@@ -1023,7 +1023,11 @@
   <input type="file" id="hidden-file-input" multiple style="display:none;" />
 
   <!-- 登录 / 首次初始化浮层 -->
-  <div class="auth-overlay" id="auth-overlay" data-mode="login">
+  <div class="auth-overlay" id="auth-overlay" data-mode="boot">
+    <div class="auth-boot" id="auth-boot" role="status">
+      <span class="auth-boot-spinner" aria-hidden="true"></span>
+      <span>正在验证登录状态…</span>
+    </div>
     <div class="auth-card">
       <div class="auth-brand">CONSOLE</div>
       <div class="auth-sub" id="auth-sub">账号密码登录后台管理</div>
