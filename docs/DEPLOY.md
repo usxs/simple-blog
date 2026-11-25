@@ -142,7 +142,7 @@ server {
 | 想改代码长期维护 | 建议 | Fork 或新建仓库后改地址，之后从 `upstream` 同步更新 |
 
 Fork 后上游更新不会自动过来：GitHub 上点 **Sync fork**，或本地
-`git remote add upstream https://github.com/usxs/simple-blog.git && git fetch upstream && git merge upstream/main`。
+`git remote add upstream https://github.com/usxs/simple-blog.git && git fetch upstream && git merge upstream/v1`。
 
 ### 方式 A：连接 Git 仓库（需要你账号下的仓库）
 

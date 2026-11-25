@@ -10,7 +10,7 @@
 [![GHCR](https://img.shields.io/badge/ghcr.io-usxs%2Fsimple--blog--backend-2496ED?logo=github&logoColor=white)](https://github.com/usxs/simple-blog/pkgs/container/simple-blog-backend)
 [![Version](https://img.shields.io/github/v/tag/usxs/simple-blog?logo=git&logoColor=white)](https://github.com/usxs/simple-blog/releases)
 [![Stars](https://img.shields.io/github/stars/usxs/simple-blog?logo=github&logoColor=white)](https://github.com/usxs/simple-blog/stargazers)
-[![Last commit](https://img.shields.io/github/last-commit/usxs/simple-blog?logo=git&logoColor=white)](https://github.com/usxs/simple-blog/commits/main)
+[![Last commit](https://img.shields.io/github/last-commit/usxs/simple-blog?logo=git&logoColor=white)](https://github.com/usxs/simple-blog/commits/v1)
 
 **文档**：<https://usxs.github.io/simple-blog/>（部署教程、使用手册、常见问题）
 
@@ -18,7 +18,7 @@
 
 一套可以自己部署的极简个人博客系统。仓库用三个分支提供三种形态，内容模型与接口完全一致，只是「谁渲染页面」和「数据存在哪」不同：
 
-- **V1**（`main`）：Cloudflare Pages 静态前端 + 自托管 Node 后端，数据以 Markdown / JSON 文件落盘
+- **V1**（`v1`）：Cloudflare Pages 静态前端 + 自托管 Node 后端，数据以 Markdown / JSON 文件落盘
 - **V2**（`v2-sqlite`）：同样的两段式部署，后端改用 SQLite（Node 内置 `node:sqlite`，没有第三方驱动）
 - **V3**（`v3-monolith`）：前后端合成一个进程，SQLite + 进程内 SSR，不再需要 Cloudflare Pages
 
@@ -32,7 +32,7 @@
 
 | 版本 | 分支 | 形态 | 存储 | Docker 标签 | 适合谁 |
 | --- | --- | --- | --- | --- | --- |
-| **V1** | `main` | Pages 前端 + Node 后端（两段式） | Markdown 文件 + JSON | `latest` | 想要数据即文件、拷走就能搬家 |
+| **V1** | `v1` | Pages 前端 + Node 后端（两段式） | Markdown 文件 + JSON | `latest` | 想要数据即文件、拷走就能搬家 |
 | **V2** | `v2-sqlite` | Pages 前端 + Node 后端（两段式） | SQLite | `v2` | 文章/评论很多，想要更稳的写入与查询 |
 | **V3** | `v3-monolith` | 前后端不分离单体（一个进程） | SQLite | `v3` | 只想在一台 VPS 上跑完，不依赖 Cloudflare |
 
@@ -272,7 +272,7 @@ git clone https://github.com/<your-name>/simple-blog.git
 cd simple-blog
 ```
 
-> Fork 之后，本仓库的更新不会自动同步到你的副本；需要同步时在 GitHub 上点 **Sync fork**，或在本地 `git remote add upstream https://github.com/usxs/simple-blog.git && git fetch upstream && git merge upstream/main`。
+> Fork 之后，本仓库的更新不会自动同步到你的副本；需要同步时在 GitHub 上点 **Sync fork**，或在本地 `git remote add upstream https://github.com/usxs/simple-blog.git && git fetch upstream && git merge upstream/v1`。
 
 ### 2. 部署后端（服务器上）
 
@@ -327,7 +327,7 @@ docker run -d --name simple-blog-backend --restart unless-stopped \
 
 V2 把镜像换成 `:v2`，SQLite 只需要 `data`（数据库在 `data/blog.db`）、`img`、`file` 三个卷；`config.json`、`article`、`Musings` 只在 `STORE=file` 时才需要。
 
-或者用仓库里的 `docker-compose.hub.yml`（复用同一个 `.env`，数据同样落在当前目录）。下面是 V3；V1 / V2 把 URL 里的分支换成 `main` / `v2-sqlite`，并确认 `IMAGE_TAG` 对应即可：
+或者用仓库里的 `docker-compose.hub.yml`（复用同一个 `.env`，数据同样落在当前目录）。下面是 V3；V1 / V2 把 URL 里的分支换成 `v1` / `v2-sqlite`，并确认 `IMAGE_TAG` 对应即可：
 
 ```bash
 curl -O https://raw.githubusercontent.com/usxs/simple-blog/v3-monolith/backend/docker-compose.hub.yml
