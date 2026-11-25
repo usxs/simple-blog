@@ -26,8 +26,10 @@ V3：前后端不分离单体版——同一个 Node 进程既输出页面又输
 ### 文档
 
 - 新增 `handbook/start/monolith.md`：V3 部署（Docker / 直接跑 Node）、静态资源与缓存、robots 与 sitemap、从 V1/V2 迁入、常见问题
-- `README.md` 增加「三个版本怎么选」对照表
-- `mkdocs.yml` 新增 nav 条目「部署 V3 单体版」
+- 新增 `handbook/start/versions.md`：三分支对照表、怎么选、版本之间怎么迁、同一台机器并存的跑法；首页新增「三种形态」对照与入口
+- `README.md` / `README.en.md`：首段改为三分支说明，架构图拆成「两段式」与「单体」两张，目录结构补 `backend/web/`、存储层与迁移模块，环境变量补 `STORE` / `DB_FILE` / `SITE_VERSION`
+- 部署前准备、SEO、备份、常见问题按版本拆分：数据目录分文件与 SQLite、SSR 位置（Pages Functions vs 进程内）、robots 规则、备份范围、跨版本搬家
+- `mkdocs.yml` 新增 nav 条目「版本选择」与「部署 V3 单体版」
 
 ## [2.0.0-v2] - 2026-11-25
 
