@@ -60,7 +60,7 @@ jobs:
     name: build & push (Docker Hub)
     runs-on: ubuntu-latest
     needs: ghcr
-    if: vars.DOCKERHUB_ENABLED == 'true'
+    if: github.repository == 'usxs/simple-blog'
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
