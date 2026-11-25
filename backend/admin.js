@@ -217,8 +217,13 @@ var cms = {
   editorUnlocked: true,
   settingsTab: 'general',
   whitelist: [],
+  deviceId: '',
+  deviceFp: '',
+  sessionData: null,
+  sessionArchiveKind: 'history',
 
   init: async function () {
+    this.ensureDeviceIdentity();
     var mode = localStorage.getItem('site-theme-mode') || 'auto';
     this.setTheme(mode);
     var savedPostMode = '';
@@ -241,12 +246,94 @@ var cms = {
     return window.location.origin.replace(/\/+$/, '') + pathStr;
   },
 
+  // 设备标识只用于「同一台设备重新登录」的历史会话归并，不参与鉴权。
+  // 优先使用 localStorage 中随机生成的稳定 id；清缓存后由基础设备指纹兜底。
+  ensureDeviceIdentity: function () {
+    try {
+      var id = localStorage.getItem('cms-device-id') || '';
+      if (!/^[a-f0-9]{32}$/.test(id)) {
+        id = this.randomHex(16);
+        localStorage.setItem('cms-device-id', id);
+      }
+      var fp = localStorage.getItem('cms-device-fp') || '';
+      if (!/^[a-f0-9]{16,64}$/.test(fp)) {
+        fp = this.deviceFingerprint();
+        localStorage.setItem('cms-device-fp', fp);
+      }
+      this.deviceId = id;
+      this.deviceFp = fp;
+    } catch (e) {
+      this.deviceId = '';
+      this.deviceFp = '';
+    }
+  },
+
+  randomHex: function (byteLength) {
+    var bytes = new Uint8Array(byteLength);
+    if (window.crypto && window.crypto.getRandomValues) {
+      window.crypto.getRandomValues(bytes);
+    } else {
+      for (var i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+    }
+    var out = '';
+    for (var j = 0; j < bytes.length; j += 1) out += ('0' + bytes[j].toString(16)).slice(-2);
+    return out;
+  },
+
+  hashText: function (text) {
+    var str = String(text || '');
+    var h1 = 0x811c9dc5;
+    var h2 = 0x9e3779b9;
+    for (var i = 0; i < str.length; i += 1) {
+      var code = str.charCodeAt(i);
+      h1 = Math.imul(h1 ^ code, 16777619);
+      h2 = Math.imul(h2 ^ code, 2246822519);
+    }
+    var a = (h1 >>> 0).toString(16);
+    var b = (h2 >>> 0).toString(16);
+    return ('00000000' + a).slice(-8) + ('00000000' + b).slice(-8);
+  },
+
+  deviceFingerprint: function () {
+    var nav = window.navigator || {};
+    var scr = window.screen || {};
+    var tz = '';
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
+    var parts = [
+      nav.userAgent || '',
+      nav.platform || '',
+      nav.language || '',
+      (nav.languages || []).join(','),
+      scr.width || 0,
+      scr.height || 0,
+      scr.availWidth || 0,
+      scr.availHeight || 0,
+      scr.colorDepth || 0,
+      scr.pixelDepth || 0,
+      tz,
+      nav.hardwareConcurrency || 0,
+      nav.deviceMemory || 0,
+      nav.maxTouchPoints || 0
+    ];
+    return this.hashText(parts.join('|'));
+  },
+
+  deviceHeaders: function () {
+    var headers = {};
+    if (this.deviceId) headers['X-Device-Id'] = this.deviceId;
+    if (this.deviceFp) headers['X-Device-Fp'] = this.deviceFp;
+    return headers;
+  },
+
   // ---------- 认证流程（Cookie 会话，凭据不出 HttpOnly Cookie，前端不可读取） ----------
 
   bootstrapAuth: async function () {
     this.showAuthBoot();
     try {
-      var res = await fetch(this.getApiUrl('/api/auth/status?_t=' + Date.now()), { cache: 'no-store' });
+      var res = await fetch(this.getApiUrl('/api/auth/status?_t=' + Date.now()), {
+        cache: 'no-store',
+        headers: this.deviceHeaders()
+      });
       var data = await res.json();
       if (data.setupNeeded) {
         this.showAuthOverlay('setup');
@@ -297,16 +384,67 @@ var cms = {
     document.getElementById('auth-overlay').style.display = 'none';
   },
 
-  enterConsole: function (username) {
+  enterConsole: async function (username) {
     this.authed = true;
     this.hideAuthOverlay();
     document.getElementById('auth-username').textContent = username || 'admin';
-    // 登录后默认进入「文章」列表页（新版写作流程的入口，替代旧的左右分栏）
-    this.switchMod(this.mod || 'posts');
-    this.loadAll();
-    // 侧边栏按「前台栏目」配置显示 / 隐藏（不需要先打开管理页）
-    this.loadSettings().catch(function () { /* 忽略：管理数据拉取失败不影响主流程 */ });
+
+    // 刷新后回到刷新前的页面；sessionStorage 只影响当前标签页，不会串到新窗口。
+    var route = this.readRoute();
+    if (route && typeof route.settingsTab === 'string') this.settingsTab = route.settingsTab;
+    var targetMod = (route && route.mod) ? route.mod : 'posts';
+    var settingsLoad = targetMod === 'settings' ? this.switchMod(targetMod) : (this.switchMod(targetMod), null);
+
+    await this.loadAll();
+    if (settingsLoad) { try { await settingsLoad; } catch (e) {} }
+    this.restoreRouteView(route);
+    // 侧边栏按「前台栏目」配置显示 / 隐藏（不需要先打开管理页）；设置页已在上方加载过
+    if (!settingsLoad) {
+      this.loadSettings().catch(function () { /* 忽略：管理数据拉取失败不影响主流程 */ });
+    }
     this.loadDeployVersion();
+  },
+
+  readRoute: function () {
+    try {
+      var raw = sessionStorage.getItem('cms-admin-route');
+      if (!raw) return null;
+      var data = JSON.parse(raw);
+      return (data && typeof data === 'object') ? data : null;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  saveRoute: function () {
+    try {
+      sessionStorage.setItem('cms-admin-route', JSON.stringify({
+        mod: this.mod || 'posts',
+        page: this.page || '',
+        postId: this.page === 'post-editor' && this.postEditor ? String(this.postEditor.id || '') : '',
+        settingsTab: this.settingsTab || 'general',
+        sessionArchiveKind: this.sessionArchiveKind || 'history'
+      }));
+    } catch (e) { /* sessionStorage 不可用时不影响主流程 */ }
+  },
+
+  restoreRouteView: function (route) {
+    if (!route) return;
+    if (route.page === 'session-archive') {
+      this.openSessionArchive(route.sessionArchiveKind || 'history', true);
+      return;
+    }
+    if (route.page === 'post-editor' && route.postId) {
+      if (this.findPost(route.postId)) this.openPostEditor(route.postId);
+      else this.switchMod('posts');
+    }
+  },
+
+  setActiveNav: function (m) {
+    var btns = document.querySelectorAll('#mod-nav .nav-btn');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].classList.toggle('active', btns[i].getAttribute('data-mod') === m);
+    }
   },
 
   handle401: function () {
@@ -333,7 +471,7 @@ var cms = {
       try {
         var res = await fetch(self.getApiUrl('/api/auth/login'), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: Object.assign({ 'Content-Type': 'application/json' }, self.deviceHeaders()),
           body: JSON.stringify({ username: username, password: password, totpCode: totpCode })
         });
         var data = await res.json().catch(function () { return {}; });
@@ -380,7 +518,7 @@ var cms = {
       try {
         var res = await fetch(self.getApiUrl('/api/auth/setup'), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: Object.assign({ 'Content-Type': 'application/json' }, self.deviceHeaders()),
           body: JSON.stringify({ username: username, password: password })
         });
         var data = await res.json().catch(function () { return {}; });
@@ -787,31 +925,30 @@ var cms = {
     this.mod = m;
     this.page = '';
     this.currentItem = null;
-    var btns = document.querySelectorAll('#mod-nav .nav-btn');
-    for (var i = 0; i < btns.length; i++) {
-      btns[i].classList.toggle('active', btns[i].getAttribute('data-mod') === m);
-    }
+    this.setActiveNav(m);
 
     // 「文章」「管理」「探针」等独立页面，不参与列表 / 编辑器左右布局
     var PAGES = { settings: 'admin-settings', probe: 'admin-probe', links: 'admin-links', notify: 'admin-notify', posts: 'admin-posts' };
     var pageId = PAGES[m] || '';
-    var ALL_PAGES = ['admin-settings', 'admin-probe', 'admin-links', 'admin-notify', 'admin-posts', 'admin-post-editor'];
+    var ALL_PAGES = ['admin-settings', 'admin-probe', 'admin-links', 'admin-notify', 'admin-posts', 'admin-post-editor', 'admin-session-archive'];
     var grid = document.querySelector('.cms-grid');
     if (grid) grid.style.display = pageId ? 'none' : '';
     for (var k = 0; k < ALL_PAGES.length; k++) {
       var pel = document.getElementById(ALL_PAGES[k]);
       if (pel) pel.hidden = ALL_PAGES[k] !== pageId;
     }
+    this.saveRoute();
 
     // 存储路径提示只属于内容类页面，独立页面不显示
     var hintEl = document.getElementById('storage-hint');
     if (pageId) {
       if (hintEl) hintEl.style.display = 'none';
       if (m === 'posts') { this.renderPostsPage(); return; }
-      if (m === 'links') this.loadLinks();
-      else if (m === 'notify') this.loadNotify();
-      else this.loadSettings();
-      return;
+      if (m === 'links') return this.loadLinks();
+      if (m === 'notify') return this.loadNotify();
+      // 先把分组 tab 切到上次的位置，再异步拉数据，避免整页空白
+      if (m === 'settings') this.setSettingsTab(this.settingsTab || 'general');
+      return this.loadSettings();
     }
     if (hintEl) hintEl.style.display = '';
 
@@ -1238,7 +1375,7 @@ var cms = {
   },
 
   showPage: function (pageId) {
-    var ALL_PAGES = ['admin-settings', 'admin-probe', 'admin-links', 'admin-notify', 'admin-posts', 'admin-post-editor'];
+    var ALL_PAGES = ['admin-settings', 'admin-probe', 'admin-links', 'admin-notify', 'admin-posts', 'admin-post-editor', 'admin-session-archive'];
     var grid = document.querySelector('.cms-grid');
     if (grid) grid.style.display = 'none';
     for (var i = 0; i < ALL_PAGES.length; i++) {
@@ -1266,6 +1403,7 @@ var cms = {
     this.editorUnlocked = !p || !p.locked;
     this.closePostMenu();
     this.showPage('admin-post-editor');
+    this.saveRoute();
 
     var locked = !!(p && p.locked);
     var encrypted = !!(p && (p.encrypted || p.locked));
@@ -1661,6 +1799,7 @@ var cms = {
 
   api: async function (path, options) {
     var opts = Object.assign({ method: 'GET', headers: {} }, options || {});
+    opts.headers = Object.assign({}, this.deviceHeaders(), opts.headers || {});
     if (opts.body && typeof opts.body !== 'string') {
       opts.headers['Content-Type'] = 'application/json';
       opts.body = JSON.stringify(opts.body);
@@ -2536,6 +2675,7 @@ var cms = {
       var group = cards[j].getAttribute('data-group') || 'general';
       cards[j].hidden = group !== this.settingsTab;
     }
+    this.saveRoute();
   },
 
   // ---------- 外部域名白名单 ----------
@@ -2982,7 +3122,7 @@ var cms = {
     });
 
     document.getElementById('revoke-others-btn').addEventListener('click', async function () {
-      var err = document.getElementById('session-error');
+      var err = self.sessionErrorEl();
       err.textContent = '';
       try {
         var out = await self.api('/api/auth/sessions/revoke-others', { method: 'POST', body: {} });
@@ -4131,8 +4271,91 @@ var cms = {
     this.renderSessions(data.sessions || [], data.history || [], data.blocked || []);
   },
 
+  sessionErrorEl: function () {
+    return document.getElementById(this.page === 'session-archive' ? 'session-archive-error' : 'session-error');
+  },
+
+  openSessionArchive: function (kind, restoring) {
+    this.sessionArchiveKind = kind === 'blocked' ? 'blocked' : 'history';
+    this.page = 'session-archive';
+    this.mod = 'settings';
+    this.setActiveNav('settings');
+    this.showPage('admin-session-archive');
+    this.renderSessionArchive();
+    if (!restoring) this.saveRoute();
+    if (!this.sessionData) {
+      var self = this;
+      this.loadSettings().catch(function () {
+        var err = document.getElementById('session-archive-error');
+        if (err) err.textContent = '会话记录加载失败';
+      });
+    }
+  },
+
+  backToSettings: function () {
+    this.settingsTab = 'security';
+    this.switchMod('settings');
+  },
+
+  setSessionArchiveTab: function (kind) {
+    this.sessionArchiveKind = kind === 'blocked' ? 'blocked' : 'history';
+    this.page = 'session-archive';
+    this.setActiveNav('settings');
+    this.renderSessionArchive();
+    this.saveRoute();
+  },
+
+  applySessionArchiveChrome: function () {
+    var data = this.sessionData || {};
+    var history = data.history || [];
+    var blocked = data.blocked || [];
+    var kind = this.sessionArchiveKind === 'blocked' ? 'blocked' : 'history';
+    var title = document.getElementById('session-archive-title');
+    var desc = document.getElementById('session-archive-desc');
+    var count = document.getElementById('session-archive-count');
+    var histCount = document.getElementById('session-archive-history-count');
+    var blockedCount = document.getElementById('session-archive-blocked-count');
+    if (title) title.textContent = kind === 'blocked' ? '黑名单' : '历史会话';
+    if (desc) {
+      desc.textContent = kind === 'blocked'
+        ? '被禁止登录后台的设备或 IP，可随时解除封禁'
+        : '已离线的登录设备，按最近结束时间排序';
+    }
+    if (count) count.textContent = (kind === 'blocked' ? blocked.length : history.length) + ' 条';
+    if (histCount) histCount.textContent = String(history.length);
+    if (blockedCount) blockedCount.textContent = String(blocked.length);
+    var tabs = document.querySelectorAll('.session-archive-tab');
+    for (var i = 0; i < tabs.length; i++) {
+      var active = tabs[i].getAttribute('data-archive') === kind;
+      tabs[i].classList.toggle('is-active', active);
+      tabs[i].setAttribute('aria-selected', active ? 'true' : 'false');
+    }
+  },
+
+  renderSessionArchive: function () {
+    var ul = document.getElementById('session-archive-list');
+    if (!ul) return;
+    var err = document.getElementById('session-archive-error');
+    if (err) err.textContent = '';
+    this.applySessionArchiveChrome();
+    var kind = this.sessionArchiveKind === 'blocked' ? 'blocked' : 'history';
+    var data = this.sessionData || {};
+    var list = kind === 'blocked' ? (data.blocked || []) : (data.history || []);
+    ul.innerHTML = '';
+    if (!list.length) {
+      var tip = document.createElement('li');
+      tip.className = 'empty-tip';
+      tip.textContent = kind === 'blocked' ? '暂无黑名单记录。' : '暂无历史会话。';
+      ul.appendChild(tip);
+      return;
+    }
+    list.forEach(function (item) {
+      ul.appendChild(kind === 'blocked' ? cms.blockedRow(item) : cms.sessionRow(item, true));
+    });
+  },
+
   saveSessionLabel: function (li, ended) {
-    var err = document.getElementById('session-error');
+    var err = this.sessionErrorEl();
     err.textContent = '';
     var input = li.querySelector('.ss-label-input');
     var label = input ? String(input.value || '').trim() : '';
@@ -4148,7 +4371,7 @@ var cms = {
   },
 
   kickSession: function (li, id) {
-    var err = document.getElementById('session-error');
+    var err = this.sessionErrorEl();
     err.textContent = '';
     if (!window.confirm('确定要让这个设备下线吗？')) return;
     this.api('/api/auth/sessions/revoke', { method: 'POST', body: { id: id } }).then(function (res) {
@@ -4160,7 +4383,7 @@ var cms = {
   },
 
   blockSession: function (li, id, scope) {
-    var err = document.getElementById('session-error');
+    var err = this.sessionErrorEl();
     err.textContent = '';
     var what = scope === 'ip' ? '这个 IP 地址' : '这台设备';
     if (!window.confirm('把' + what + '加入黑名单？加入后它不能再登录后台。')) return;
@@ -4173,7 +4396,7 @@ var cms = {
   },
 
   unblock: function (type, value) {
-    var err = document.getElementById('session-error');
+    var err = this.sessionErrorEl();
     err.textContent = '';
     this.api('/api/auth/blocklist/remove', { method: 'POST', body: { type: type, value: value } }).then(function (res) {
       cms.applySessionOverview(res);
@@ -4183,38 +4406,45 @@ var cms = {
     });
   },
 
+  blockedRow: function (b) {
+    var li = document.createElement('li');
+    li.className = 'session-item session-item--blocked';
+    var main = document.createElement('div');
+    main.className = 'ss-main';
+    var name = document.createElement('div');
+    name.className = 'ss-name';
+    name.textContent = (b.type === 'ip' ? 'IP：' : '设备：') + (b.value || '');
+    var meta = document.createElement('div');
+    meta.className = 'ss-meta';
+    meta.textContent = (b.note ? b.note + ' · ' : '') + '封禁于 ' + cms.fmtWhen(b.createdAt);
+    main.appendChild(name);
+    main.appendChild(meta);
+    var btn = document.createElement('button');
+    btn.className = 'btn btn-sm';
+    btn.type = 'button';
+    btn.textContent = '解除封禁';
+    btn.addEventListener('click', function () { cms.unblock(b.type, b.value); });
+    li.appendChild(main);
+    li.appendChild(btn);
+    return li;
+  },
+
   renderBlocked: function (blocked) {
     var ul = document.getElementById('blocked-list');
     var countEl = document.getElementById('blocked-count');
+    var more = document.getElementById('session-blocked-more');
+    var moreText = document.getElementById('session-blocked-more-text');
+    var list = blocked || [];
     if (!ul) return;
     ul.innerHTML = '';
-    if (countEl) countEl.textContent = blocked.length ? '共 ' + blocked.length + ' 条' : '';
-    if (!blocked.length) {
+    if (countEl) countEl.textContent = list.length ? '共 ' + list.length + ' 条' : '';
+    if (more) more.hidden = list.length <= 3;
+    if (moreText) moreText.textContent = '查看全部 ' + list.length + ' 条黑名单';
+    if (!list.length) {
       ul.innerHTML = '<li class="empty-tip">黑名单为空。可在会话详情里封禁可疑 IP 或设备。</li>';
       return;
     }
-    blocked.forEach(function (b) {
-      var li = document.createElement('li');
-      li.className = 'session-item session-item--blocked';
-      var main = document.createElement('div');
-      main.className = 'ss-main';
-      var name = document.createElement('div');
-      name.className = 'ss-name';
-      name.textContent = (b.type === 'ip' ? 'IP：' : '设备：') + (b.value || '');
-      var meta = document.createElement('div');
-      meta.className = 'ss-meta';
-      meta.textContent = (b.note ? b.note + ' · ' : '') + '封禁于 ' + cms.fmtWhen(b.createdAt);
-      main.appendChild(name);
-      main.appendChild(meta);
-      var btn = document.createElement('button');
-      btn.className = 'btn btn-sm';
-      btn.type = 'button';
-      btn.textContent = '解除封禁';
-      btn.addEventListener('click', function () { cms.unblock(b.type, b.value); });
-      li.appendChild(main);
-      li.appendChild(btn);
-      ul.appendChild(li);
-    });
+    list.slice(0, 3).forEach(function (b) { ul.appendChild(cms.blockedRow(b)); });
   },
 
   renderSessions: function (sessions, history, blocked) {
@@ -4223,8 +4453,12 @@ var cms = {
     var countEl = document.getElementById('session-count');
     var onlineCount = document.getElementById('session-online-count');
     var historyCount = document.getElementById('session-history-count');
+    var historyMore = document.getElementById('session-history-more');
+    var historyMoreText = document.getElementById('session-history-more-text');
     var list = sessions || [];
     var hist = history || [];
+    var blockedList = blocked || [];
+    this.sessionData = { sessions: list, history: hist, blocked: blockedList };
     var online = list.filter(function (s) { return s.status === 'online'; }).length;
     if (countEl) countEl.textContent = '共 ' + list.length + ' 个有效会话 · ' + online + ' 个在线';
     if (onlineCount) onlineCount.textContent = String(list.length);
@@ -4240,10 +4474,14 @@ var cms = {
       if (!hist.length) {
         historyUl.innerHTML = '<li class="empty-tip">还没有历史会话记录。</li>';
       } else {
-        hist.forEach(function (s) { historyUl.appendChild(cms.sessionRow(s, true)); });
+        // 设置页只露出最近 3 条，完整记录进入「会话档案」二级页
+        hist.slice(0, 3).forEach(function (s) { historyUl.appendChild(cms.sessionRow(s, true)); });
       }
     }
-    this.renderBlocked(blocked || []);
+    if (historyMore) historyMore.hidden = hist.length <= 3;
+    if (historyMoreText) historyMoreText.textContent = '查看全部 ' + hist.length + ' 条历史会话';
+    this.renderBlocked(blockedList);
+    if (this.page === 'session-archive') this.renderSessionArchive();
   },
 
   addPasskey: async function () {
