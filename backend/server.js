@@ -16,6 +16,7 @@ const auth = require('./backend/auth');
 const { buildSitemap, PUBLIC_SITE_URL } = require('./backend/sitemap');
 const site = require('./backend/site');
 const { fetchProbeServers } = require('./backend/probe-source');
+const transfer = require('./backend/transfer');
 
 // 评论提交的全局并发闸门：同一时刻最多处理 20 条，超出的直接快速失败，避免写队列堆到超时
 let pendingSubmits = 0;
@@ -374,6 +375,12 @@ const server = http.createServer((req, res) => {
   if (pathname.indexOf('/api/admin/backup/') === 0) {
     if (!guardAuth(req, res)) return;
     return backup.handleRequest(req, res, pathname, reqUrl);
+  }
+
+  // 3.7.2 数据迁移 / 静态博客导入导出（需登录）: /api/admin/transfer/*
+  if (pathname.indexOf('/api/admin/transfer/') === 0) {
+    if (!guardAuth(req, res)) return;
+    return transfer.handleRequest(req, res, pathname, reqUrl);
   }
 
   // 3.8 保存站点信息（需登录）: POST /api/admin/site

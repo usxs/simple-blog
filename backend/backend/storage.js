@@ -276,7 +276,15 @@ function sortNewestFirst(list) {
 
 // 标签：接受字符串（逗号分隔）或数组，去重、去空、限制数量与长度
 function normalizeTags(value) {
-  const raw = Array.isArray(value) ? value : String(value == null ? '' : value).split(/[,，]/);
+  // 兼容从静态博客（Hugo / Hexo / Jekyll）导入的 YAML 列表写法：tags: [随笔, 折腾]
+  const stripList = (text) => {
+    let s = String(text == null ? '' : text).trim();
+    if (s.startsWith('[') && s.endsWith(']')) s = s.slice(1, -1);
+    return s.replace(/^["']|["']$/g, '');
+  };
+  const raw = Array.isArray(value)
+    ? value.map(stripList)
+    : stripList(value).split(/[,，]/);
   const seen = Object.create(null);
   const out = [];
   for (let i = 0; i < raw.length; i++) {

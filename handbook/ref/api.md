@@ -65,6 +65,16 @@
 | GET/POST | `/api/admin/telegram` | 瞬间同步配置 |
 | POST | `/api/admin/telegram/test` | 发一条测试消息 |
 
+## 迁移与导入导出（需登录）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/admin/transfer/info` | 统计、可用的导入来源 / 导出目标、体积上限 |
+| POST | `/api/admin/transfer/migrate` | `{target:'v2'\|'v3',includeAuth?,includeUploads?}` → `application/zip` 便携包 |
+| POST | `/api/admin/transfer/push` | `{url,token,mode:'replace'\|'merge',…}` 服务端推送到目标站点 `/api/migrate/import` |
+| POST | `/api/admin/transfer/import-md` | 请求体是 ZIP / `.md` 二进制，query `source` / `name` / `dryRun` |
+| POST | `/api/admin/transfer/export-md` | `{target,ids?}` → `application/zip` 静态博客目录结构 |
+
 ## 约定
 
 - 写操作需要 `Content-Type: application/json`（否则 415），以及同源 `Origin`。

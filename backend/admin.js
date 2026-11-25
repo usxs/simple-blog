@@ -207,6 +207,7 @@ var cms = {
   iconTarget: null,
   dragKey: '',
   markdownMode: 'content',
+  postMode: 'content',
   store: { posts: [], moments: [], comments: [], tools: [], status: [], quirky: [] },
   currentItem: null,
   authed: false,
@@ -220,6 +221,12 @@ var cms = {
   init: async function () {
     var mode = localStorage.getItem('site-theme-mode') || 'auto';
     this.setTheme(mode);
+    var savedPostMode = '';
+    try { savedPostMode = localStorage.getItem('cms-post-mode') || ''; } catch (e) {}
+    if (savedPostMode === 'content' || savedPostMode === 'preview' || savedPostMode === 'compare') {
+      this.postMode = savedPostMode;
+    }
+    this.bindPostModeShortcuts();
     this.bindUploadInputs();
     this.renderForm();
     this.bindAuthForms();
@@ -567,6 +574,43 @@ var cms = {
     ta.focus();
     ta.setSelectionRange(newPos, newPos);
     ta.dispatchEvent(new Event('input', { bubbles: true }));
+  },
+
+  // 文章编辑器的「内容 / 预览 / 对照」三视图。
+  // 与 schema 编辑器的 setMarkdownMode 分开：那个作用在 #markdown-workspace，
+  // 这个是常驻的文章写作页，选择会记进 localStorage，下次打开还是同一个视图。
+  setPostMode: function (mode) {
+    var next = (mode === 'preview' || mode === 'compare') ? mode : 'content';
+    this.postMode = next;
+    try { localStorage.setItem('cms-post-mode', next); } catch (e) {}
+    this.applyPostMode();
+    if (next !== 'content') this.renderPostPreview();
+  },
+
+  applyPostMode: function () {
+    var workspace = document.getElementById('post-workspace');
+    if (!workspace) return;
+    var mode = this.postMode || 'content';
+    workspace.setAttribute('data-mode', mode);
+    var buttons = document.querySelectorAll('.post-mode-btn');
+    for (var i = 0; i < buttons.length; i++) {
+      var isActive = buttons[i].getAttribute('data-mode') === mode;
+      buttons[i].classList.toggle('active', isActive);
+      buttons[i].setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    }
+  },
+
+  bindPostModeShortcuts: function () {
+    if (this._postModeShortcutBound) return;
+    this._postModeShortcutBound = true;
+    document.addEventListener('keydown', function (e) {
+      if (!e.ctrlKey && !e.metaKey) return;
+      if (e.key !== '1' && e.key !== '2' && e.key !== '3') return;
+      var editor = document.getElementById('admin-post-editor');
+      if (!editor || editor.hidden) return;
+      e.preventDefault();
+      cms.setPostMode(e.key === '1' ? 'content' : (e.key === '2' ? 'preview' : 'compare'));
+    });
   },
 
   setMarkdownMode: function (mode) {
@@ -1233,6 +1277,7 @@ var cms = {
     document.getElementById('post-editor-status').textContent = locked ? '已加密 · 解锁后可编辑正文' : (p ? ('ID: ' + p.id) : 'NEW');
     document.getElementById('post-error').textContent = '';
     document.getElementById('md-toolbar-tip').textContent = locked ? '请先解锁正文' : '选中文字后点按钮即可套用格式';
+    this.applyPostMode();
     this.renderPostPreview();
   },
 
@@ -1823,6 +1868,7 @@ var cms = {
       this.loadIndexNow();
       this.loadTelegram();
       this.loadBackup();
+      this.loadTransfer();
     } catch (e) {
       if (String(e && e.message) === 'unauthorized') return;
       this.notify('管理信息加载失败：' + (e && e.message ? e.message : '未知错误'));
@@ -3230,6 +3276,19 @@ var cms = {
         self.startBackup();
       });
     }
+    var transferDlV2 = document.getElementById('transfer-download-v2');
+    if (transferDlV2) transferDlV2.addEventListener('click', function () { self.downloadTransferBundle('v2'); });
+    var transferDlV3 = document.getElementById('transfer-download-v3');
+    if (transferDlV3) transferDlV3.addEventListener('click', function () { self.downloadTransferBundle('v3'); });
+    var transferPush = document.getElementById('transfer-push-btn');
+    if (transferPush) transferPush.addEventListener('click', function () { self.pushTransferBundle(); });
+    var transferPreview = document.getElementById('transfer-preview-btn');
+    if (transferPreview) transferPreview.addEventListener('click', function () { self.runMarkdownImport(true); });
+    var transferImport = document.getElementById('transfer-import-btn');
+    if (transferImport) transferImport.addEventListener('click', function () { self.runMarkdownImport(false); });
+    var transferExport = document.getElementById('transfer-export-btn');
+    if (transferExport) transferExport.addEventListener('click', function () { self.exportMarkdown(); });
+
     var backupList = document.getElementById('backup-history');
     if (backupList) {
       backupList.addEventListener('click', function (e) {
@@ -3415,6 +3474,232 @@ var cms = {
       this.notify('删除失败：' + (e && e.message ? e.message : '未知错误'));
     }
     this.loadBackup();
+  },
+
+  // ---------------- 数据迁移：V2/V3 便携包 · 静态博客导入导出 ----------------
+
+  transferInfo: null,
+
+  saveBlob: function (blob, filename) {
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(function () {
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }, 1500);
+  },
+
+  filenameFromResponse: function (res, fallback) {
+    var cd = res.headers.get('Content-Disposition') || '';
+    var m = cd.match(/filename="?([^"]+)"?/i);
+    return m ? m[1] : fallback;
+  },
+
+  fillTransferSelect: function (id, items, preferred) {
+    var el = document.getElementById(id);
+    if (!el || !items) return;
+    var current = el.value || '';
+    el.innerHTML = '';
+    items.forEach(function (item) {
+      var opt = document.createElement('option');
+      opt.value = item.key;
+      opt.textContent = item.label;
+      el.appendChild(opt);
+    });
+    var want = preferred || current;
+    if (want) {
+      for (var i = 0; i < el.options.length; i++) {
+        if (el.options[i].value === want) { el.selectedIndex = i; break; }
+      }
+    }
+  },
+
+  loadTransfer: async function () {
+    var info;
+    try {
+      info = await this.api('/api/admin/transfer/info?_t=' + Date.now());
+    } catch (e) {
+      if (String(e && e.message) === 'unauthorized') return;
+      var errEl = document.getElementById('transfer-error');
+      if (errEl) errEl.textContent = '读取迁移信息失败：' + (e && e.message ? e.message : '未知错误');
+      return;
+    }
+    this.transferInfo = info;
+    var setText = function (id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
+    setText('transfer-version', 'V1 · 文件存储 · v' + (info.version || '?'));
+    var stats = info.stats || {};
+    setText('transfer-stat-posts', (stats.posts || 0) + ' 篇');
+    setText('transfer-stat-moments', (stats.moments || 0) + ' 条');
+    setText('transfer-stat-comments', (stats.comments || 0) + ' 条');
+    setText('transfer-stat-uploads', (stats.uploads || 0) + ' 个 / ' + this.fmtBytes(stats.uploadBytes || 0));
+    this.fillTransferSelect('transfer-import-source', info.sources, 'auto');
+    this.fillTransferSelect('transfer-export-target', info.targets, 'hugo');
+  },
+
+  transferOptions: function () {
+    var chk = function (id) { var el = document.getElementById(id); return !el || el.checked; };
+    return { includeAuth: chk('transfer-include-auth'), includeUploads: chk('transfer-include-uploads') };
+  },
+
+  downloadTransferBundle: async function (target) {
+    var state = document.getElementById('transfer-state');
+    var errEl = document.getElementById('transfer-error');
+    if (errEl) errEl.textContent = '';
+    if (state) state.textContent = '正在打包（' + (target || 'v2').toUpperCase() + '）…';
+    var payload = this.transferOptions();
+    payload.target = target || 'v2';
+    try {
+      var res = await fetch(this.getApiUrl('/api/admin/transfer/migrate'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.status === 401) { this.handle401(); return; }
+      if (!res.ok) {
+        var data = await res.json().catch(function () { return {}; });
+        throw new Error((data && data.error) || ('HTTP ' + res.status));
+      }
+      var blob = await res.blob();
+      var name = this.filenameFromResponse(res, 'simple-blog-portable-' + payload.target + '.zip');
+      this.saveBlob(blob, name);
+      if (state) state.textContent = '已生成 ' + name + '（' + this.fmtBytes(blob.size) + '）';
+      this.notify('迁移包已生成，开始下载');
+    } catch (e) {
+      if (String(e && e.message) === 'unauthorized') return;
+      if (state) state.textContent = '';
+      if (errEl) errEl.textContent = '打包失败：' + (e && e.message ? e.message : '未知错误');
+    }
+  },
+
+  pushTransferBundle: async function () {
+    var state = document.getElementById('transfer-state');
+    var errEl = document.getElementById('transfer-error');
+    if (errEl) errEl.textContent = '';
+    var urlEl = document.getElementById('transfer-push-url');
+    var tokenEl = document.getElementById('transfer-push-token');
+    var modeEl = document.getElementById('transfer-push-mode');
+    var url = urlEl ? urlEl.value.trim() : '';
+    var token = tokenEl ? tokenEl.value.trim() : '';
+    if (!url) { if (errEl) errEl.textContent = '请填写目标站点地址'; return; }
+    if (!token) { if (errEl) errEl.textContent = '请填写目标站点的迁移令牌（在目标后台「迁移」页生成）'; return; }
+    var payload = this.transferOptions();
+    payload.url = url;
+    payload.token = token;
+    payload.mode = modeEl ? modeEl.value : 'replace';
+    if (state) state.textContent = '正在推送，迁移包越大会越慢…';
+    try {
+      var out = await this.api('/api/admin/transfer/push', { method: 'POST', body: payload });
+      var remote = (out && out.remote) || {};
+      if (out && out.ok) {
+        if (state) state.textContent = '推送成功 · 远端导入 ' + (remote.imported || remote.posts || 0) + ' 篇';
+        this.notify('已推送到目标站点并完成导入');
+        setTimeout(function () { cms.loadTransfer(); }, 800);
+      } else {
+        throw new Error((remote && remote.error) || ('目标返回 HTTP ' + (out && out.status)));
+      }
+    } catch (e) {
+      if (String(e && e.message) === 'unauthorized') return;
+      if (state) state.textContent = '';
+      if (errEl) errEl.textContent = '推送失败：' + (e && e.message ? e.message : '未知错误');
+    }
+  },
+
+  renderTransferReport: function (data) {
+    var list = document.getElementById('transfer-report');
+    if (!list) return;
+    list.innerHTML = '';
+    var push = function (text, warn) {
+      var li = document.createElement('li');
+      li.textContent = text;
+      if (warn) li.classList.add('is-warn');
+      list.appendChild(li);
+    };
+    var stats = (data && data.stats) || {};
+    push('识别为 ' + ((data.source || 'generic')) + '（自动判断：' + (data.detected || '-') + '）· 压缩包内 ' +
+      (stats.files || 0) + ' 个文件，其中 Markdown ' + (stats.markdown || 0) + ' 个');
+    if (typeof data.imported === 'number') {
+      push('已导入 ' + data.imported + ' 篇文章' + (data.assets ? '、' + data.assets + ' 个图片附件' : ''));
+    }
+    ((data && data.warnings) || []).forEach(function (w) { push('提示：' + w, true); });
+    ((data && data.preview) || []).slice(0, 12).forEach(function (p) {
+      push('· ' + p.title + '　' + (p.date || '无日期') + '　' + (p.tags || []).join('/') + '　' + p.chars + ' 字');
+    });
+    if (((data && data.preview) || []).length > 12) push('…… 其余 ' + (((data.preview || []).length) - 12) + ' 篇未在列表显示');
+  },
+
+  runMarkdownImport: async function (dryRun) {
+    var errEl = document.getElementById('transfer-import-error');
+    var stateEl = document.getElementById('transfer-import-state');
+    if (errEl) errEl.textContent = '';
+    var fileEl = document.getElementById('transfer-import-file');
+    var sourceEl = document.getElementById('transfer-import-source');
+    var file = fileEl && fileEl.files ? fileEl.files[0] : null;
+    if (!file) { if (errEl) errEl.textContent = '请选择要导入的 ZIP 或 .md 文件'; return; }
+    var source = sourceEl ? sourceEl.value : 'auto';
+    var query = '?source=' + encodeURIComponent(source || 'auto') + '&name=' + encodeURIComponent(file.name) + (dryRun ? '&dryRun=1' : '');
+    if (stateEl) stateEl.textContent = dryRun ? '正在预检…' : '正在导入…';
+    var btn = document.getElementById(dryRun ? 'transfer-preview-btn' : 'transfer-import-btn');
+    if (btn) btn.disabled = true;
+    try {
+      var res = await fetch(this.getApiUrl('/api/admin/transfer/import-md' + query), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: file
+      });
+      if (res.status === 401) { this.handle401(); return; }
+      var data = await res.json().catch(function () { return {}; });
+      if (!res.ok || (data && data.ok === false)) {
+        throw new Error((data && data.error) || ('HTTP ' + res.status));
+      }
+      this.renderTransferReport(data);
+      if (stateEl) stateEl.textContent = dryRun ? ('预检完成：将导入 ' + ((data.stats && data.stats.posts) || 0) + ' 篇') : ('导入完成：' + (data.imported || 0) + ' 篇');
+      if (!dryRun) {
+        this.notify('已导入 ' + (data.imported || 0) + ' 篇文章');
+        this.loadAll();
+        this.loadTransfer();
+      }
+    } catch (e) {
+      if (String(e && e.message) === 'unauthorized') return;
+      if (stateEl) stateEl.textContent = '';
+      if (errEl) errEl.textContent = (dryRun ? '预检失败：' : '导入失败：') + (e && e.message ? e.message : '未知错误');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  },
+
+  exportMarkdown: async function () {
+    var errEl = document.getElementById('transfer-export-error');
+    var stateEl = document.getElementById('transfer-export-state');
+    if (errEl) errEl.textContent = '';
+    var targetEl = document.getElementById('transfer-export-target');
+    var target = targetEl ? targetEl.value : 'hugo';
+    if (stateEl) stateEl.textContent = '正在导出…';
+    try {
+      var res = await fetch(this.getApiUrl('/api/admin/transfer/export-md'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target: target })
+      });
+      if (res.status === 401) { this.handle401(); return; }
+      if (!res.ok) {
+        var data = await res.json().catch(function () { return {}; });
+        throw new Error((data && data.error) || ('HTTP ' + res.status));
+      }
+      var blob = await res.blob();
+      var name = this.filenameFromResponse(res, 'simple-blog-' + target + '.zip');
+      this.saveBlob(blob, name);
+      if (stateEl) stateEl.textContent = '已导出 ' + name + '（' + this.fmtBytes(blob.size) + '）';
+      this.notify('导出完成，开始下载');
+    } catch (e) {
+      if (String(e && e.message) === 'unauthorized') return;
+      if (stateEl) stateEl.textContent = '';
+      if (errEl) errEl.textContent = '导出失败：' + (e && e.message ? e.message : '未知错误');
+    }
   },
 
   copy: function (text, okMsg) {

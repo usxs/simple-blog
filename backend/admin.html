@@ -197,7 +197,14 @@
             <span class="md-toolbar-tip" id="md-toolbar-tip">选中文字后点按钮即可套用格式</span>
           </div>
 
-          <div class="markdown-workspace post-workspace" id="post-workspace" data-mode="compare">
+          <div class="markdown-mode-tabs editor-mode-tabs" role="group" aria-label="文章编辑视图">
+            <button type="button" class="markdown-mode-btn post-mode-btn" data-mode="content" aria-pressed="false" onclick="cms.setPostMode('content')" title="只看 Markdown 源码">内容</button>
+            <button type="button" class="markdown-mode-btn post-mode-btn" data-mode="preview" aria-pressed="false" onclick="cms.setPostMode('preview')" title="只看渲染后的效果">预览</button>
+            <button type="button" class="markdown-mode-btn post-mode-btn" data-mode="compare" aria-pressed="false" onclick="cms.setPostMode('compare')" title="左边写、右边看">对照</button>
+            <span class="md-toolbar-tip" id="post-mode-tip">Ctrl/⌘ + 1 · 2 · 3 快速切换</span>
+          </div>
+
+          <div class="markdown-workspace post-workspace" id="post-workspace" data-mode="content">
             <div class="markdown-source">
               <div class="dropzone-wrap">
                 <textarea class="field-textarea" id="post-content" placeholder="在这里用 Markdown 写作…"></textarea>
@@ -218,6 +225,7 @@
               <button type="button" class="settings-tab" data-tab="security" role="tab">安全</button>
               <button type="button" class="settings-tab" data-tab="integration" role="tab">集成</button>
               <button type="button" class="settings-tab" data-tab="backup" role="tab">备份</button>
+              <button type="button" class="settings-tab" data-tab="transfer" role="tab">迁移</button>
             </nav>
           </header>
 
@@ -530,6 +538,92 @@
                 <button class="btn" type="button" id="revoke-others-btn">下线其它设备</button>
               </div>
               <div class="auth-error" id="session-error"></div>
+            </section>
+
+            <section class="settings-card settings-card--wide" data-group="transfer" id="card-transfer">
+              <div class="settings-card-head">
+                <h3>数据迁移</h3>
+                <span class="settings-tip" id="transfer-version">V1 · 文件存储</span>
+              </div>
+              <p class="settings-desc">当前版本（V1）把文章存成磁盘上的 Markdown 文件。这里可以把整站搬到两个新版本：<b>V2</b> = 前后端分离 + SQLite（前端放 Cloudflare，后端一个 Node 进程）；<b>V3</b> = 前后端不分离 + SQLite（单进程 SSR，像 Typecho 一样）。也支持和 Hugo / Hexo / Jekyll / Astro / Ghost / Obsidian 互相搬运 Markdown。</p>
+
+              <div class="transfer-stats" id="transfer-stats">
+                <div class="backup-meta"><span>文章</span><b id="transfer-stat-posts">—</b></div>
+                <div class="backup-meta"><span>瞬间</span><b id="transfer-stat-moments">—</b></div>
+                <div class="backup-meta"><span>评论</span><b id="transfer-stat-comments">—</b></div>
+                <div class="backup-meta"><span>附件</span><b id="transfer-stat-uploads">—</b></div>
+              </div>
+
+              <div class="transfer-block">
+                <div class="transfer-block-head">① 一键迁移到 V2 / V3</div>
+                <p class="settings-desc">迁移包是 ZIP，里面是 manifest.json + data.json + 原始图片附件。目标站点后台「迁移」页可以直接导入，或者用它自带的 <code>scripts/import-portable.js</code> 从命令行导入。</p>
+                <div class="settings-actions">
+                  <button class="btn" type="button" id="transfer-download-v2">下载 V2 迁移包</button>
+                  <button class="btn" type="button" id="transfer-download-v3">下载 V3 迁移包</button>
+                </div>
+                <div class="field-grid">
+                  <div class="field field--wide">
+                    <label class="field-label" for="transfer-push-url">目标站点地址</label>
+                    <input class="field-input" id="transfer-push-url" placeholder="https://v2.example.com" autocomplete="off" />
+                  </div>
+                  <div class="field">
+                    <label class="field-label" for="transfer-push-token">迁移令牌</label>
+                    <input class="field-input" id="transfer-push-token" type="password" placeholder="目标后台生成的令牌" autocomplete="off" />
+                  </div>
+                  <div class="field">
+                    <label class="field-label" for="transfer-push-mode">导入方式</label>
+                    <select class="field-input" id="transfer-push-mode">
+                      <option value="replace">覆盖：先清空目标再导入（首次迁移推荐）</option>
+                      <option value="merge">合并：保留目标已有内容，同 ID 覆盖</option>
+                    </select>
+                  </div>
+                </div>
+                <label class="check-row"><input type="checkbox" id="transfer-include-auth" checked /> 带上管理员账户（口令保持不变）</label>
+                <label class="check-row"><input type="checkbox" id="transfer-include-uploads" checked /> 带上图片与附件</label>
+                <div class="settings-actions">
+                  <button class="btn btn-primary" type="button" id="transfer-push-btn">推送到目标站点</button>
+                  <span class="settings-tip" id="transfer-state"></span>
+                </div>
+                <div class="auth-error" id="transfer-error"></div>
+              </div>
+
+              <div class="transfer-block">
+                <div class="transfer-block-head">② 从静态博客导入</div>
+                <p class="settings-desc">上传站点目录的 ZIP，或者单个 .md 文件。目录按各家的约定自动定位：Hugo 取 <code>content/</code>，Hexo 取 <code>source/_posts/</code>，Jekyll 取 <code>_posts/</code>，Astro 取 <code>src/content/</code>；<code>node_modules</code>、<code>themes</code>、<code>public</code>、<code>_site</code> 等目录会自动跳过。正文里引用的本地图片会一起搬进 <code>img/</code>，链接自动改写。</p>
+                <div class="field-grid">
+                  <div class="field">
+                    <label class="field-label" for="transfer-import-source">博客类型</label>
+                    <select class="field-input" id="transfer-import-source"></select>
+                  </div>
+                  <div class="field field--wide">
+                    <label class="field-label" for="transfer-import-file">ZIP / Markdown 文件</label>
+                    <input class="field-input" type="file" id="transfer-import-file" accept=".zip,.md,.markdown" />
+                  </div>
+                </div>
+                <div class="settings-actions">
+                  <button class="btn" type="button" id="transfer-preview-btn">先预检</button>
+                  <button class="btn btn-primary" type="button" id="transfer-import-btn">导入</button>
+                  <span class="settings-tip" id="transfer-import-state"></span>
+                </div>
+                <ul class="transfer-report" id="transfer-report"></ul>
+                <div class="auth-error" id="transfer-import-error"></div>
+              </div>
+
+              <div class="transfer-block">
+                <div class="transfer-block-head">③ 导出为静态博客</div>
+                <p class="settings-desc">导出 ZIP 里带 README 与配置片段，说明放到目标站点的哪个目录。Ghost 会额外生成 <code>ghost-import.json</code>。</p>
+                <div class="field-grid">
+                  <div class="field">
+                    <label class="field-label" for="transfer-export-target">导出目标</label>
+                    <select class="field-input" id="transfer-export-target"></select>
+                  </div>
+                </div>
+                <div class="settings-actions">
+                  <button class="btn btn-primary" type="button" id="transfer-export-btn">导出 ZIP</button>
+                  <span class="settings-tip" id="transfer-export-state"></span>
+                </div>
+                <div class="auth-error" id="transfer-export-error"></div>
+              </div>
             </section>
 
             <section class="settings-card settings-card--wide" data-group="backup" id="card-backup">

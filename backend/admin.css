@@ -356,6 +356,16 @@ button, input, textarea { font: inherit; color: inherit; background: none; borde
   background: var(--bg-surface);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
+/* 文章编辑页的视图切换条：和 schema 编辑器复用同一套按钮样式，只是多个快捷键提示 */
+.editor-mode-tabs {
+  margin: 4px 0 10px;
+}
+.editor-mode-tabs .md-toolbar-tip {
+  margin-left: 8px;
+  align-self: center;
+}
+#post-workspace[data-mode="content"] .field-textarea { min-height: 460px; }
+#post-workspace[data-mode="preview"] .markdown-preview { min-height: 460px; }
 .markdown-workspace { min-width: 0; }
 .markdown-workspace[data-mode="compare"] {
   display: grid;
@@ -1910,3 +1920,51 @@ body.md-lightbox-locked {
 
 /* ---------------- hidden 属性统一生效（.admin-tip 例外：工具提示靠 hover 显示） ---------------- */
 [hidden]:not(.admin-tip) { display: none !important; }
+
+/* ===== 迁移卡片（设置 → 迁移） ===== */
+.transfer-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  padding: 12px 14px;
+  margin: 4px 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-subtle);
+}
+.transfer-block {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--border);
+}
+.transfer-block-head {
+  font-size: 13.5px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.transfer-report {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+.transfer-report li {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-subtle);
+  overflow-wrap: anywhere;
+}
+.transfer-report li.is-warn { border-color: #d9a441; color: #a86a12; }
+#card-transfer code {
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--bg-subtle);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+#transfer-import-file { padding: 8px; }

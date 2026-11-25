@@ -91,6 +91,7 @@ nav:
       - 通知推送: guide/notify.md
       - 安全设置: guide/security.md
       - 站点配置: guide/site.md
+      - 迁移与导入导出: guide/transfer.md
   - 参考:
       - 环境变量: ref/env.md
       - 接口速查: ref/api.md

@@ -3,6 +3,26 @@
 本项目的所有重要变更记录在此文件中，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.17.0] - 2026-11-25
+
+### 新增
+
+- 迁移中枢：后台新增「管理 → 迁移」页，把「搬去新版本」「从静态博客进来」「往静态博客出去」放到一处
+- 一键迁移到 V2 / V3：把文章、评论、瞬间、图片附件与模块配置打成 `simple-blog-portable/1` 便携包（ZIP），可下载，也可在服务端直接推送到目标站点的 `/api/migrate/import`；目标站点的迁移令牌在它自己的「迁移」页里生成，可选覆盖或合并
+- 静态博客导入：支持 Hugo（YAML / TOML 前言）、Hexo、Jekyll、Astro、Ghost、Obsidian 与通用 Markdown，自动识别站点类型、跳过 `node_modules`/`themes`/`public` 等目录，正文引用的本地图片一并搬进 `img/imported/<id>/` 并改写链接；先「预检」再「导入」
+- 静态博客导出：一条命令导出 Hugo / Hexo / Jekyll / Astro / Ghost / Obsidian / 通用 Markdown 目录结构，附配置片段、`manifest.json` 与 README；隐藏文章导出为草稿；正文里的 `/img/...` 按各家静态目录规则一起打包
+- 写作页三视图：「内容（纯 Markdown）」「预览（渲染后）」「对照（原模式）」三种视图可切换，支持 <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> 快捷键，选择记在浏览器里
+
+### 变更
+
+- 写作页默认进入「内容」视图，长文写作时不再被右栏挤窄
+- 标签解析兼容 YAML 列表写法（`tags: [随笔, 折腾]`），从静态博客导入的标签不再带上方括号
+- 后端新增 `backend/{frontmatter,zip,portable,mdimport,mdexport,transfer}.js` 六个零依赖模块，只有 Node 内置模块，不引入新的 npm 依赖
+
+### 文档
+
+- 新增手册页「迁移与导入导出」（`handbook/guide/transfer.md`），说明三个版本的关系、迁移包结构、两种落地方式和各家静态博客的目录约定
+
 ## [1.16.0] - 2026-11-25
 
 ### 新增
