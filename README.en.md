@@ -271,7 +271,7 @@ The image is published to GHCR (GitHub Container Registry): <https://github.com/
 | `v2` | V2 | Node backend with SQLite; the frontend still goes to Cloudflare Pages |
 | `v3` | V3 | **Site + admin in one container**, no Pages needed |
 
-Stable tags move with their branches. To pin one build, use the short SHA tag CI produces (e.g. `3a1b2c4`), or push a tag such as `v3.0.0` so CI also emits `3.0.0` / `3.0` / `3`. Roll back the same way.
+Stable tags move with their branches. To pin one build, use the short SHA tag CI produces (e.g. `sha-3a1b2c4`), or push a tag such as `v3.0.0` so CI also emits `3.0.0` / `3.0` / `3`. Roll back the same way.
 
 **V3: the shortest path, one container**
 
