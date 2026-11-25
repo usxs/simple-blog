@@ -56,7 +56,7 @@ docker run -d --name simple-blog --restart unless-stopped \
 
 打开 `http://服务器IP:33001/` 就是站点，后台在同一个域名的 `/admin`。数据只需要 `data/`（含 `blog.db` 与 WAL 文件）、`img/`、`file/`；不需要 `config.json`、`article/`、`Musings/`，也不需要 `BACKEND_PUBLIC_URL`。
 
-固定某次构建或回滚时，把标签换成 CI 生成的短 SHA（如 `3a1b2c4`），或打 tag 后使用 `3.0.0`；生产环境前面加 Nginx 并配 HTTPS。
+固定某次构建或回滚时，把标签换成 CI 生成的短 SHA（如 `sha-3a1b2c4`），或打 tag 后使用 `3.0.0`；生产环境前面加 Nginx 并配 HTTPS。
 
 ## 部署方式二：从源码构建 Docker
 
