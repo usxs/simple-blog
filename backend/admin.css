@@ -1970,3 +1970,157 @@ body.md-lightbox-locked {
   font-size: 12px;
 }
 #transfer-import-file { padding: 8px; }
+
+/* ===== Switch 开关组件（统一替换所有二值选项） ===== */
+.check-row input[type="checkbox"],
+.check-label input[type="checkbox"],
+.editor-switch input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  margin: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  vertical-align: -5px;
+  cursor: pointer;
+  transition: background .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+.check-row input[type="checkbox"]::after,
+.check-label input[type="checkbox"]::after,
+.editor-switch input[type="checkbox"]::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .22);
+  transition: transform .18s ease, background .18s ease;
+}
+.check-row input[type="checkbox"]:checked,
+.check-label input[type="checkbox"]:checked,
+.editor-switch input[type="checkbox"]:checked {
+  background: var(--text-primary);
+  border-color: var(--text-primary);
+}
+.check-row input[type="checkbox"]:checked::after,
+.check-label input[type="checkbox"]:checked::after,
+.editor-switch input[type="checkbox"]:checked::after {
+  transform: translateX(16px);
+  background: var(--bg-surface);
+}
+.check-row input[type="checkbox"]:focus-visible,
+.check-label input[type="checkbox"]:focus-visible,
+.editor-switch input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+}
+.check-row input[type="checkbox"]:disabled,
+.check-label input[type="checkbox"]:disabled,
+.editor-switch input[type="checkbox"]:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+.check-row, .check-label {
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  line-height: 1.55;
+}
+.check-label { cursor: pointer; }
+.check-row { margin: 6px 0 10px; }
+.check-label input[type="checkbox"] { margin-top: 0; }
+
+/* ===== 文章编辑器美化 ===== */
+.admin-post-editor { gap: 16px; }
+.admin-post-editor .editor-head {
+  align-items: flex-start;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.admin-post-editor .editor-head-left { flex-wrap: wrap; row-gap: 4px; }
+.editor-head-title { font-size: 18px; letter-spacing: -.02em; }
+.admin-post-editor .editor-head .settings-tip { flex-basis: 100%; order: 3; }
+.admin-post-editor .editor-head-actions { padding-top: 2px; }
+
+.admin-post-editor .editor-meta {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-surface);
+  gap: 14px 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .03);
+}
+.admin-post-editor .editor-meta .field { gap: 7px; }
+.admin-post-editor .editor-meta .field-label { font-size: 12px; }
+
+.admin-post-editor .editor-flags {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-surface);
+}
+.editor-switch {
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg-canvas);
+  cursor: pointer;
+  transition: border-color .18s ease, background .18s ease;
+}
+.editor-switch:hover { border-color: var(--border-strong); background: var(--bg-subtle); }
+.editor-switch-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.editor-switch-title { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+.editor-switch-desc { font-size: 11.5px; line-height: 1.45; color: var(--text-muted); }
+.editor-password-field { grid-column: 1 / -1; gap: 7px; padding-top: 2px; }
+.editor-password-field .field-hint { font-size: 11.5px; line-height: 1.5; color: var(--text-muted); }
+.editor-password-field .editor-password { width: 100%; background: var(--bg-canvas); }
+
+.admin-post-editor .md-toolbar {
+  padding: 7px;
+  border-radius: 10px;
+  background: var(--bg-subtle);
+  border-color: var(--border);
+}
+.admin-post-editor .md-btn { background: var(--bg-surface); }
+.admin-post-editor .editor-mode-tabs { margin: 2px 0 0; }
+.admin-post-editor .post-workspace {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+.admin-post-editor .post-workspace .field-textarea,
+.admin-post-editor .post-workspace .markdown-preview {
+  border-radius: 8px;
+  background: var(--bg-canvas);
+}
+.admin-post-editor .post-workspace .drop-hint { padding: 0 2px 2px; }
+
+@media (max-width: 720px) {
+  .admin-post-editor .editor-flags { grid-template-columns: 1fr; }
+  .admin-post-editor .editor-meta { grid-template-columns: 1fr; }
+  .admin-post-editor .editor-meta .field--wide { grid-column: auto; }
+  .admin-post-editor .editor-head-actions { width: 100%; }
+}

@@ -162,9 +162,25 @@
           </div>
 
           <div class="editor-flags">
-            <label class="check-row"><input type="checkbox" id="post-hidden" /> 在前端隐藏（后端保留，可随时恢复）</label>
-            <label class="check-row"><input type="checkbox" id="post-enc" /> 整篇加密（读者需输入口令才能查看）</label>
-            <input class="field-input editor-password" id="post-password" type="password" autocomplete="new-password" placeholder="设置 / 修改访问口令（留空表示不修改）" />
+            <label class="editor-switch">
+              <input type="checkbox" id="post-hidden" />
+              <span class="editor-switch-copy">
+                <span class="editor-switch-title">在前端隐藏</span>
+                <span class="editor-switch-desc">后端保留，随时可以恢复显示</span>
+              </span>
+            </label>
+            <label class="editor-switch">
+              <input type="checkbox" id="post-enc" />
+              <span class="editor-switch-copy">
+                <span class="editor-switch-title">整篇加密</span>
+                <span class="editor-switch-desc">读者需要输入口令才能查看</span>
+              </span>
+            </label>
+            <div class="field editor-password-field">
+              <label class="field-label" for="post-password">访问口令</label>
+              <input class="field-input editor-password" id="post-password" type="password" autocomplete="new-password" placeholder="设置 / 修改访问口令（留空表示不修改）" />
+              <span class="field-hint">启用加密时必填；已有口令时留空表示沿用原口令。</span>
+            </div>
           </div>
 
           <div class="editor-lock-bar" id="post-lock-bar" hidden>
