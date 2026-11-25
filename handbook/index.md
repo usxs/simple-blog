@@ -82,7 +82,7 @@ hide:
 
 | | 分支 | Docker 标签 | 前端 | 后端 | 存储 | 适合 |
 | --- | --- | --- | --- | --- | --- | --- |
-| **V1** | `main` | `latest` | Cloudflare Pages | Node（自托管） | Markdown + JSON 文件 | 数据即文件，拷走就能搬家 |
+| **V1** | `v1` | `latest` | Cloudflare Pages | Node（自托管） | Markdown + JSON 文件 | 数据即文件，拷走就能搬家 |
 | **V2** | `v2-sqlite` | `v2` | Cloudflare Pages | Node（自托管） | SQLite（`node:sqlite`） | 文章 / 评论很多，想要更稳的写入与查询 |
 | **V3** | `v3-monolith` | `v3` | 同进程 SSR | 同一个进程 | SQLite | 一台 VPS 跑完，不依赖 Cloudflare |
 

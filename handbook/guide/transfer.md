@@ -10,7 +10,7 @@
 
 | 版本 | 形态 | 数据存储 | 适合谁 |
 | --- | --- | --- | --- |
-| **V1**（`main`） | Cloudflare Pages 前端 + 自托管 Node 后端 | `article/` 下的 Markdown 文件 + `data/*.json` | 想直接看文件、能 ssh 上服务器改的人 |
+| **V1**（`v1`） | Cloudflare Pages 前端 + 自托管 Node 后端 | `article/` 下的 Markdown 文件 + `data/*.json` | 想直接看文件、能 ssh 上服务器改的人 |
 | **V2**（`v2-sqlite`） | Cloudflare Pages 前端 + Node 后端 | SQLite（一个 `.db` 文件） | 想要数据库的查询/事务能力，又保留前后端分离 |
 | **V3**（`v3-monolith`） | 单进程：后端直接吐 HTML（SSR），不依赖 Pages | SQLite | 想一条命令跑起来、像 Typecho 一样前后端不分离 |
 

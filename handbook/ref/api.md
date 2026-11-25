@@ -100,7 +100,7 @@ curl -X POST --data-binary @simple-blog-portable-20261125.zip \
 - 列表类接口支持 `ETag` / `If-None-Match`，命中返回 `304` 空体。
 - 限流命中返回 `429` 并带 `Retry-After`。
 
-完整字段说明见仓库里的 [`docs/API.md`](https://github.com/usxs/simple-blog/blob/main/docs/API.md)。
+完整字段说明见仓库里的 [`docs/API.md`](https://github.com/usxs/simple-blog/blob/v1/docs/API.md)。
 
 ## 下一步
 

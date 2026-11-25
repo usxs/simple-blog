@@ -27,7 +27,7 @@ V1 / V2 都是「Cloudflare Pages 托管前端 + 自建服务器跑后端」的�
 
 ## 获取代码
 
-V3 在 `v3-monolith` 分支上（V1 是 `main`，V2 是 `v2-sqlite`）：
+V3 在 `v3-monolith` 分支上（V1 是 `v1`，V2 是 `v2-sqlite`）：
 
 ```bash
 git clone -b v3-monolith https://github.com/usxs/simple-blog.git

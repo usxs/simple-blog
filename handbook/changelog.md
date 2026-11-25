@@ -1,6 +1,6 @@
 # 更新日志
 
-完整、逐条的变更记录在仓库根目录的 [`CHANGELOG.md`](https://github.com/usxs/simple-blog/blob/main/CHANGELOG.md)。
+完整、逐条的变更记录在仓库根目录的 [`CHANGELOG.md`](https://github.com/usxs/simple-blog/blob/v1/CHANGELOG.md)。
 
 ## 近期版本
 
