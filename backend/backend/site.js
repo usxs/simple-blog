@@ -39,7 +39,7 @@ const PRESET_ICONS = [
 const MODULE_DEFAULTS = {
   home: { name: '首页', icon: 'home', route: '' },
   posts: { name: '文章', icon: 'book', route: 'posts' },
-  moments: { name: '碎碎念', icon: 'message', route: 'moments' },
+  moments: { name: '瞬间', icon: 'message', route: 'moments' },
   links: { name: '友链', icon: 'link', route: 'links' },
   tools: { name: '工具', icon: 'wrench', route: 'tools' },
   probe: { name: '探针', icon: 'activity', route: 'probe' },
