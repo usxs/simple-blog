@@ -132,9 +132,15 @@
         <section class="admin-post-editor" id="admin-post-editor" hidden>
           <header class="editor-head">
             <div class="editor-head-left">
-              <button class="btn" type="button" onclick="cms.backToPosts()">← 返回列表</button>
-              <span class="editor-head-title" id="post-editor-title">新建文章</span>
-              <span class="settings-tip" id="post-editor-status"></span>
+              <button class="btn editor-back" type="button" onclick="cms.backToPosts()" aria-label="返回文章列表">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+                <span>返回列表</span>
+              </button>
+              <div class="editor-head-copy">
+                <span class="editor-kicker" id="post-editor-kicker">新建稿件</span>
+                <span class="editor-head-title" id="post-editor-title">新建文章</span>
+                <span class="settings-tip" id="post-editor-status"></span>
+              </div>
             </div>
             <div class="editor-head-actions">
               <button class="btn btn-danger" type="button" id="post-delete-btn" onclick="cms.deleteCurrentPost()">删除</button>
@@ -143,21 +149,21 @@
           </header>
 
           <div class="editor-meta">
-            <div class="field field--wide">
+            <div class="field editor-meta-title">
               <label class="field-label" for="post-title">标题</label>
               <input class="field-input" id="post-title" maxlength="120" placeholder="文章标题" />
             </div>
-            <div class="field">
+            <div class="field editor-meta-id">
               <label class="field-label" for="post-id">链接 ID</label>
               <input class="field-input" id="post-id" maxlength="80" placeholder="留空自动生成" />
             </div>
-            <div class="field">
+            <div class="field editor-meta-date">
               <label class="field-label" for="post-date">日期</label>
               <input class="field-input" id="post-date" placeholder="YYYY-MM-DD" />
             </div>
-            <div class="field field--wide">
+            <div class="field editor-meta-tags">
               <label class="field-label" for="post-tags">标签</label>
-              <input class="field-input" id="post-tags" placeholder="用逗号分隔，例如：前端, 随笔" />
+              <input class="field-input" id="post-tags" placeholder="前端, 随笔" />
             </div>
           </div>
 
@@ -178,57 +184,74 @@
             </label>
             <div class="field editor-password-field">
               <label class="field-label" for="post-password">访问口令</label>
-              <input class="field-input editor-password" id="post-password" type="password" autocomplete="new-password" placeholder="设置 / 修改访问口令（留空表示不修改）" />
-              <span class="field-hint">启用加密时必填；已有口令时留空表示沿用原口令。</span>
+              <input class="field-input editor-password" id="post-password" type="password" autocomplete="new-password" placeholder="留空表示不修改" />
+              <span class="field-hint">启用加密时必填；已有口令时留空沿用。</span>
             </div>
           </div>
 
           <div class="editor-lock-bar" id="post-lock-bar" hidden>
-            <span class="editor-lock-text">🔒 这篇文章已加密，输入口令解锁后才能编辑正文。</span>
+            <span class="editor-lock-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+            <span class="editor-lock-text">正文已加密，输入口令后解锁编辑</span>
             <input class="field-input" id="post-unlock-input" type="password" autocomplete="current-password" placeholder="访问口令" />
             <button class="btn" type="button" id="post-unlock-btn">解锁编辑</button>
             <span class="auth-error" id="post-unlock-error"></span>
           </div>
 
           <div class="md-toolbar" id="md-toolbar" role="toolbar" aria-label="Markdown 快捷操作">
-            <button type="button" class="md-btn" data-md="h1" title="一级标题">H1</button>
-            <button type="button" class="md-btn" data-md="h2" title="二级标题">H2</button>
-            <button type="button" class="md-btn" data-md="h3" title="三级标题">H3</button>
-            <span class="md-sep"></span>
-            <button type="button" class="md-btn" data-md="bold" title="加粗"><b>B</b></button>
-            <button type="button" class="md-btn" data-md="italic" title="斜体"><i>I</i></button>
-            <button type="button" class="md-btn" data-md="strike" title="删除线"><s>S</s></button>
-            <button type="button" class="md-btn" data-md="upper" title="将选中文字转为大写">大写</button>
-            <span class="md-sep"></span>
-            <button type="button" class="md-btn" data-md="quote" title="引用">❝</button>
-            <button type="button" class="md-btn" data-md="code" title="行内代码">&lt;/&gt;</button>
-            <button type="button" class="md-btn" data-md="link" title="链接">链接</button>
-            <button type="button" class="md-btn" data-md="image" title="图片">图片</button>
-            <span class="md-sep"></span>
-            <button type="button" class="md-btn" data-md="ul" title="无序列表">• 列表</button>
-            <button type="button" class="md-btn" data-md="ol" title="有序列表">1. 列表</button>
-            <button type="button" class="md-btn" data-md="hr" title="分隔线">—</button>
-            <span class="md-sep"></span>
-            <button type="button" class="md-btn md-btn-lock" data-md="lock" title="插入加密片段">🔒 加密片段</button>
-            <button type="button" class="md-btn md-btn-unlock" data-md="unlock" title="把已保存的加密片段还原为明文">🔓 解除片段</button>
-            <span class="md-toolbar-tip" id="md-toolbar-tip">选中文字后点按钮即可套用格式</span>
+            <div class="md-group" role="group" aria-label="标题">
+              <button type="button" class="md-btn md-btn-text" data-md="h1" title="一级标题" aria-label="一级标题">H1</button>
+              <button type="button" class="md-btn md-btn-text" data-md="h2" title="二级标题" aria-label="二级标题">H2</button>
+              <button type="button" class="md-btn md-btn-text" data-md="h3" title="三级标题" aria-label="三级标题">H3</button>
+            </div>
+            <span class="md-sep" aria-hidden="true"></span>
+            <div class="md-group" role="group" aria-label="字符格式">
+              <button type="button" class="md-btn md-btn-text" data-md="bold" title="加粗" aria-label="加粗"><b>B</b></button>
+              <button type="button" class="md-btn md-btn-text" data-md="italic" title="斜体" aria-label="斜体"><i>I</i></button>
+              <button type="button" class="md-btn md-btn-text" data-md="strike" title="删除线" aria-label="删除线"><s>S</s></button>
+              <button type="button" class="md-btn md-btn-text" data-md="upper" title="转为大写" aria-label="转为大写">AA</button>
+            </div>
+            <span class="md-sep" aria-hidden="true"></span>
+            <div class="md-group" role="group" aria-label="插入">
+              <button type="button" class="md-btn md-btn-text md-btn-quote" data-md="quote" title="引用" aria-label="引用"><span aria-hidden="true">&ldquo;</span></button>
+              <button type="button" class="md-btn" data-md="code" title="行内代码" aria-label="行内代码"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></button>
+              <button type="button" class="md-btn" data-md="link" title="链接" aria-label="链接"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></button>
+              <button type="button" class="md-btn" data-md="image" title="图片" aria-label="图片"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></button>
+            </div>
+            <span class="md-sep" aria-hidden="true"></span>
+            <div class="md-group" role="group" aria-label="列表">
+              <button type="button" class="md-btn" data-md="ul" title="无序列表" aria-label="无序列表"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg></button>
+              <button type="button" class="md-btn" data-md="ol" title="有序列表" aria-label="有序列表"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 12h11"/><path d="M10 18h11"/><path d="M10 6h11"/><path d="M4 10h2"/><path d="M4 6h1v4"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg></button>
+              <button type="button" class="md-btn" data-md="hr" title="分隔线" aria-label="分隔线"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" x2="19" y1="12" y2="12"/></svg></button>
+            </div>
+            <span class="md-sep" aria-hidden="true"></span>
+            <div class="md-group md-group-lock" role="group" aria-label="加密片段">
+              <button type="button" class="md-btn md-btn-lock" data-md="lock" title="插入加密片段" aria-label="插入加密片段"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span>加密片段</span></button>
+              <button type="button" class="md-btn md-btn-unlock" data-md="unlock" title="把已保存的加密片段还原为明文" aria-label="解除片段"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg><span>解除片段</span></button>
+            </div>
+            <span class="md-toolbar-tip" id="md-toolbar-tip">选中文字后套用格式</span>
           </div>
 
-          <div class="markdown-mode-tabs editor-mode-tabs" role="group" aria-label="文章编辑视图">
-            <button type="button" class="markdown-mode-btn post-mode-btn" data-mode="content" aria-pressed="false" onclick="cms.setPostMode('content')" title="只看 Markdown 源码">内容</button>
-            <button type="button" class="markdown-mode-btn post-mode-btn" data-mode="preview" aria-pressed="false" onclick="cms.setPostMode('preview')" title="只看渲染后的效果">预览</button>
-            <button type="button" class="markdown-mode-btn post-mode-btn" data-mode="compare" aria-pressed="false" onclick="cms.setPostMode('compare')" title="左边写、右边看">对照</button>
-            <span class="md-toolbar-tip" id="post-mode-tip">Ctrl/⌘ + 1 · 2 · 3 快速切换</span>
+          <div class="markdown-mode-tabs editor-mode-tabs">
+            <div class="editor-mode-group" role="group" aria-label="文章编辑视图">
+              <button type="button" class="markdown-mode-btn post-mode-btn" data-mode="content" aria-pressed="false" onclick="cms.setPostMode('content')" title="只看 Markdown 源码">内容</button>
+              <button type="button" class="markdown-mode-btn post-mode-btn" data-mode="preview" aria-pressed="false" onclick="cms.setPostMode('preview')" title="只看渲染后的效果">预览</button>
+              <button type="button" class="markdown-mode-btn post-mode-btn" data-mode="compare" aria-pressed="false" onclick="cms.setPostMode('compare')" title="左边写、右边看">对照</button>
+            </div>
+            <span class="md-toolbar-tip" id="post-mode-tip" title="Ctrl/⌘ + 1 / 2 / 3 快速切换"><kbd>1</kbd> 内容 <kbd>2</kbd> 预览 <kbd>3</kbd> 对照</span>
           </div>
 
           <div class="markdown-workspace post-workspace" id="post-workspace" data-mode="content">
             <div class="markdown-source">
+              <div class="pane-head"><span class="pane-label">Markdown</span><span class="pane-hint">源稿</span></div>
               <div class="dropzone-wrap">
-                <textarea class="field-textarea" id="post-content" placeholder="在这里用 Markdown 写作…"></textarea>
+                <textarea class="field-textarea" id="post-content" placeholder="在这里用 Markdown 写作"></textarea>
                 <div class="drop-hint"><span>支持拖入图片或 Ctrl+V 粘贴图片上传</span><span id="post-upload-status"></span></div>
               </div>
             </div>
-            <div class="markdown-preview"><div class="markdown-preview-content" id="post-preview"></div></div>
+            <div class="markdown-preview">
+              <div class="pane-head"><span class="pane-label">预览</span><span class="pane-hint">渲染结果</span></div>
+              <div class="markdown-preview-content" id="post-preview"></div>
+            </div>
           </div>
           <div class="auth-error" id="post-error"></div>
         </section>
