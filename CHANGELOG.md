@@ -65,6 +65,10 @@ V2：把后端从「Markdown 文件 + JSON」换成 SQLite，前端仍然部署�
 - 命令行导入便携包：`scripts/import-portable.js --file bundle.zip [--mode replace|merge]`
 - 后台「迁移」页显示当前存储形态（V1 文件 / V2 数据库），令牌区块只在数据库版出现
 
+### 修复
+
+- 评论提交按 `article/<id>` 目录判断文章是否存在，SQLite 模式下恒为「目标文章不存在」；改走 `storage.postExists(id)`，两种存储都能正常提交
+
 ### 变更
 
 - 存储实现拆成 `storage-file.js`（原 `storage.js`）+ `storage-db.js`，由 `backend/storage.js` 按 `STORE` 选择；纯函数（id 清洗、摘要、搜索排序、日期）抽到 `backend/text.js`，前言解析抽到 `backend/mdparse.js`
@@ -76,6 +80,9 @@ V2：把后端从「Markdown 文件 + JSON」换成 SQLite，前端仍然部署�
 
 - 新增「存储（V2 新增）」环境变量表、数据库表结构说明、迁移令牌与接收端接口
 - 《迁移与导入导出》补充目标站点侧的操作与两个命令行脚本的用法
+- 新增手册页「版本选择」（`handbook/start/versions.md`）：V1 / V2 / V3 对照表、怎么选、版本之间怎么迁、同机并存
+- README 中英文同步重写：三分支首段、双架构图（两段式 / 单体）、目录结构补存储层与迁移模块、环境变量补 `STORE` / `DB_FILE` / `SITE_VERSION`
+- 部署前准备、SEO、备份、常见问题按版本拆分：数据目录分文件与 SQLite、SSR 位置、robots 规则、备份范围、跨版本搬家
 
 ## [1.17.0] - 2026-11-25
 
