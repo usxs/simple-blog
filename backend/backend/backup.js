@@ -580,7 +580,9 @@ function buildMigrationDoc(manifest) {
     '## 包里有什么',
     '',
     '- backend/：完整后端目录（server.js、admin.*、backend/ 模块、config.json、article/、Musings/、img/、file/、data/）',
-    '- frontend/：' + (fe.mode === 'source' ? '前端源码，可直接重新部署到 Cloudflare Pages' : fe.mode === 'snapshot' ? '线上前端静态快照（index.html、style.css、app.js 等）' : '无'),
+    '- frontend/：' + (fe.mode === 'source'
+      ? '前端源码（V1/V2 可直接重新部署到 Cloudflare Pages；V3 单体版就是 backend/web，随服务一起跑）'
+      : fe.mode === 'snapshot' ? '线上前端静态快照（index.html、style.css、app.js 等）' : '无'),
     '- manifest.json：备份元信息（含前端部署版本号）',
     '- restore.sh：一键恢复 / 迁移脚本',
     '- docker-compose.yml、.env.example：可移植的容器编排',
