@@ -15,7 +15,7 @@
 
 **文档**：<https://usxs.github.io/simple-blog/>（部署教程、使用手册、常见问题）
 
-一套可以自己部署的极简个人博客系统：**Cloudflare Pages 静态前端 + 自托管 Node 后端**。
+一套可以自己部署的极简个人博客系统。仓库按分支提供三种形态：**V1** 是「Cloudflare Pages 静态前端 + 自托管 Node 后端 + Markdown 文件存储」，**V2** 换成 SQLite，**V3** 则把前后端合成一个进程（单体版，SQLite + 进程内 SSR）。当前这个分支是 **V3**。
 
 前端是零构建的纯静态 SPA（HTML/CSS/原生 JS），由 Pages 的 Functions 在边缘做服务端渲染，保证搜索引擎能拿到每篇文章的完整正文；后端是零框架依赖的 Node 服务，负责账号登录、文章/动态管理、图片上传与评论，数据全部以 Markdown / JSON 文件形式落盘，换个机器拷走目录就能搬家。
 
