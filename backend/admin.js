@@ -13,16 +13,17 @@ function syncAvatarFavicon() {
   var avatarEl = document.getElementById('admin-avatar');
   var charText = String(avatarEl ? avatarEl.textContent : 'S').trim().slice(0, 2);
   var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-  var bg = isDark ? '%23F4F4F5' : '%23141416';
-  var fg = isDark ? '%23141416' : '%23FFFFFF';
+  var bg = isDark ? '#FFFFFF' : '#18181B';
+  var fg = isDark ? '#18181B' : '#F4F4F5';
   var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 34 34">' +
     '<rect width="34" height="34" rx="7" fill="' + bg + '"/>' +
     '<text x="50%" y="53%" dominant-baseline="central" text-anchor="middle" fill="' + fg + '" font-family="monospace" font-weight="600" font-size="18">' +
-    encodeURIComponent(charText) +
+    charText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') +
     '</text></svg>';
   var link = document.getElementById('dynamic-favicon');
-  if (link) link.href = 'data:image/svg+xml,' + svg;
+  if (link) link.href = 'data:image/svg+xml,' + encodeURIComponent(svg);
 }
+syncAvatarFavicon();
 
 // 侧边栏头像文字 + favicon 同步（头像文字最多 2 字，空则回退 S）
 function setSidebarAvatar(text) {

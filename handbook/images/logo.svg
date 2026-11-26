@@ -1,6 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96" role="img" aria-label="简单博客">
-  <rect x="0.5" y="0.5" width="95" height="95" rx="22" fill="#17181c" stroke="rgba(255,255,255,.16)"/>
-  <text x="48" y="68" text-anchor="middle"
-        font-family="-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', sans-serif"
-        font-size="54" font-weight="700" fill="#ffffff">简</text>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img"><text x="48" y="52" text-anchor="middle" dominant-baseline="central" fill="#F4F4F5" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', sans-serif" font-weight="600" font-size="72">简</text></svg>

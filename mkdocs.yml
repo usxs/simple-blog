@@ -24,7 +24,7 @@ theme:
   name: material
   language: zh
   logo: images/logo.svg
-  favicon: images/logo.svg
+  favicon: images/favicon.svg
   font: false
   icon:
     repo: fontawesome/brands/github

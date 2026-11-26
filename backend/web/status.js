@@ -12,6 +12,36 @@
     d.setAttribute('data-theme', 'light');
   }
 
+  function paintFavicon() {
+    var link = document.getElementById('status-favicon');
+    if (!link) return;
+    var dark = d.getAttribute('data-theme') === 'dark';
+    var text = d.getAttribute('data-favicon-text') || '简';
+    var c = document.createElement('canvas');
+    c.width = 128;
+    c.height = 128;
+    var ctx = c.getContext('2d');
+    if (!ctx) return;
+    var r = 26;
+    ctx.beginPath();
+    ctx.moveTo(r, 0);
+    ctx.arcTo(128, 0, 128, 128, r);
+    ctx.arcTo(128, 128, 0, 128, r);
+    ctx.arcTo(0, 128, 0, 0, r);
+    ctx.arcTo(0, 0, 128, 0, r);
+    ctx.closePath();
+    ctx.fillStyle = dark ? '#FFFFFF' : '#18181B';
+    ctx.fill();
+    ctx.fillStyle = dark ? '#18181B' : '#F4F4F5';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '700 ' + (Array.from(text).length > 1 ? 62 : 94) + 'px -apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,"PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.fillText(text, 64, 67);
+    link.type = 'image/png';
+    link.href = c.toDataURL('image/png');
+  }
+  paintFavicon();
+
   var code = document.body.getAttribute('data-status-code') || '404';
 
   function setText(selector, value) {
