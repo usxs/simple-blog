@@ -137,6 +137,7 @@ const COMMENTS_SECTION_HTML =
       '</div>' +
       '<input type="text" id="comment-hp" style="display:none;" tabindex="-1" autocomplete="off" />' +
       '<textarea class="comment-textarea" id="comment-content" maxlength="1000" placeholder="写下您的想法... *"></textarea>' +
+      '<div class="turnstile-slot" id="comment-turnstile" hidden></div>' +
       '<div class="comment-submit-row">' +
         '<div class="captcha-box">' +
           '<span>验证：</span>' +

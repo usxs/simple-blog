@@ -20,6 +20,7 @@ const { fetchProbeServers } = require('./backend/probe-source');
 const transfer = require('./backend/transfer');
 const migrateImport = require('./backend/migrate-import');
 const ssr = require('./web/ssr');
+const turnstile = require('./backend/turnstile');
 
 // 评论提交的全局并发闸门：同一时刻最多处理 20 条，超出的直接快速失败，避免写队列堆到超时
 let pendingSubmits = 0;
@@ -137,6 +138,7 @@ const MIME_MAP = {
   '.txt': 'text/plain; charset=utf-8',
   '.md': 'text/markdown; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.zip': 'application/zip',
   '.7z': 'application/x-7z-compressed',
   '.tar': 'application/x-tar',
@@ -149,6 +151,16 @@ const MIME_MAP = {
 const WEB_DIR = path.join(__dirname, 'web');
 // 有 web/index.html 说明本进程同时托管前端（V3 单体版）；V1/V2 的前端在 Cloudflare Pages 上
 const MONOLITH = fs.existsSync(path.join(WEB_DIR, 'index.html'));
+// 这些文件直接放在 web 根目录，供浏览器与搜索引擎抓取（/favicon.ico 是搜索结果显示站点的关键）
+const PUBLIC_ICON_FILES = new Set([
+  '/favicon.ico',
+  '/favicon.svg',
+  '/favicon-32.png',
+  '/favicon-192.png',
+  '/favicon-512.png',
+  '/apple-touch-icon.png',
+  '/manifest.webmanifest'
+]);
 const OWN_VERSION = (function () {
   try {
     return String(JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version || '');
@@ -246,7 +258,8 @@ function serveSingleFile(res, filePath, contentType) {
     return res.end('Not Found');
   }
   res.writeHead(200, { 'Content-Type': contentType });
-  res.end(fs.readFileSync(filePath, 'utf8'));
+  // 不加 encoding：HTML/CSS/JS 与 PNG/ICO 都按原始字节返回
+  res.end(fs.readFileSync(filePath));
 }
 
 const server = http.createServer((req, res) => {
@@ -314,6 +327,11 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && (pathname === '/app.js' || pathname === '/style.css' || pathname === '/status.css' || pathname === '/status.js')) {
     res.setHeader('Cache-Control', pathname === '/status.css' || pathname === '/status.js' ? 'public, max-age=3600' : assetCacheOf(reqUrl));
     return serveSingleFile(res, path.join(WEB_DIR, pathname.slice(1)), MIME_MAP[path.extname(pathname)]);
+  }
+  // 搜索引擎与浏览器直接请求的站点图标（含 /favicon.ico），必须由主站真实返回而不是 404
+  if (req.method === 'GET' && PUBLIC_ICON_FILES.has(pathname)) {
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return serveSingleFile(res, path.join(WEB_DIR, pathname.slice(1)), MIME_MAP[path.extname(pathname)] || 'application/octet-stream');
   }
   // 状态页：直接访问 /404.html 等也要能打开（SPA 内部出错时同样跳这些地址）
   if (req.method === 'GET' && (pathname === '/404.html' || pathname === '/401.html' || pathname === '/403.html' || pathname === '/500.html')) {
@@ -435,11 +453,14 @@ const server = http.createServer((req, res) => {
 
   // 3.6 站点展示信息（公开）：GET /api/site —— 前端启动时读取名称/标题/副标题
   if (req.method === 'GET' && pathname === '/api/site') {
+    const turnstileConfig = turnstile.config();
+    const siteInfo = auth.getSiteInfo();
+    if (turnstileConfig.enabled) siteInfo.turnstileSiteKey = turnstileConfig.siteKey;
     res.writeHead(200, {
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'no-cache, must-revalidate'
     });
-    return res.end(JSON.stringify({ ok: true, site: auth.getSiteInfo() }));
+    return res.end(JSON.stringify({ ok: true, site: siteInfo }));
   }
 
   // 3.6 友链列表（公开，只返回已通过的）: GET /api/links
@@ -453,18 +474,37 @@ const server = http.createServer((req, res) => {
 
   // 3.6.1 申请友链（公开，进后台审核）: POST /api/links/apply
   if (req.method === 'POST' && pathname === '/api/links/apply') {
-    return auth.readJsonBody(req, res, function (data) {
-      const result = links.apply(data || {}, getClientIp(req));
-      if (!result.ok) {
-        const status = result.retryAfter ? 429 : 400;
-        if (result.retryAfter) res.setHeader('Retry-After', String(result.retryAfter));
-        res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
-        return res.end(JSON.stringify({ ok: false, error: result.error, retryAfter: result.retryAfter }));
+    return auth.readJsonBody(req, res, async function (data) {
+      try {
+        const check = await turnstile.verify({
+          token: data && data.turnstileToken,
+          ip: getClientIp(req),
+          action: 'link'
+        });
+        if (!check.ok) {
+          const status = check.unavailable ? 503 : 400;
+          if (check.unavailable) res.setHeader('Retry-After', '30');
+          res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+          return res.end(JSON.stringify({ ok: false, error: check.error }));
+        }
+
+        const result = links.apply(data || {}, getClientIp(req));
+        if (!result.ok) {
+          const status = result.retryAfter ? 429 : 400;
+          if (result.retryAfter) res.setHeader('Retry-After', String(result.retryAfter));
+          res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+          return res.end(JSON.stringify({ ok: false, error: result.error, retryAfter: result.retryAfter }));
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: true, item: result.item }));
+        notify.onLinkApply(result.item).catch(function () {});
+        console.warn('[links] 新的友链申请：' + result.item.name + ' · ' + result.item.url);
+      } catch (error) {
+        if (!res.headersSent) {
+          res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ ok: false, error: '提交失败，请稍后再试' }));
+        }
       }
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ ok: true, item: result.item }));
-      notify.onLinkApply(result.item).catch(function () {});
-      console.warn('[links] 新的友链申请：' + result.item.name + ' · ' + result.item.url);
     });
   }
 
@@ -814,7 +854,29 @@ const server = http.createServer((req, res) => {
           return res.end(JSON.stringify({ ok: true }));
         }
 
-        if (!verifyMathCaptcha(data.captchaToken, data.captchaAnswer)) {
+        const turnstileConfig = turnstile.config();
+        if (turnstileConfig.enabled) {
+          const check = await turnstile.verify({
+            token: data.turnstileToken,
+            ip: ip,
+            action: 'comment'
+          });
+          if (!check.ok) {
+            if (!check.unavailable) {
+              rec.failCount += 1;
+              rec.lastActive = now;
+              if (rec.failCount >= 5) {
+                rec.blockedUntil = now + 15 * 60 * 1000;
+                rec.failCount = 0;
+              }
+              ipRateStore.set(ip, rec);
+            } else {
+              res.setHeader('Retry-After', '30');
+            }
+            res.writeHead(check.unavailable ? 503 : 400, { 'Content-Type': 'application/json; charset=utf-8' });
+            return res.end(JSON.stringify({ ok: false, error: check.error }));
+          }
+        } else if (!verifyMathCaptcha(data.captchaToken, data.captchaAnswer)) {
           rec.failCount += 1;
           rec.lastActive = now;
           if (rec.failCount >= 5) {

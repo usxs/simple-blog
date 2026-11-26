@@ -6,6 +6,7 @@ var SITE_CONFIG = {
   homeBio: '这里是我的个人博客，记录技术、折腾与生活。',
   // V3 前后端不分离：接口就在同一个域名下，留空即同源
   apiBaseUrl: '',
+  turnstileSiteKey: '',
   whitelistEnabled: true,
   probeUrl: '',
   icpText: '',
@@ -47,6 +48,60 @@ var ICON_SVGS = {
   coffee: '<path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" x2="6" y1="2" y2="4"/><line x1="10" x2="10" y1="2" y2="4"/><line x1="14" x2="14" y1="2" y2="4"/>',
   image: '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>'
 };
+
+// ---------------- Cloudflare Turnstile ----------------
+// 只有后端 /api/site 下发 siteKey 时才加载；未配置时评论继续使用算术验证码。
+var TURNSTILE_SCRIPT_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+
+function loadTurnstileScript() {
+  if (window.turnstile) return Promise.resolve(window.turnstile);
+  if (window.__turnstileLoading) return window.__turnstileLoading;
+  window.__turnstileLoading = new Promise(function (resolve, reject) {
+    var script = document.createElement('script');
+    script.src = TURNSTILE_SCRIPT_SRC;
+    script.async = true;
+    script.defer = true;
+    script.onload = function () {
+      if (window.turnstile) resolve(window.turnstile);
+      else reject(new Error('Turnstile 未加载'));
+    };
+    script.onerror = function () { reject(new Error('Turnstile 加载失败')); };
+    document.head.appendChild(script);
+  }).catch(function (err) {
+    window.__turnstileLoading = null;
+    throw err;
+  });
+  return window.__turnstileLoading;
+}
+
+function turnstileTheme() {
+  return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+}
+
+function renderTurnstile(container, action, onToken) {
+  if (!container || !SITE_CONFIG.turnstileSiteKey) return Promise.resolve(null);
+  return loadTurnstileScript().then(function (api) {
+    if (!api || !container) return null;
+    container.hidden = false;
+    container.innerHTML = '';
+    return api.render(container, {
+      sitekey: SITE_CONFIG.turnstileSiteKey,
+      action: action,
+      theme: turnstileTheme(),
+      callback: function (token) { onToken(token || ''); },
+      'expired-callback': function () { onToken(''); },
+      'error-callback': function () { onToken(''); }
+    });
+  }).catch(function () {
+    container.hidden = true;
+    return null;
+  });
+}
+
+function resetTurnstile(widget) {
+  if (widget === null || widget === undefined || !window.turnstile) return;
+  try { window.turnstile.reset(widget); } catch (e) { /* 忽略 */ }
+}
 
 var ICON_FALLBACK = {
   home: { name: '首页', icon: 'home' },
@@ -287,6 +342,7 @@ function applySitePayload(site) {
   if (!site) return;
   var ssrTitled = Boolean(window.__SSR_META__ && window.__SSR_META__.title);
 
+  SITE_CONFIG.turnstileSiteKey = site.turnstileSiteKey ? String(site.turnstileSiteKey) : '';
   SITE_CONFIG.whitelistEnabled = site.whitelistEnabled !== false;
   if (site.name) {
     SITE_CONFIG.name = String(site.name);
@@ -340,14 +396,16 @@ if (cachedSiteData && cachedSiteData.site) {
 // 2) 后台拉最新配置；失败就沿用缓存（后端挂了前端照常可用）
 (function applyRemoteSiteInfo() {
   var base = String(SITE_CONFIG.apiBaseUrl || '').replace(/\/+$/, '');
-  if (!base) { SITE_CONFIG.siteReady = true; return; }
+  // 前后端不分离时 base 为空，也要拉同源 /api/site（Turnstile siteKey 从这里下发）
   SITE_CONFIG.siteReadyPromise = fetch(base + '/api/site', { cache: 'no-store' })
     .then(function (res) { return res.ok ? res.json() : null; })
     .then(function (data) {
       if (!data || !data.ok || !data.site) return;
       var site = data.site;
       var nextUpdatedAt = Number(site.updatedAt || 0);
-      var changed = !SITE_CONFIG.hasConfig || nextUpdatedAt !== SITE_CONFIG.cacheUpdatedAt;
+      var nextTurnstileKey = site.turnstileSiteKey ? String(site.turnstileSiteKey) : '';
+      var changed = !SITE_CONFIG.hasConfig || nextUpdatedAt !== SITE_CONFIG.cacheUpdatedAt ||
+        nextTurnstileKey !== (SITE_CONFIG.turnstileSiteKey || '');
       SITE_CONFIG.cacheUpdatedAt = nextUpdatedAt;
       SITE_CONFIG.hasConfig = true;
       if (!changed) return;
@@ -764,6 +822,9 @@ function refreshHomeSocials() {
 var commentBox = {
   currentPostId: '',
   captchaToken: '',
+  turnstileWidget: null,
+  turnstileToken: '',
+  turnstileLoading: null,
   replyToId: '',
   replyToAuthor: '',
   commentsMap: {},
@@ -807,7 +868,44 @@ var commentBox = {
     }
   },
 
+  setupTurnstile: async function () {
+    if (!SITE_CONFIG.turnstileSiteKey) return;
+    var slot = document.getElementById('comment-turnstile');
+    if (!slot) return;
+    if (this.turnstileWidget !== null) {
+      resetTurnstile(this.turnstileWidget);
+      this.turnstileToken = '';
+      return;
+    }
+    if (this.turnstileLoading) return this.turnstileLoading;
+    var self = this;
+    this.turnstileLoading = renderTurnstile(slot, 'comment', function (token) {
+      self.turnstileToken = token;
+    }).then(function (widget) {
+      self.turnstileWidget = widget;
+      self.turnstileLoading = null;
+      if (widget === null) {
+        var msgEl = document.getElementById('comment-feedback');
+        if (msgEl) msgEl.textContent = '人机验证加载失败，请刷新页面后重试';
+      }
+      return widget;
+    });
+    return this.turnstileLoading;
+  },
+
+  resetTurnstile: function () {
+    resetTurnstile(this.turnstileWidget);
+    this.turnstileToken = '';
+  },
+
   refreshCaptcha: async function () {
+    var captchaBox = document.querySelector('#comment-form-box .captcha-box');
+    if (SITE_CONFIG.turnstileSiteKey) {
+      if (captchaBox) captchaBox.hidden = true;
+      await this.setupTurnstile();
+      return;
+    }
+    if (captchaBox) captchaBox.hidden = false;
     var qEl = document.getElementById('captcha-question');
     if (!qEl) return;
     if (this.captchaBusy) return;                                 // 防止连点刷题
@@ -988,6 +1086,7 @@ var commentBox = {
     var contentEl = document.getElementById('comment-content');
     var answerEl = document.getElementById('captcha-answer');
     var hpEl = document.getElementById('comment-hp');
+    var turnstileEnabled = Boolean(SITE_CONFIG.turnstileSiteKey);
     var btnEl = document.getElementById('comment-submit-btn');
     var msgEl = document.getElementById('comment-feedback');
 
@@ -1001,7 +1100,12 @@ var commentBox = {
       msgEl.textContent = '请填写昵称和评论内容';
       return;
     }
-    if (!answer) {
+    if (turnstileEnabled) {
+      if (!this.turnstileToken) {
+        msgEl.textContent = '请先完成人机验证';
+        return;
+      }
+    } else if (!answer) {
       msgEl.textContent = '请填写算术题计算结果';
       return;
     }
@@ -1024,6 +1128,7 @@ var commentBox = {
           content: content,
           captchaToken: this.captchaToken,
           captchaAnswer: answer,
+          turnstileToken: this.turnstileToken,
           website_hp: honeypot
         })
       });
@@ -1035,6 +1140,7 @@ var commentBox = {
         if (res.status === 429 && resData.retryAfter) {
           this.startSubmitCooldown(resData.retryAfter);
         }
+        if (turnstileEnabled) this.resetTurnstile();
         if (res.status !== 429) this.refreshCaptcha();
         if (answerEl) answerEl.value = '';
         return;
@@ -1680,6 +1786,7 @@ var router = {
             '</div>' +
             '<input type="text" id="comment-hp" style="display:none;" tabindex="-1" autocomplete="off" />' +
             '<textarea class="comment-textarea" id="comment-content" maxlength="1000" placeholder="写下您的想法... *"></textarea>' +
+            '<div class="turnstile-slot" id="comment-turnstile" hidden></div>' +
             '<div class="comment-submit-row">' +
               '<div class="captcha-box">' +
                 '<span>验证：</span>' +
@@ -1882,6 +1989,7 @@ renderLinksApplyView: function (container) {
             '<span class="links-label">一句话介绍<span class="links-optional">选填</span></span>' +
             '<input class="links-input" id="friend-note" type="text" name="note" placeholder="写点关于这个站的说明" maxlength="80" />' +
           '</label>' +
+          '<div class="turnstile-slot" id="links-turnstile" hidden></div>' +
           '<input class="links-hp" id="friend-website" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />' +
           '<div class="links-actions">' +
             '<button class="btn btn-primary" id="links-submit" type="submit">提交申请</button>' +
@@ -1901,6 +2009,17 @@ renderLinksApplyView: function (container) {
       feedback.setAttribute('data-ok', ok ? 'true' : 'false');
     }
 
+    var linksTurnstileToken = '';
+    var linksTurnstileWidget = null;
+    if (SITE_CONFIG.turnstileSiteKey) {
+      renderTurnstile(document.getElementById('links-turnstile'), 'link', function (token) {
+        linksTurnstileToken = token;
+      }).then(function (widget) {
+        linksTurnstileWidget = widget;
+        if (widget === null) setFeedback('人机验证加载失败，请刷新页面后重试', false);
+      });
+    }
+
     form.addEventListener('submit', async function (ev) {
       ev.preventDefault();
       var url = (document.getElementById('friend-url') || {}).value || '';
@@ -1912,6 +2031,9 @@ renderLinksApplyView: function (container) {
 
       if (!url.trim()) return setFeedback('请填写网站地址', false);
       if (!name.trim()) return setFeedback('请填写网站名', false);
+      if (SITE_CONFIG.turnstileSiteKey && !linksTurnstileToken) {
+        return setFeedback('请先完成人机验证', false);
+      }
 
       submitBtn.disabled = true;
       submitBtn.textContent = '提交中…';
@@ -1920,7 +2042,7 @@ renderLinksApplyView: function (container) {
         var res = await fetch(SITE_CONFIG.apiBaseUrl + '/api/links/apply', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: url.trim(), name: name.trim(), icon: icon.trim(), note: note.trim(), email: email.trim(), website: hp })
+          body: JSON.stringify({ url: url.trim(), name: name.trim(), icon: icon.trim(), note: note.trim(), email: email.trim(), website: hp, turnstileToken: linksTurnstileToken })
         });
         var data = await res.json().catch(function () { return {}; });
         if (res.ok && data.ok) {
@@ -1929,8 +2051,16 @@ renderLinksApplyView: function (container) {
         } else {
           setFeedback((data && data.error) || '提交失败，请稍后再试', false);
         }
+        if (SITE_CONFIG.turnstileSiteKey) {
+          resetTurnstile(linksTurnstileWidget);
+          linksTurnstileToken = '';
+        }
       } catch (e) {
         setFeedback('网络不太顺畅，请稍后再试', false);
+        if (SITE_CONFIG.turnstileSiteKey) {
+          resetTurnstile(linksTurnstileWidget);
+          linksTurnstileToken = '';
+        }
       } finally {
         submitBtn.disabled = false;
         submitBtn.textContent = '提交申请';

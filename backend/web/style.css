@@ -1301,6 +1301,21 @@ button, input, textarea {
   flex-wrap: wrap;
 }
 
+.turnstile-slot {
+  margin: 10px 0 2px;
+  min-height: 0;
+  line-height: 0;
+  overflow: hidden;
+}
+
+.turnstile-slot[hidden] {
+  display: none;
+}
+
+.turnstile-slot iframe {
+  max-width: 100%;
+}
+
 .captcha-box {
   display: inline-flex;
   align-items: center;

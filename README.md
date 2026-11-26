@@ -40,6 +40,17 @@
 - V2 的数据库结构与 V3 完全一致，`blog.db` 直接可用；从 V1 文件结构迁移时用 `node scripts/migrate-v1-to-v2.js`。
 - V3 的部署见 [部署 V3 单体版](https://usxs.github.io/simple-blog/start/monolith/)。
 
+### 为什么没有「一键部署到 Cloudflare Workers」按钮
+
+短链和临时邮箱可以一键部署到 Workers；简单博客不行。V3 是一个依赖 Node 文件系统、SQLite 与 `sharp` 的长期运行进程，V1 / V2 也至少需要一个能跑 Node 的后端，这些都不是 Workers 运行时能直接承载的。Cloudflare Pages 只负责前端静态资源（V1 / V2），后端仍需部署在 VPS、Docker 或其它 Node 环境。
+
+因此这里提供的是两条实际可用的路径：
+
+- **V3**：用 Docker 在 VPS 上跑一个进程，见下文「部署后端」与官方文档；
+- **V1 / V2**：后端跑在 Node 主机上，前端按「部署前端」一节接到 Cloudflare Pages，Pages 支持 Git 自动发布，但没有 Workers 那种一键创建全部资源的按钮。
+
+如果以后 Cloudflare 的运行时能完整承载 SQLite 文件与图片处理，再考虑补一键部署。
+
 ---
 
 ## 界面预览
@@ -521,6 +532,7 @@ Pages 项目 → **Custom domains** → 添加 `www.example.com`，按提示在 
 | `SITE_PUBLIC_URL` | 是 | 前端站点地址，写进 sitemap 与推送的 URL |
 | `BACKEND_PUBLIC_URL` | 是 | 后端地址，写进 `robots.txt` 的 Sitemap 行 |
 | `CAPTCHA_SECRET` | 否 | 留空自动生成并持久化到 `data/captcha-secret.json` |
+| `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` | 否 | Cloudflare Turnstile 免费人机验证；两个都填才启用，评论与友链申请生效。留空时评论继续用算术验证码 |
 | `INDEXNOW_KEY` | 否 | 也可在后台「管理 → 搜索引擎推送」填写（优先于环境变量）；填了才会在发布/删除文章后向 Bing 等推送 |
 | `INDEXNOW_KEY_LOCATION` | 否 | key 文件完整 URL，默认 `${SITE_PUBLIC_URL}/<KEY>.txt` |
 | `PROBE_ENABLED` | 否 | 是否启用前台探针数据，`0` 关闭（默认启用） |
@@ -585,6 +597,23 @@ GET  /api/admin/indexnow  POST /api/admin/indexnow  # IndexNow 密钥
 ```
 
 完整参数见 [docs/API.md](docs/API.md)。
+
+## 开启 Turnstile（可选）
+
+评论区和友链申请都可以接入 Cloudflare Turnstile 的免费人机验证。未配置时评论继续使用原来的算术验证码，友链保持原有的 IP 频率限制。
+
+1. 在 Cloudflare 控制台进入 **Turnstile → Add site**，把前台站点域名加进去，拿到 Site Key 和 Secret Key。
+2. 在 `backend/.env` 中设置：
+
+   ```bash
+   TURNSTILE_SITE_KEY=你的站点密钥
+   TURNSTILE_SECRET_KEY=你的私钥
+   ```
+
+3. 重启 Node 后端。前端会从同源 `/api/site` 读取站点密钥，在评论框和友链申请表单里渲染验证组件。
+4. 服务端分别用 action `comment` 和 `link` 调用 Siteverify；验证失败会拒绝提交，不会进入待审核队列。
+
+只有两个变量都设置才会启用。Turnstile 是免费的，不限制评论数量；它的脚本和校验请求都发往 `challenges.cloudflare.com`。如果站点通过反向代理访问，确保 `/api/site` 与前台同源，或前端配置的 API 地址可达。
 
 ## 安全说明
 
