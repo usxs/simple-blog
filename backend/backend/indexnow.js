@@ -104,14 +104,11 @@ function notifyIndexNow(urls) {
     urlList: list.slice(0, 10000)
   };
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 4000);
-
   fetch(ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
     body: JSON.stringify(payload),
-    signal: controller.signal
+    signal: AbortSignal.timeout(4000)
   })
     .then(res => {
       if (!res.ok && res.status !== 200 && res.status !== 202) {
@@ -121,7 +118,6 @@ function notifyIndexNow(urls) {
     .catch(err => {
       console.warn('[indexnow] 推送失败（不影响保存）：' + (err && err.message ? err.message : err));
     })
-    .finally(() => clearTimeout(timer));
 }
 
 module.exports = {

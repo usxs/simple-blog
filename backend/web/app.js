@@ -1,4 +1,9 @@
+function isImeEnter(e) {
+  return !!(e && (e.isComposing || e.keyCode === 229));
+}
+
 var SITE_CONFIG = {
+
   name: '简单博客',
   owner: '博主',
   avatarText: '简',
@@ -83,7 +88,7 @@ function renderTurnstile(container, action, onToken) {
   return loadTurnstileScript().then(function (api) {
     if (!api || !container) return null;
     container.hidden = false;
-    container.innerHTML = '';
+    container.replaceChildren();
     return api.render(container, {
       sitekey: SITE_CONFIG.turnstileSiteKey,
       action: action,
@@ -287,19 +292,41 @@ function getVerifiedBadgeSvg() {
 function syncAvatarFavicon() {
   var avatarEl = document.getElementById('site-avatar');
   var rawText = avatarEl ? avatarEl.textContent : SITE_CONFIG.avatarText;
-  var charText = String(rawText || 'S').trim().slice(0, 2);
+  var chars = Array.from(String(rawText || 'S').trim() || 'S').slice(0, 2).join('');
   var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  var canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  var ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  ctx.clearRect(0, 0, 128, 128);
   var bg = isDark ? '#FFFFFF' : '#18181B';
   var fg = isDark ? '#18181B' : '#F4F4F5';
-  var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 34 34">' +
-    '<rect width="34" height="34" rx="7" fill="' + bg + '"/>' +
-    '<text x="50%" y="53%" dominant-baseline="central" text-anchor="middle" fill="' + fg + '" font-family="monospace" font-weight="600" font-size="18">' +
-    charText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') +
-    '</text></svg>';
+  var r = 26;
+  ctx.beginPath();
+  ctx.moveTo(r, 0);
+  ctx.arcTo(128, 0, 128, 128, r);
+  ctx.arcTo(128, 128, 0, 128, r);
+  ctx.arcTo(0, 128, 0, 0, r);
+  ctx.arcTo(0, 0, 128, 0, r);
+  ctx.closePath();
+  ctx.fillStyle = bg;
+  ctx.fill();
+  ctx.fillStyle = fg;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = '700 ' + (chars.length > 1 ? 62 : 94) + 'px -apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,"PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.fillText(chars, 64, 67);
   var link = document.getElementById('dynamic-favicon');
   if (link) {
-    link.href = 'data:image/svg+xml,' + encodeURIComponent(svg);
+    link.type = 'image/png';
+    link.href = canvas.toDataURL('image/png');
   }
+}
+
+if (window.MutationObserver) {
+  var avatarNode = document.getElementById('site-avatar');
+  if (avatarNode) new MutationObserver(syncAvatarFavicon).observe(avatarNode, { childList: true, characterData: true, subtree: true });
 }
 
 // SSR 页自带本页专属标题（文章/列表页由 Functions 注入），普通加载用站点名
@@ -554,7 +581,7 @@ function dateMsOf(item) {
 // 统一排序：发布日期（date）优先从新到旧，其次 mtime，最后 id
 function sortNewestFirst(arr) {
   if (!Array.isArray(arr)) return [];
-  return arr.slice().sort(function (a, b) {
+  return arr.toSorted(function (a, b) {
     var ta = dateMsOf(a);
     var tb = dateMsOf(b);
     if (tb !== ta) return tb - ta;
@@ -567,7 +594,7 @@ function sortNewestFirst(arr) {
 
 function sortOldestFirst(arr) {
   if (!Array.isArray(arr)) return [];
-  return arr.slice().sort(function (a, b) {
+  return arr.toSorted(function (a, b) {
     var ta = Number(a && a.mtime) || 0;
     var tb = Number(b && b.mtime) || 0;
     if (ta !== tb) return ta - tb;
@@ -662,6 +689,8 @@ var theme = {
     document.documentElement.setAttribute('data-theme', resolved);
     document.documentElement.setAttribute('data-theme-mode', mode);
     document.documentElement.style.colorScheme = resolved;
+    var colorSchemeMeta = document.querySelector('meta[name="color-scheme"]');
+    if (colorSchemeMeta) colorSchemeMeta.setAttribute('content', resolved);
     this.updateButtons(mode);
     syncAvatarFavicon();
   },
@@ -1604,7 +1633,7 @@ var router = {
     });
     input.addEventListener('keydown', function (evt) {
       if (evt.isComposing || self.imeComposing) return;
-      if (evt.key === 'Enter') {
+      if (evt.key === 'Enter' && !evt.isComposing && !isImeEnter(evt)) {
         evt.preventDefault();
         self.onPostSearchInput(input.value, null);
       } else if (evt.key === 'Escape') {
@@ -1910,7 +1939,7 @@ var router = {
         }
         btn.addEventListener('click', tryUnlock);
         input.addEventListener('keydown', function (ev) {
-          if (ev.key === 'Enter') { ev.preventDefault(); tryUnlock(); }
+          if (ev.key === 'Enter' && !ev.isComposing && !isImeEnter(ev)) { ev.preventDefault(); tryUnlock(); }
         });
       })(cards[i]);
     }
@@ -2423,7 +2452,7 @@ renderLinksApplyView: function (container) {
   function closeLightbox() {
     if (!mask) return;
     mask.className = 'md-lightbox';
-    mask.querySelector('.md-lightbox-body').innerHTML = '';
+    mask.querySelector('.md-lightbox-body').replaceChildren();
     document.body.classList.remove('md-lightbox-locked');
   }
 

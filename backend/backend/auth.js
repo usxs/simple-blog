@@ -1312,7 +1312,7 @@ function listSessions(req) {
   const now = Date.now();
   return loadStore().sessions
     .filter(s => s.expiresAt > now)
-    .sort((a, b) => (Math.max(b.lastSeenAt || 0, lastSeenMem.get(b.id) || 0)) - (Math.max(a.lastSeenAt || 0, lastSeenMem.get(a.id) || 0)))
+    .toSorted((a, b) => (Math.max(b.lastSeenAt || 0, lastSeenMem.get(b.id) || 0)) - (Math.max(a.lastSeenAt || 0, lastSeenMem.get(a.id) || 0)))
     .map(s => sessionView(s, currentId, now, false));
 }
 
@@ -1324,7 +1324,7 @@ function sessionOverview(req) {
   const store = loadStore();
   const activeRecs = store.sessions
     .filter(s => s.expiresAt > now)
-    .sort((a, b) => (Math.max(b.lastSeenAt || 0, lastSeenMem.get(b.id) || 0)) - (Math.max(a.lastSeenAt || 0, lastSeenMem.get(a.id) || 0)));
+    .toSorted((a, b) => (Math.max(b.lastSeenAt || 0, lastSeenMem.get(b.id) || 0)) - (Math.max(a.lastSeenAt || 0, lastSeenMem.get(a.id) || 0)));
   const active = activeRecs.map(s => sessionView(s, currentId, now, false));
 
   // 历史会话只展示「已经不在线、且不是当前设备」的记录：
@@ -1334,8 +1334,7 @@ function sessionOverview(req) {
   const seenHistoryKeys = new Set();
   const historyRecs = [];
   store.history
-    .slice()
-    .sort((a, b) => (b.endedAt || 0) - (a.endedAt || 0))
+    .toSorted((a, b) => (b.endedAt || 0) - (a.endedAt || 0))
     .forEach(h => {
       const key = sessionDeviceKey(h);
       if (key) {

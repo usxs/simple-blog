@@ -229,23 +229,16 @@ async function pushBundle(payload) {
 
   const mode = payload.mode === 'merge' ? 'merge' : 'replace';
   const endpoint = target + '/api/migrate/import?mode=' + mode;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), PUSH_TIMEOUT_MS);
-  let resp;
-  try {
-    resp = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/zip',
-        'X-Migrate-Token': token,
-        'X-Portable-Format': portable.PORTABLE_FORMAT
-      },
-      body: bundle.buffer,
-      signal: controller.signal
-    });
-  } finally {
-    clearTimeout(timer);
-  }
+  const resp = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/zip',
+      'X-Migrate-Token': token,
+      'X-Portable-Format': portable.PORTABLE_FORMAT
+    },
+    body: bundle.buffer,
+    signal: AbortSignal.timeout(PUSH_TIMEOUT_MS)
+  });
 
   const text = await resp.text();
   let data;

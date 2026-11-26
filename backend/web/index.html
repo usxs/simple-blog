@@ -2,6 +2,7 @@
 <html lang="zh-CN" data-theme="light" data-theme-mode="auto">
 <head>
   <meta charset="UTF-8" />
+  <meta name="color-scheme" content="light dark" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>简单博客</title>
   <!-- SEO：首页默认元信息。文章页/列表页由 Cloudflare Pages Functions 在服务端替换为本页专属元信息。
@@ -22,7 +23,7 @@
   <script type="application/ld+json">
   {"@context":"https://schema.org","@type":"WebSite","name":"简单博客","url":"https://example.com/","inLanguage":"zh-CN"}
   </script>
-<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png?v=5" id="dynamic-favicon">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png?v=5" id="dynamic-favicon">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=5">
   <link rel="manifest" href="/manifest.webmanifest">
   <script>
@@ -43,9 +44,6 @@
       }
     })();
   </script>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet" />
   <!-- 首屏防闪：用上次缓存的栏目开关先隐藏已关闭的栏目（app.js 随后会再校正名称/图标/顺序） -->
   <script>
     (function () {
@@ -69,7 +67,7 @@
       } catch (e) { /* 缓存不可用时忽略，等 /api/site 回来再隐藏 */ }
     })();
   </script>
-  <link rel="stylesheet" href="/style.css?v=20261125-2" />
+  <link rel="stylesheet" href="/style.css?v=20261127-1" />
   <link rel="stylesheet" href="/status.css?v=20261125-2" />
 </head>
 <body>
@@ -209,7 +207,7 @@
   </nav>
 
   <script src="/markdown.js?v=20261125-2"></script>
-  <script src="/app.js?v=20261125-2"></script>
+  <script src="/app.js?v=20261127-2"></script>
   <button class="to-top" id="back-to-top" type="button" aria-label="回到顶部" data-show="false">
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
   </button>

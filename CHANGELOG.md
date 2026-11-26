@@ -3,6 +3,21 @@
 本项目的所有重要变更记录在此文件中，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [3.0.1-v3] - 2026-11-27
+
+### 修复
+
+- 站点图标改为浅色/深色双套：白天黑底白标、夜间白底黑标；前台、后台、状态页和 favicon 随主题切换同步更新
+- 修复 favicon 的 HTML 链接缺少 id、SVG data URI 未编码，导致动态图标从未生效或加载失败
+- 401/403/404/500 状态页补 `apple-touch-icon` 与 `color-scheme`，图标版本与主题逻辑保持一致
+
+### 变更
+
+- 移除 Google Fonts（Inter / JetBrains Mono / Noto Sans SC），改用系统字体栈，减少外部请求与首屏阻塞
+- 后台编辑器：中文输入法回车不再误触发提交；文章、会话、友链列表改用稳定排序；深拷贝改用 `structuredClone`
+- IndexNow、Turnstile、备份/WebDAV、迁移推送的超时改用 `AbortSignal.timeout`，错误保留 `cause`；备份把 `TimeoutError` 也识别为连接超时
+- 后台列表链接改为常显下划线（hover 加深）；前后台补 `color-scheme`，滚动条与表单控件跟随主题
+
 ## [1.18.0] - 2026-11-25
 
 ### 新增

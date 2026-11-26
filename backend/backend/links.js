@@ -40,7 +40,7 @@ function writeStore(store) {
   try {
     kvfile.writeJson(LINKS_FILE, { items: items }, { mode: 0o644 });
   } catch (e) {
-    throw new Error('友链数据写入失败：' + (e.message || e));
+    throw new Error('友链数据写入失败：' + (e.message || e), { cause: e });
   }
 }
 
@@ -146,7 +146,7 @@ function listApproved() {
 }
 
 function listForAdmin() {
-  const items = readStore().items.slice().sort(function (a, b) {
+  const items = readStore().items.toSorted(function (a, b) {
     if (a.status !== b.status) {
       const rank = { pending: 0, approved: 1, rejected: 2 };
       return rank[a.status] - rank[b.status];

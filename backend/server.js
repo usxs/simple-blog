@@ -38,15 +38,12 @@ function fetchDeployVersion(callback) {
     return callback(null, deployVersionCache.info);
   }
   const target = PUBLIC_SITE_URL.replace(/\/+$/, '') + '/version';
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 6000);
-  fetch(target, { signal: controller.signal, headers: { 'User-Agent': 'simple-blog-backend/1.0' } })
+  fetch(target, { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': 'simple-blog-backend/1.0' } })
     .then((response) => {
       if (!response.ok) throw new Error('HTTP ' + response.status);
       return response.json();
     })
     .then((data) => {
-      clearTimeout(timer);
       const info = {
         version: String((data && data.version) || ''),
         branch: String((data && data.branch) || ''),
@@ -57,7 +54,6 @@ function fetchDeployVersion(callback) {
       callback(null, info);
     })
     .catch((err) => {
-      clearTimeout(timer);
       callback(err);
     });
 }

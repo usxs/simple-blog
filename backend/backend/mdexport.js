@@ -99,7 +99,7 @@ function slugOf(post) {
 }
 
 function sortedPosts(posts) {
-  return (posts || []).slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+  return (posts || []).toSorted((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
 }
 
 function baseFields(post) {

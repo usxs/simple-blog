@@ -1,5 +1,9 @@
 document.getElementById('year').textContent = String(new Date().getFullYear());
 
+function isImeEnter(e) {
+  return !!(e && (e.isComposing || e.keyCode === 229));
+}
+
 function getVerifiedBadgeSvg() {
   return '<span class="verified-badge" title="站长认证徽章">' +
     '<svg viewBox="0 0 24 24" aria-hidden="true">' +
@@ -11,19 +15,43 @@ function getVerifiedBadgeSvg() {
 
 function syncAvatarFavicon() {
   var avatarEl = document.getElementById('admin-avatar');
-  var charText = String(avatarEl ? avatarEl.textContent : 'S').trim().slice(0, 2);
+  var rawText = avatarEl ? avatarEl.textContent : 'S';
+  var chars = Array.from(String(rawText || 'S').trim() || 'S').slice(0, 2).join('');
   var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  var canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  var ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  ctx.clearRect(0, 0, 128, 128);
   var bg = isDark ? '#FFFFFF' : '#18181B';
   var fg = isDark ? '#18181B' : '#F4F4F5';
-  var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 34 34">' +
-    '<rect width="34" height="34" rx="7" fill="' + bg + '"/>' +
-    '<text x="50%" y="53%" dominant-baseline="central" text-anchor="middle" fill="' + fg + '" font-family="monospace" font-weight="600" font-size="18">' +
-    charText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') +
-    '</text></svg>';
+  var r = 26;
+  ctx.beginPath();
+  ctx.moveTo(r, 0);
+  ctx.arcTo(128, 0, 128, 128, r);
+  ctx.arcTo(128, 128, 0, 128, r);
+  ctx.arcTo(0, 128, 0, 0, r);
+  ctx.arcTo(0, 0, 128, 0, r);
+  ctx.closePath();
+  ctx.fillStyle = bg;
+  ctx.fill();
+  ctx.fillStyle = fg;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = '700 ' + (chars.length > 1 ? 62 : 94) + 'px -apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,"PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.fillText(chars, 64, 67);
   var link = document.getElementById('dynamic-favicon');
-  if (link) link.href = 'data:image/svg+xml,' + encodeURIComponent(svg);
+  if (link) {
+    link.type = 'image/png';
+    link.href = canvas.toDataURL('image/png');
+  }
 }
-syncAvatarFavicon();
+
+if (window.MutationObserver) {
+  var avatarNode = document.getElementById('admin-avatar');
+  if (avatarNode) new MutationObserver(syncAvatarFavicon).observe(avatarNode, { childList: true, characterData: true, subtree: true });
+}
 
 // 侧边栏头像文字 + favicon 同步（头像文字最多 2 字，空则回退 S）
 function setSidebarAvatar(text) {
@@ -48,7 +76,7 @@ function adminDateMsOf(item) {
 
 function sortNewestFirst(arr) {
   if (!Array.isArray(arr)) return [];
-  return arr.slice().sort(function (a, b) {
+  return arr.toSorted(function (a, b) {
     var da = adminDateMsOf(a);
     var db = adminDateMsOf(b);
     if (db !== da) return db - da;
@@ -224,9 +252,16 @@ var cms = {
   sessionArchiveKind: 'history',
 
   init: async function () {
+    var self = this;
     this.ensureDeviceIdentity();
     var mode = localStorage.getItem('site-theme-mode') || 'auto';
     this.setTheme(mode);
+    var media = window.matchMedia('(prefers-color-scheme: dark)');
+    if (media.addEventListener) {
+      media.addEventListener('change', function () {
+        if ((localStorage.getItem('site-theme-mode') || 'auto') === 'auto') self.setTheme('auto');
+      });
+    }
     var savedPostMode = '';
     try { savedPostMode = localStorage.getItem('cms-post-mode') || ''; } catch (e) {}
     if (savedPostMode === 'content' || savedPostMode === 'preview' || savedPostMode === 'compare') {
@@ -608,6 +643,8 @@ var cms = {
     document.documentElement.setAttribute('data-theme', resolved);
     document.documentElement.setAttribute('data-theme-mode', mode);
     document.documentElement.style.colorScheme = resolved;
+    var colorSchemeMeta = document.querySelector('meta[name="color-scheme"]');
+    if (colorSchemeMeta) colorSchemeMeta.setAttribute('content', resolved);
     var btns = document.querySelectorAll('.theme-option');
     for (var i = 0; i < btns.length; i++) {
       btns[i].setAttribute('aria-pressed', btns[i].getAttribute('data-mode') === mode ? 'true' : 'false');
@@ -1050,7 +1087,7 @@ var cms = {
   selectByIndex: function (idx) {
     var list = this.store[this.mod] || [];
     if (!list[idx]) return;
-    this.currentItem = JSON.parse(JSON.stringify(list[idx]));
+    this.currentItem = structuredClone(list[idx]);
     this.renderList();
     this.renderForm();
   },
@@ -1258,7 +1295,7 @@ var cms = {
 
   saveCurrent: async function () {
     var schema = SCHEMAS[this.mod];
-    var payloadItem = this.currentItem ? JSON.parse(JSON.stringify(this.currentItem)) : {};
+    var payloadItem = this.currentItem ? structuredClone(this.currentItem) : {};
     for (var i = 0; i < schema.fields.length; i++) {
       var f = schema.fields[i];
       var el = document.getElementById('field-' + f.key);
@@ -1398,8 +1435,8 @@ var cms = {
     if (id && !p) { this.notify('文章不存在，可能已被删除'); return; }
     this.page = 'post-editor';
     this.mod = 'posts';
-    this.currentItem = p ? JSON.parse(JSON.stringify(p)) : null;
-    this.postEditor = p ? JSON.parse(JSON.stringify(p)) : null;
+    this.currentItem = p ? structuredClone(p) : null;
+    this.postEditor = p ? structuredClone(p) : null;
     this.editorPassword = '';
     this.editorUnlocked = !p || !p.locked;
     this.closePostMenu();
@@ -2262,12 +2299,12 @@ var cms = {
     list.querySelectorAll('[data-name-for]').forEach(function (input) {
       var key = input.getAttribute('data-name-for');
       input.addEventListener('change', function () { self.onModuleNameChange(key, input.value); });
-      input.addEventListener('keydown', function (evt) { if (evt.key === 'Enter') { evt.preventDefault(); input.blur(); } });
+      input.addEventListener('keydown', function (evt) { if (evt.key === 'Enter' && !evt.isComposing && !isImeEnter(evt)) { evt.preventDefault(); input.blur(); } });
     });
     list.querySelectorAll('[data-route-for]').forEach(function (input) {
       var key = input.getAttribute('data-route-for');
       input.addEventListener('change', function () { self.onModuleRouteChange(key, input.value); });
-      input.addEventListener('keydown', function (evt) { if (evt.key === 'Enter') { evt.preventDefault(); input.blur(); } });
+      input.addEventListener('keydown', function (evt) { if (evt.key === 'Enter' && !evt.isComposing && !isImeEnter(evt)) { evt.preventDefault(); input.blur(); } });
     });
   },
 
@@ -2967,7 +3004,7 @@ var cms = {
     var unlockInput = document.getElementById('post-unlock-input');
     if (unlockInput) {
       unlockInput.addEventListener('keydown', function (ev) {
-        if (ev.key === 'Enter') { ev.preventDefault(); self.unlockPostEditor(); }
+        if (ev.key === 'Enter' && !ev.isComposing && !isImeEnter(ev)) { ev.preventDefault(); self.unlockPostEditor(); }
       });
     }
 
@@ -3182,7 +3219,7 @@ var cms = {
     var whitelistInput = document.getElementById('whitelist-input');
     if (whitelistInput) {
       whitelistInput.addEventListener('keydown', function (ev) {
-        if (ev.key === 'Enter') { ev.preventDefault(); self.addWhitelist(); }
+        if (ev.key === 'Enter' && !ev.isComposing && !isImeEnter(ev)) { ev.preventDefault(); self.addWhitelist(); }
       });
     }
     var whitelistReset = document.getElementById('whitelist-reset-btn');
@@ -3734,7 +3771,7 @@ var cms = {
     var el = document.getElementById(id);
     if (!el || !items) return;
     var current = el.value || '';
-    el.innerHTML = '';
+    el.replaceChildren();
     items.forEach(function (item) {
       var opt = document.createElement('option');
       opt.value = item.key;
@@ -3806,7 +3843,7 @@ var cms = {
     var mode = modeEl ? modeEl.value : 'merge';
     if (mode === 'replace' && !confirm('覆盖模式会先清空本站现有的文章、瞬间与列表配置，只保留这个包里的内容。继续？')) return;
     if (state) state.textContent = '导入中…（' + this.fmtBytes(file.size) + '）';
-    if (report) report.innerHTML = '';
+    if (report) report.replaceChildren();
     var push = function (text, warn) {
       if (!report) return;
       var li = document.createElement('li');
@@ -3927,7 +3964,7 @@ var cms = {
   renderTransferReport: function (data) {
     var list = document.getElementById('transfer-report');
     if (!list) return;
-    list.innerHTML = '';
+    list.replaceChildren();
     var push = function (text, warn) {
       var li = document.createElement('li');
       li.textContent = text;
@@ -4047,7 +4084,7 @@ var cms = {
 
   renderPasskeys: function (list) {
     var ul = document.getElementById('passkey-list');
-    ul.innerHTML = '';
+    ul.replaceChildren();
     if (!list.length) {
       ul.innerHTML = '<li class="empty-tip">还没有通行密钥，添加后可用指纹 / 面容免密码登录。</li>';
       return;
@@ -4235,7 +4272,7 @@ var cms = {
 
     row.addEventListener('click', function () { cms.toggleSession(li, s.ip); });
     row.addEventListener('keydown', function (ev) {
-      if (ev.key === 'Enter' || ev.key === ' ') {
+      if ((ev.key === 'Enter' && !ev.isComposing && !isImeEnter(ev)) || ev.key === ' ') {
         ev.preventDefault();
         cms.toggleSession(li, s.ip);
       }
@@ -4342,7 +4379,7 @@ var cms = {
     var kind = this.sessionArchiveKind === 'blocked' ? 'blocked' : 'history';
     var data = this.sessionData || {};
     var list = kind === 'blocked' ? (data.blocked || []) : (data.history || []);
-    ul.innerHTML = '';
+    ul.replaceChildren();
     if (!list.length) {
       var tip = document.createElement('li');
       tip.className = 'empty-tip';
@@ -4437,7 +4474,7 @@ var cms = {
     var moreText = document.getElementById('session-blocked-more-text');
     var list = blocked || [];
     if (!ul) return;
-    ul.innerHTML = '';
+    ul.replaceChildren();
     if (countEl) countEl.textContent = list.length ? '共 ' + list.length + ' 条' : '';
     if (more) more.hidden = list.length <= 3;
     if (moreText) moreText.textContent = '查看全部 ' + list.length + ' 条黑名单';
@@ -4464,14 +4501,14 @@ var cms = {
     if (countEl) countEl.textContent = '共 ' + list.length + ' 个有效会话 · ' + online + ' 个在线';
     if (onlineCount) onlineCount.textContent = String(list.length);
     if (historyCount) historyCount.textContent = hist.length ? String(hist.length) : '';
-    ul.innerHTML = '';
+    ul.replaceChildren();
     if (!list.length) {
       ul.innerHTML = '<li class="empty-tip">没有其它在线会话。</li>';
     } else {
       list.forEach(function (s) { ul.appendChild(cms.sessionRow(s, false)); });
     }
     if (historyUl) {
-      historyUl.innerHTML = '';
+      historyUl.replaceChildren();
       if (!hist.length) {
         historyUl.innerHTML = '<li class="empty-tip">还没有历史会话记录。</li>';
       } else {
@@ -4689,7 +4726,7 @@ var cms = {
   function close() {
     if (!mask) return;
     mask.className = 'md-lightbox';
-    mask.querySelector('.md-lightbox-body').innerHTML = '';
+    mask.querySelector('.md-lightbox-body').replaceChildren();
     document.body.classList.remove('md-lightbox-locked');
   }
 

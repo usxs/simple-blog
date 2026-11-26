@@ -1,4 +1,5 @@
 :root, html[data-theme="light"] {
+  color-scheme: light dark;
   --bg-canvas: #F7F7F8;
   --bg-surface: #FFFFFF;
   --bg-subtle: #F1F1F3;
@@ -14,8 +15,8 @@
   --status-warn: #F59E0B;
   --sidebar-w: 236px;
   --radius: 8px;
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Noto Sans SC', sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 html[data-theme="dark"] {
@@ -1790,11 +1791,13 @@ body.md-lightbox-locked {
 
 .admin-link-title a {
   color: var(--text-primary);
-  text-decoration: none;
-  border-bottom: 1px solid transparent;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
 
-.admin-link-title a:hover { border-bottom-color: var(--border-strong); }
+.admin-link-title a:hover { text-decoration-color: var(--border-strong); }
 
 .admin-link-status {
   font-size: 10.5px;

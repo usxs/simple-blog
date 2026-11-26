@@ -40,13 +40,11 @@ async function verify(input) {
   const ip = String(options.ip || '').trim();
   if (ip && ip !== 'unknown') form.set('remoteip', ip);
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), VERIFY_TIMEOUT_MS);
   try {
     const response = await fetch(SITEVERIFY_URL, {
       method: 'POST',
       body: form,
-      signal: controller.signal
+      signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS)
     });
     if (!response.ok) {
       return { ok: false, unavailable: true, error: '人机验证服务暂时不可用，请稍后再试' };
@@ -63,8 +61,6 @@ async function verify(input) {
     return { ok: true };
   } catch (error) {
     return { ok: false, unavailable: true, error: '人机验证服务暂时不可用，请稍后再试' };
-  } finally {
-    clearTimeout(timer);
   }
 }
 

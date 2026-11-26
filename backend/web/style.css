@@ -1,4 +1,5 @@
 :root, html[data-theme="light"] {
+  color-scheme: light dark;
   --bg-canvas: #F7F7F8;
   --bg-surface: #FFFFFF;
   --bg-subtle: #F1F1F3;
@@ -12,8 +13,8 @@
   --status-ok: #10B981;
   --sidebar-w: 236px;
   --radius: 8px;
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Noto Sans SC', sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 html[data-theme="dark"] {

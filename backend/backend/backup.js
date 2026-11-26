@@ -150,7 +150,7 @@ function copyBackend(destDir) {
           stats.files += 1;
           stats.bytes += fs.statSync(src).size;
         } catch (e) {
-          throw new Error('复制失败：' + entry.name + '（' + e.message + '）');
+          throw new Error('复制失败：' + entry.name + '（' + e.message + '）', { cause: e });
         }
       }
     }
@@ -162,22 +162,16 @@ function copyBackend(destDir) {
 }
 
 async function fetchWithTimeout(url, timeoutMs, asJson) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const resp = await fetch(url, {
-      signal: controller.signal,
-      headers: { 'User-Agent': 'simple-blog-backup/1.0' }
-    });
-    if (asJson) {
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      return await resp.json();
-    }
-    const buf = Buffer.from(await resp.arrayBuffer());
-    return { ok: resp.ok, status: resp.status, buf };
-  } finally {
-    clearTimeout(timer);
+  const resp = await fetch(url, {
+    signal: AbortSignal.timeout(timeoutMs),
+    headers: { 'User-Agent': 'simple-blog-backup/1.0' }
+  });
+  if (asJson) {
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    return await resp.json();
   }
+  const buf = Buffer.from(await resp.arrayBuffer());
+  return { ok: resp.ok, status: resp.status, buf };
 }
 
 async function fetchFrontendVersion() {
@@ -1090,14 +1084,8 @@ function davTarget(dav, extra) {
 
 async function davFetch(url, options, timeoutMs) {
   const opts = Object.assign({}, options);
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs || 30000);
-  opts.signal = controller.signal;
-  try {
-    return await fetch(url, opts);
-  } finally {
-    clearTimeout(timer);
-  }
+  opts.signal = AbortSignal.timeout(timeoutMs || 30000);
+  return fetch(url, opts);
 }
 
 async function ensureDavDirs(dav) {
@@ -1114,7 +1102,7 @@ async function ensureDavDirs(dav) {
     try {
       res = await davFetch(target, { method: 'MKCOL', headers: auth }, 30000);
     } catch (e) {
-      throw new Error('无法连接 WebDAV：' + (e && e.name === 'AbortError' ? '连接超时' : (e.message || e)));
+      throw new Error('无法连接 WebDAV：' + ((e && (e.name === 'AbortError' || e.name === 'TimeoutError')) ? '连接超时' : (e.message || e)), { cause: e });
     }
     // 201 新建 / 200-204 成功 / 301-302 已存在或重定向 / 405 已存在
     if (res.status === 401 || res.status === 403) throw new Error('WebDAV 认证失败（HTTP ' + res.status + '）');
@@ -1131,7 +1119,7 @@ async function uploadArchive(filePath, fileName) {
   if (!dav.url) throw new Error('WebDAV 地址未填写');
   await ensureDavDirs(dav);
   let buf;
-  try { buf = fs.readFileSync(filePath); } catch (e) { throw new Error('读取备份文件失败：' + e.message); }
+  try { buf = fs.readFileSync(filePath); } catch (e) { throw new Error('读取备份文件失败：' + e.message, { cause: e }); }
   const target = davTarget(dav, fileName);
   let res;
   try {
@@ -1141,7 +1129,7 @@ async function uploadArchive(filePath, fileName) {
       body: buf
     }, 300000);
   } catch (e) {
-    throw new Error('WebDAV 上传失败：' + (e && e.name === 'AbortError' ? '连接超时' : (e.message || e)));
+    throw new Error('WebDAV 上传失败：' + ((e && (e.name === 'AbortError' || e.name === 'TimeoutError')) ? '连接超时' : (e.message || e)), { cause: e });
   }
   if (res.status === 401 || res.status === 403) throw new Error('WebDAV 认证失败（HTTP ' + res.status + '）');
   if (!res.ok) throw new Error('WebDAV 上传失败（HTTP ' + res.status + '）');

@@ -155,7 +155,7 @@ function writeJson(data) {
   try {
     kvfile.writeJson(CONFIG_FILE, data, { mode: 0o600 });
   } catch (e) {
-    throw new Error('通知配置写入失败：' + (e.message || e));
+    throw new Error('通知配置写入失败：' + (e.message || e), { cause: e });
   }
 }
 
