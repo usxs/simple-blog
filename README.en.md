@@ -1,4 +1,10 @@
-# Simple Blog
+<p align="center">
+  <img src="handbook/images/logo.svg" width="84" height="84" alt="Simple Blog logo">
+</p>
+
+<h1 align="center">Simple Blog</h1>
+
+<p align="center"><strong>Simple Blog — anything but simple.</strong></p>
 
 [简体中文](README.md) · **English**
 
@@ -8,13 +14,8 @@
 [![Docs](https://img.shields.io/badge/docs-usxs.github.io%2Fsimple--blog-555?logo=readthedocs&logoColor=white)](https://usxs.github.io/simple-blog/)
 
 [![GHCR](https://img.shields.io/badge/ghcr.io-usxs%2Fsimple--blog--backend-2496ED?logo=github&logoColor=white)](https://github.com/usxs/simple-blog/pkgs/container/simple-blog-backend)
-[![Version](https://img.shields.io/github/v/tag/usxs/simple-blog?logo=git&logoColor=white)](https://github.com/usxs/simple-blog/releases)
-[![Stars](https://img.shields.io/github/stars/usxs/simple-blog?logo=github&logoColor=white)](https://github.com/usxs/simple-blog/stargazers)
-[![Last commit](https://img.shields.io/github/last-commit/usxs/simple-blog?logo=git&logoColor=white)](https://github.com/usxs/simple-blog/commits/v1)
 
 **Docs**: <https://usxs.github.io/simple-blog/> (deployment guide, handbook, FAQ)
-
-**Simple Blog — anything but simple.**
 
 A minimal, self-hosted personal blog. The repository ships three variants on three branches — same content model, same API, only the renderer and the storage differ:
 
