@@ -1,4 +1,10 @@
-# 简单博客
+<p align="center">
+  <img src="handbook/images/logo.svg" width="84" height="84" alt="简单博客 logo">
+</p>
+
+<h1 align="center">简单博客</h1>
+
+<p align="center"><strong>简单博客，并不“简单”</strong></p>
 
 **简体中文** · [English](README.en.md)
 
@@ -8,13 +14,8 @@
 [![Docs](https://img.shields.io/badge/docs-usxs.github.io%2Fsimple--blog-555?logo=readthedocs&logoColor=white)](https://usxs.github.io/simple-blog/)
 
 [![GHCR](https://img.shields.io/badge/ghcr.io-usxs%2Fsimple--blog--backend-2496ED?logo=github&logoColor=white)](https://github.com/usxs/simple-blog/pkgs/container/simple-blog-backend)
-[![Version](https://img.shields.io/github/v/tag/usxs/simple-blog?logo=git&logoColor=white)](https://github.com/usxs/simple-blog/releases)
-[![Stars](https://img.shields.io/github/stars/usxs/simple-blog?logo=github&logoColor=white)](https://github.com/usxs/simple-blog/stargazers)
-[![Last commit](https://img.shields.io/github/last-commit/usxs/simple-blog?logo=git&logoColor=white)](https://github.com/usxs/simple-blog/commits/v1)
 
 **文档**：<https://usxs.github.io/simple-blog/>（部署教程、使用手册、常见问题）
-
-**简单博客，并不“简单”。**
 
 一套可以自己部署的极简个人博客系统。仓库用三个分支提供三种形态，内容模型与接口完全一致，只是「谁渲染页面」和「数据存在哪」不同：
 
