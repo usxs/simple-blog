@@ -18,7 +18,7 @@
 
 ---
 
-## 一键迁移到 V2 / V3
+## V1 一键迁移到 V2 / V3
 
 ### 迁移包里有什么
 
@@ -99,6 +99,20 @@ node scripts/migrate-v1-to-v2.js --v1-dir /srv/simple-blog --no-uploads --no-aut
 ```bash
 STORE=file node server.js   # 读的仍是 V1 的 Markdown 文件
 ```
+
+---
+
+## V2 → V3：直接复制数据库（后台已内置指引）
+
+V2 和 V3 用同一套 SQLite schema（`schema_version = 2`），所以迁移不是「导包」，而是「换一个进程读同一个库」：
+
+1. 停掉 V2，确认没有写入（`docker compose stop` 或 `pm2 stop simple-blog`）。
+2. 把 V2 的 `data/`、`img/`、`file/` 覆盖到 V3 的对应目录。同机用 `cp -a`，跨机用 `rsync -a`；先停服再拷，避免 SQLite 的 `-wal` / `-shm` 和主库不一致。
+3. 启动 V3，用 V2 原来的管理员账号登录。站点设置、友链、通知配置都在 `data/blog.db` 的 `kv` 表里，会一起带过来。
+
+V2 后台「管理 → 迁移」和 V3 后台同一页会按版本显示这三步和可复制的命令；V1 的「一键迁移到 V2 / V3」只出现在 V1 后台。
+
+> 不要用便携包做 V2 → V3：便携包在 SQLite 模式下只带文章、瞬间和图片，站点设置与管理员账号会丢（已在线验收确认）。便携包和 V1 推送仍然适合 V1 → V2 或 V1 → V3。
 
 ---
 

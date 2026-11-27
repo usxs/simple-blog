@@ -37,7 +37,7 @@
 | **V3** | `v3-monolith` | 前后端不分离单体（一个进程） | SQLite | `v3` | 只想在一台 VPS 上跑完，不依赖 Cloudflare |
 
 - V1 后台「设置 → 迁移」可以**一键迁移到 V2 / V3**（下载或直推便携包 `.zip`），也能和 **Hugo / Hexo / Jekyll / Astro / Ghost / Obsidian** 互导 Markdown。
-- V2 的数据库结构与 V3 完全一致，`blog.db` 直接可用；从 V1 文件结构迁移时用 `node scripts/migrate-v1-to-v2.js`。
+- V2 的数据库结构与 V3 完全一致，`blog.db` 直接可用；V2/V3 后台「数据迁移」会按版本显示停服、拷 `data/` `img/` `file/`、启动的步骤和命令。从 V1 文件结构迁移时用 `node scripts/migrate-v1-to-v2.js`。
 - V3 的部署见 [部署 V3 单体版](https://usxs.github.io/simple-blog/start/monolith/)。
 
 ---

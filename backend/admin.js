@@ -3503,6 +3503,8 @@ var cms = {
     if (transferImport) transferImport.addEventListener('click', function () { self.runMarkdownImport(false); });
     var transferExport = document.getElementById('transfer-export-btn');
     if (transferExport) transferExport.addEventListener('click', function () { self.exportMarkdown(); });
+    var upgradeCopy = document.getElementById('transfer-upgrade-copy');
+    if (upgradeCopy) upgradeCopy.addEventListener('click', function () { self.copyTransferCommand(); });
     var bundleImport = document.getElementById('migrate-import-btn');
     if (bundleImport) bundleImport.addEventListener('click', function () { self.importPortableBundle(); });
     var tokenReset = document.getElementById('migrate-token-reset');
@@ -3761,13 +3763,40 @@ var cms = {
     this.transferInfo = info;
     var setText = function (id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
     var variant = String(info.variant || 'file');
+    var edition = String(info.edition || '');
+    if (!edition) edition = variant === 'sqlite' ? (parseInt(String(info.version || '0'), 10) >= 3 ? 'v3' : 'v2') : 'v1';
+    var editionLabel = edition === 'v3' ? 'V3' : (edition === 'v2' ? 'V2' : 'V1');
     var variantLabel = variant === 'sqlite' ? 'SQLite 存储' : '文件存储';
-    setText('transfer-version', (variant === 'sqlite' ? 'V2/V3' : 'V1') + ' · ' + variantLabel + ' · v' + (info.version || '?'));
+    setText('transfer-version', editionLabel + ' · ' + variantLabel + ' · v' + (info.version || '?'));
     var stats = info.stats || {};
     setText('transfer-stat-posts', (stats.posts || 0) + ' 篇');
     setText('transfer-stat-moments', (stats.moments || 0) + ' 条');
     setText('transfer-stat-comments', (stats.comments || 0) + ' 条');
     setText('transfer-stat-uploads', (stats.uploads || 0) + ' 个 / ' + this.fmtBytes(stats.uploadBytes || 0));
+
+    // V1 才显示「一键迁移到 V2 / V3」；V2 / V3 直接复制 SQLite 数据库，不再生成便携包
+    var legacy = document.getElementById('transfer-legacy');
+    if (legacy) legacy.hidden = edition !== 'v1';
+    var upgrade = document.getElementById('transfer-upgrade');
+    if (upgrade) upgrade.hidden = edition === 'v1';
+    var desc = document.getElementById('transfer-desc');
+    if (desc) {
+      if (edition === 'v2') {
+        desc.innerHTML = '当前版本（V2）把文章、瞬间、评论和站点配置都放在 SQLite（<code>data/blog.db</code>）里，图片在 <code>img/</code>、附件在 <code>file/</code>。迁移到 V3 不需要转换，直接复制这三个目录即可；也支持和 Hugo / Hexo / Jekyll / Astro / Ghost / Obsidian 互相搬运 Markdown。';
+      } else if (edition === 'v3') {
+        desc.innerHTML = '当前版本（V3）是单进程 SSR，文章、瞬间、评论和站点配置都在 SQLite（<code>data/blog.db</code>）里，图片在 <code>img/</code>、附件在 <code>file/</code>。从 V2 迁入直接复制这三个目录即可；也支持和 Hugo / Hexo / Jekyll / Astro / Ghost / Obsidian 互相搬运 Markdown。';
+      }
+    }
+    if (edition === 'v2') {
+      setText('transfer-upgrade-title', '① 迁移到 V3：直接复制 SQLite 数据库');
+      setText('transfer-upgrade-desc', 'V2 与 V3 共用同一套数据库结构，不需要转换格式。按下面三步操作，文章、瞬间、评论、站点设置和管理员账号都会保留；迁移期间先停 V2，避免数据库还在写入。');
+      setText('transfer-receive-desc', '从 V1 推送过来时，在 V1 后台「推送到目标站点」填这里的令牌即可。V2 → V3 请直接用上方的数据库复制，不需要迁移包。');
+    } else if (edition === 'v3') {
+      setText('transfer-upgrade-title', '① 从 V2 迁入：直接复制 SQLite 数据库');
+      setText('transfer-upgrade-desc', 'V2 与 V3 共用同一套数据库结构。按下面三步把 V2 的数据目录覆盖到本站即可，站点设置、友链、通知配置和管理员账号都在 data/blog.db 里，不会像便携包那样丢失。');
+      setText('transfer-receive-desc', '从 V1 推送过来时，在 V1 后台「推送到目标站点」填这里的令牌即可。从 V2 迁入请直接用上方的数据库复制。');
+    }
+
     this.fillTransferSelect('transfer-import-source', info.sources, 'auto');
     this.fillTransferSelect('transfer-export-target', info.targets, 'hugo');
 
@@ -3775,6 +3804,24 @@ var cms = {
     var receive = document.getElementById('transfer-receive');
     if (receive) receive.hidden = variant !== 'sqlite';
     if (variant === 'sqlite') this.loadMigrateToken();
+  },
+
+  copyTransferCommand: async function () {
+    var cmd = document.getElementById('transfer-upgrade-cmd');
+    var state = document.getElementById('transfer-upgrade-state');
+    if (!cmd) return;
+    var text = cmd.textContent || '';
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.writeText) throw new Error('clipboard unavailable');
+      await navigator.clipboard.writeText(text);
+      if (state) state.textContent = '已复制，按你的实际路径改一下再执行';
+    } catch (e) {
+      var range = document.createRange();
+      range.selectNodeContents(cmd);
+      var sel = window.getSelection();
+      if (sel) { sel.removeAllRanges(); sel.addRange(range); }
+      if (state) state.textContent = '已选中命令，按 Ctrl/Cmd+C 复制';
+    }
   },
 
   loadMigrateToken: async function () {

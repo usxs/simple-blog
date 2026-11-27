@@ -1,6 +1,6 @@
 {
   "name": "simple-blog-backend",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "description": "简单博客 V2 · Cloudflare Pages 前端 + Node 后端（SQLite 存储）：登录、文章/瞬间管理、评论、图片上传",
   "main": "server.js",
