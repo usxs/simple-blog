@@ -118,13 +118,23 @@ function countUploads() {
   return { count: img.count + file.count, bytes: img.bytes + file.bytes };
 }
 
+function detectEdition() {
+  if ((storage.variant || 'file') === 'file') return 'v1';
+  // V3 独有 backend/web（SSR 前端），V2 没有
+  if (fs.existsSync(path.join(__dirname, '..', 'web'))) return 'v3';
+  const major = parseInt(String(portable.appVersion() || '0'), 10) || 0;
+  return major >= 3 ? 'v3' : 'v2';
+}
+
 function buildInfo() {
   const posts = storage.readArticles();
   const moments = storage.readMusings();
   const comments = posts.reduce((n, p) => n + storage.readPostComments(p.id).length, 0);
   const uploads = countUploads();
+  const edition = detectEdition();
   return {
     ok: true,
+    edition: edition,
     variant: storage.variant || 'file',
     storage: storage.variant === 'sqlite' ? 'sqlite' : 'file',
     version: portable.appVersion(),
@@ -139,10 +149,12 @@ function buildInfo() {
     },
     sources: Object.keys(mdimport.SOURCES).map(k => ({ key: k, label: mdimport.SOURCES[k].label })),
     targets: Object.keys(mdexport.TARGETS).map(k => ({ key: k, label: mdexport.TARGETS[k].label })),
-    migrateTargets: [
+    migrateTargets: edition === 'v1' ? [
       { key: 'v2', label: 'V2 · 前后端分离 + SQLite', hint: 'Cloudflare Pages 前端 + Node 后端 + SQLite 数据库' },
       { key: 'v3', label: 'V3 · 前后端不分离 + SQLite', hint: '单体 SSR，像 Typecho 一样一个进程跑完' }
-    ]
+    ] : edition === 'v2' ? [
+      { key: 'v3', label: 'V3 · 前后端不分离 + SQLite', hint: '直接复制 data / img / file，数据库结构相同' }
+    ] : []
   };
 }
 

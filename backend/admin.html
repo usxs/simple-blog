@@ -598,7 +598,7 @@
                 <h3>数据迁移</h3>
                 <span class="settings-tip" id="transfer-version">V1 · 文件存储</span>
               </div>
-              <p class="settings-desc">当前版本（V1）把文章存成磁盘上的 Markdown 文件。这里可以把整站搬到两个新版本：<b>V2</b> = 前后端分离 + SQLite（前端放 Cloudflare，后端一个 Node 进程）；<b>V3</b> = 前后端不分离 + SQLite（单进程 SSR，像 Typecho 一样）。也支持和 Hugo / Hexo / Jekyll / Astro / Ghost / Obsidian 互相搬运 Markdown。</p>
+              <p class="settings-desc" id="transfer-desc">当前版本（V1）把文章存成磁盘上的 Markdown 文件。这里可以把整站搬到两个新版本：<b>V2</b> = 前后端分离 + SQLite（前端放 Cloudflare，后端一个 Node 进程）；<b>V3</b> = 前后端不分离 + SQLite（单进程 SSR，像 Typecho 一样）。也支持和 Hugo / Hexo / Jekyll / Astro / Ghost / Obsidian 互相搬运 Markdown。</p>
 
               <div class="transfer-stats" id="transfer-stats">
                 <div class="backup-meta"><span>文章</span><b id="transfer-stat-posts">—</b></div>
@@ -609,7 +609,7 @@
 
               <div class="transfer-block" id="transfer-receive">
                 <div class="transfer-block-head">接收其它站点的推送</div>
-                <p class="settings-desc">在 V1 后台「推送到目标站点」时填这里的令牌即可把整站推过来。令牌保存在数据库里，重置后需要重新填写。</p>
+                <p class="settings-desc" id="transfer-receive-desc">在 V1 后台「推送到目标站点」时填这里的令牌即可把整站推过来。令牌保存在数据库里，重置后需要重新填写。</p>
                 <div class="field-grid">
                   <div class="field field--wide">
                     <label class="field-label" for="migrate-token">迁移令牌</label>
@@ -645,7 +645,32 @@
                 <ul class="transfer-report" id="migrate-import-report"></ul>
               </div>
 
-              <div class="transfer-block">
+              <div class="transfer-block" id="transfer-upgrade" hidden>
+                <div class="transfer-block-head" id="transfer-upgrade-title">① 迁移到 V3：直接复制 SQLite 数据库</div>
+                <p class="settings-desc" id="transfer-upgrade-desc">V2 与 V3 共用同一套数据库结构，不需要转换格式。按下面三步操作，文章、瞬间、评论、站点设置和管理员账号都会保留；迁移期间先停 V2，避免数据库还在写入。</p>
+                <ol class="transfer-steps">
+                  <li>停掉 V2：<code>cd /srv/v2 &amp;&amp; docker compose stop</code>；pm2 部署用 <code>pm2 stop simple-blog</code>。</li>
+                  <li>把 V2 的 <code>data/</code>、<code>img/</code>、<code>file/</code> 覆盖到 V3 的对应目录。先停服再拷，SQLite 的 WAL 文件才不会和主库不一致。</li>
+                  <li>启动 V3：<code>cd /srv/v3 &amp;&amp; docker compose up -d</code>，用 V2 原来的管理员账号登录。</li>
+                </ol>
+                <pre class="transfer-cmd" id="transfer-upgrade-cmd"># 1) 停掉 V2（pm2 部署改成 pm2 stop simple-blog）
+cd /srv/v2 &amp;&amp; docker compose stop
+
+# 2) 覆盖 data / img / file（跨机把 cp 换成 rsync -a user@v2:/srv/v2/data/ /srv/v3/data/）
+mkdir -p /srv/v3/data /srv/v3/img /srv/v3/file
+cp -a /srv/v2/data/. /srv/v3/data/
+cp -a /srv/v2/img/.  /srv/v3/img/
+cp -a /srv/v2/file/. /srv/v3/file/
+
+# 3) 启动 V3
+cd /srv/v3 &amp;&amp; docker compose up -d</pre>
+                <div class="settings-actions">
+                  <button class="btn" type="button" id="transfer-upgrade-copy">复制命令</button>
+                  <span class="settings-tip" id="transfer-upgrade-state">把 /srv/v2、/srv/v3 换成你的实际部署目录</span>
+                </div>
+              </div>
+
+              <div class="transfer-block" id="transfer-legacy">
                 <div class="transfer-block-head">① 一键迁移到 V2 / V3</div>
                 <p class="settings-desc">迁移包是 ZIP，里面是 manifest.json + data.json + 原始图片附件。目标站点后台「迁移」页可以直接导入，或者用它自带的 <code>scripts/import-portable.js</code> 从命令行导入。</p>
                 <div class="settings-actions">
